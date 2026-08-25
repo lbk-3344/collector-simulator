@@ -22,3 +22,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 _to_delete/
+
+# stray backups
+*.bak
