@@ -1,0 +1,95 @@
+// Bartender Track and Trace Simulator — data model.
+// See CLAUDE-CONCEPT.md section 4 (auth/user mgmt) and section 3 (bug reporting).
+// Devices/Workflows/Serialized Items models are NOT part of this schema yet —
+// see BACKLOG.md sections 5-7, still to be settled (BL-003).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  USER
+  PENDING
+}
+
+enum BugStatus {
+  OPEN
+  RESOLVED
+}
+
+// ─── NextAuth required tables (via @auth/prisma-adapter) ────────────────────
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ─── App tables ───────────────────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  role          Role      @default(PENDING)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts   Account[]
+  sessions   Session[]
+  bugReports BugReport[]
+}
+
+// See CLAUDE-CONCEPT.md section 3 and CLAUDE.md "Bug handling" for the full
+// reporting/export/notification process built around this model.
+model BugReport {
+  id            String    @id @default(cuid())
+  title         String
+  description   String
+  status        BugStatus @default(OPEN)
+  screenshotUrl String?
+  reporterId    String
+  reporter      User      @relation(fields: [reporterId], references: [id], onDelete: Cascade)
+  reportedAt    DateTime  @default(now())
+  resolvedAt    DateTime?
+
+  @@index([status])
+}

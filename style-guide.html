@@ -1,0 +1,523 @@
+<title>Track &amp; Trace Design System</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+:root {
+  --bg: #FAF8F4;
+  --surface: #FFFFFF;
+  --surface-2: #F4EFE8;
+  --border: #E9E2D8;
+  --border-strong: #D9CEBE;
+  --ink: #1B2228;
+  --ink-2: #5E6B72;
+  --ink-3: #93A0A6;
+
+  --accent-brand: #E8472A;
+  --accent-brand-tint: #FDEDE7;
+  --accent-brand-ink: #B23A1F;
+  --accent-brand-contrast: #FFFFFF;
+
+  --accent-primary: #0D1E2C;
+  --accent-primary-hover: #16324A;
+  --accent-primary-tint: #E7ECEF;
+  --accent-primary-contrast: #FFFFFF;
+
+  --success: #1E8E5A; --success-tint: #E7F6EE; --success-border: #BFE6D2;
+  --warning: #B4740E; --warning-tint: #FFF6E5; --warning-border: #F3DDA6;
+  --danger:  #C41E3A; --danger-tint:  #FBE9EC; --danger-border:  #F5C2CB;
+  --info:    #5B6B78; --info-tint:    #F0F3F5; --info-border:    #DCE2E6;
+
+  --radius: 8px;
+  --font-ui: "IBM Plex Sans", system-ui, sans-serif;
+  --font-cond: "IBM Plex Sans Condensed", "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0A1015;
+    --surface: #121A21;
+    --surface-2: #1A232C;
+    --border: #263039;
+    --border-strong: #37454F;
+    --ink: #ECEEEE;
+    --ink-2: #9CACB4;
+    --ink-3: #6A7880;
+
+    --accent-brand: #FF6B45;
+    --accent-brand-tint: rgba(255,107,69,0.14);
+    --accent-brand-ink: #FF8A66;
+    --accent-brand-contrast: #1B0A05;
+
+    --accent-primary: #6FB1E0;
+    --accent-primary-hover: #8FC4EA;
+    --accent-primary-tint: rgba(111,177,224,0.14);
+    --accent-primary-contrast: #0A1015;
+
+    --success: #4ADE94; --success-tint: rgba(74,222,148,0.12); --success-border: rgba(74,222,148,0.35);
+    --warning: #F5B542; --warning-tint: rgba(245,181,66,0.12); --warning-border: rgba(245,181,66,0.35);
+    --danger:  #FF6B7F; --danger-tint:  rgba(255,107,127,0.12); --danger-border: rgba(255,107,127,0.35);
+    --info:    #93A5AF; --info-tint:    rgba(147,165,175,0.12); --info-border:   rgba(147,165,175,0.35);
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #0A1015;
+  --surface: #121A21;
+  --surface-2: #1A232C;
+  --border: #263039;
+  --border-strong: #37454F;
+  --ink: #ECEEEE;
+  --ink-2: #9CACB4;
+  --ink-3: #6A7880;
+
+  --accent-brand: #FF6B45;
+  --accent-brand-tint: rgba(255,107,69,0.14);
+  --accent-brand-ink: #FF8A66;
+  --accent-brand-contrast: #1B0A05;
+
+  --accent-primary: #6FB1E0;
+  --accent-primary-hover: #8FC4EA;
+  --accent-primary-tint: rgba(111,177,224,0.14);
+  --accent-primary-contrast: #0A1015;
+
+  --success: #4ADE94; --success-tint: rgba(74,222,148,0.12); --success-border: rgba(74,222,148,0.35);
+  --warning: #F5B542; --warning-tint: rgba(245,181,66,0.12); --warning-border: rgba(245,181,66,0.35);
+  --danger:  #FF6B7F; --danger-tint:  rgba(255,107,127,0.12); --danger-border: rgba(255,107,127,0.35);
+  --info:    #93A5AF; --info-tint:    rgba(147,165,175,0.12); --info-border:   rgba(147,165,175,0.35);
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+.shell { max-width: 1180px; margin: 0 auto; padding: 0 28px 80px; }
+
+/* ---- App-shell header mockup ---- */
+.topbar {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  position: relative;
+}
+.topbar::after {
+  content: "";
+  position: absolute; left: 0; right: 0; bottom: -3px;
+  height: 3px;
+  background: var(--accent-brand);
+}
+.topbar-inner {
+  max-width: 1180px; margin: 0 auto; padding: 0 28px;
+  display: flex; align-items: center; gap: 28px; height: 64px;
+}
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand img { width: 30px; height: 24px; display: block; }
+.brand-word { font-weight: 700; font-size: 16px; color: var(--ink); letter-spacing: -0.01em; }
+.brand-word span { color: var(--accent-brand); }
+.brand-tag {
+  font-family: var(--font-cond);
+  font-weight: 600; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--ink-2);
+  padding-left: 10px; border-left: 1px solid var(--border-strong);
+}
+.nav { display: flex; gap: 4px; margin-left: auto; }
+.nav a {
+  font-size: 13px; font-weight: 500; color: var(--ink-2); text-decoration: none;
+  padding: 8px 12px; border-radius: 6px; transition: background .15s, color .15s;
+}
+.nav a:hover { background: var(--surface-2); color: var(--ink); }
+.nav a.active { color: var(--accent-primary); font-weight: 600; }
+.avatar {
+  width: 30px; height: 30px; border-radius: 50%;
+  background: var(--accent-primary-tint); color: var(--accent-primary);
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 12px; font-family: var(--font-cond);
+}
+
+/* ---- Page intro ---- */
+.intro { padding: 40px 0 8px; }
+.eyebrow {
+  font-family: var(--font-cond); font-weight: 700; font-size: 11px; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--accent-brand-ink); margin: 0 0 10px;
+}
+h1.page-title { font-size: 30px; font-weight: 700; letter-spacing: -0.015em; margin: 0 0 10px; text-wrap: balance; }
+.lede { font-size: 15px; color: var(--ink-2); max-width: 62ch; margin: 0; }
+
+/* ---- Section scaffolding ---- */
+section.block { margin-top: 56px; }
+.block-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+.block-head h2 { font-size: 12px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--ink-3); margin: 0; }
+.block-head p { font-size: 13px; color: var(--ink-2); margin: 0; }
+
+/* ---- Color swatches ---- */
+.swatch-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+.swatch {
+  border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; background: var(--surface);
+}
+.swatch-fill { height: 64px; }
+.swatch-body { padding: 10px 12px; }
+.swatch-name { font-weight: 600; font-size: 12.5px; }
+.swatch-hex { font-family: var(--font-mono); font-size: 11px; color: var(--ink-2); margin-top: 2px; }
+.swatch-use { font-size: 11.5px; color: var(--ink-3); margin-top: 4px; }
+
+/* ---- Type samples ---- */
+.type-row { display: flex; align-items: baseline; gap: 24px; padding: 16px 0; border-top: 1px solid var(--border); }
+.type-row:last-child { border-bottom: 1px solid var(--border); }
+.type-label { width: 130px; flex-shrink: 0; font-family: var(--font-mono); font-size: 11px; color: var(--ink-3); }
+.type-sample.h1 { font-size: 30px; font-weight: 700; letter-spacing: -0.015em; }
+.type-sample.h2 { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
+.type-sample.h3 { font-size: 15px; font-weight: 600; }
+.type-sample.body { font-size: 14px; color: var(--ink); }
+.type-sample.label { font-family: var(--font-cond); font-size: 11px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--ink-2); }
+.type-sample.mono { font-family: var(--font-mono); font-size: 13px; color: var(--ink); background: var(--surface-2); padding: 3px 8px; border-radius: 4px; display: inline-block; }
+
+/* ---- Buttons ---- */
+.row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.btn {
+  font-family: var(--font-ui); font-weight: 600; font-size: 13.5px; border-radius: 7px;
+  padding: 9px 16px; border: 1px solid transparent; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 7px;
+  transition: opacity .15s, transform .1s, background .15s, border-color .15s;
+}
+.btn:active { transform: scale(0.98); }
+.btn-primary { background: var(--accent-primary); color: var(--accent-primary-contrast); }
+.btn-primary:hover { background: var(--accent-primary-hover); }
+.btn-secondary { background: transparent; color: var(--ink); border-color: var(--border-strong); }
+.btn-secondary:hover { background: var(--surface-2); }
+.btn-danger { background: var(--danger); color: white; }
+.btn-danger:hover { opacity: .88; }
+.btn-brand { background: var(--accent-brand-tint); color: var(--accent-brand-ink); }
+.btn-brand:hover { background: var(--accent-brand); color: var(--accent-brand-contrast); }
+.btn[disabled] { opacity: .4; cursor: not-allowed; }
+.btn:focus-visible { outline: 2px solid var(--accent-primary); outline-offset: 2px; }
+
+.field { display: flex; flex-direction: column; gap: 6px; width: 240px; }
+.field label { font-family: var(--font-cond); font-size: 11px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--ink-2); }
+.field input {
+  font-family: var(--font-mono); font-size: 13px; padding: 9px 11px;
+  border: 1px solid var(--border-strong); border-radius: 7px; background: var(--surface); color: var(--ink);
+}
+.field input:focus {
+  outline: none; border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px var(--accent-primary-tint);
+}
+
+/* ---- Badges / chips ---- */
+.chip {
+  display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 600;
+  padding: 4px 10px; border-radius: 999px; border: 1px solid transparent;
+}
+.chip::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.chip-success { background: var(--success-tint); color: var(--success); border-color: var(--success-border); }
+.chip-warning { background: var(--warning-tint); color: var(--warning); border-color: var(--warning-border); }
+.chip-danger  { background: var(--danger-tint);  color: var(--danger);  border-color: var(--danger-border); }
+.chip-info    { background: var(--info-tint);    color: var(--info);    border-color: var(--info-border); }
+
+/* ---- Cards / device list ---- */
+.card-list { display: flex; flex-direction: column; gap: 10px; }
+.dev-card {
+  display: flex; align-items: center; gap: 14px;
+  background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--card-accent, var(--border));
+  border-radius: var(--radius); padding: 13px 16px;
+  transition: border-color .15s;
+}
+.dev-card:hover { border-color: var(--border-strong); border-left-color: var(--card-accent, var(--border-strong)); }
+.dev-icon {
+  width: 36px; height: 36px; border-radius: 8px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--icon-bg); color: var(--icon-fg);
+}
+.dev-main { flex: 1; min-width: 0; }
+.dev-name { font-weight: 600; font-size: 13.5px; }
+.dev-meta { font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-2); margin-top: 2px; }
+.dev-right { display: flex; align-items: center; gap: 14px; flex-shrink: 0; }
+.dev-stat { text-align: right; }
+.dev-stat .n { font-family: var(--font-mono); font-weight: 600; font-size: 14px; font-variant-numeric: tabular-nums; }
+.dev-stat .l { font-size: 10.5px; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.06em; }
+
+/* ---- Serialized item panel ---- */
+.si-panel { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 720px) { .si-panel { grid-template-columns: 1fr; } }
+.si-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px;
+}
+.si-card h3 { margin: 0 0 4px; font-size: 13.5px; }
+.si-card .sub { font-size: 12px; color: var(--ink-2); margin: 0 0 14px; }
+.si-id {
+  font-family: var(--font-mono); font-size: 13px; background: var(--surface-2);
+  border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; word-break: break-all;
+  color: var(--ink);
+}
+.si-tag-preview {
+  margin-top: 14px; border: 1.5px dashed var(--border-strong); border-radius: 6px;
+  padding: 14px; display: flex; flex-direction: column; gap: 3px;
+}
+.si-tag-preview .tp-brand { font-family: var(--font-cond); font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em; color: var(--accent-brand-ink); text-transform: uppercase; }
+.si-tag-preview .tp-code { font-family: var(--font-mono); font-size: 15px; font-weight: 600; margin-top: 4px; }
+.si-tag-preview .tp-bars { height: 22px; margin-top: 6px; background: repeating-linear-gradient(90deg, var(--ink) 0 2px, transparent 2px 5px); opacity: .85; }
+.si-no-label { display: flex; align-items: center; gap: 10px; margin-top: 14px; padding: 14px; border-radius: 6px; background: var(--info-tint); color: var(--info); font-size: 12.5px; }
+
+/* ---- Notes ---- */
+.notes { font-size: 12.5px; color: var(--ink-2); border-top: 1px solid var(--border); padding-top: 22px; margin-top: 60px; }
+.notes ul { margin: 8px 0 0; padding-left: 18px; }
+.notes li { margin-bottom: 6px; }
+code { font-family: var(--font-mono); background: var(--surface-2); padding: 1px 5px; border-radius: 4px; font-size: 0.92em; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .fade-in { animation: fadeIn .5s ease both; }
+}
+@keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+</style>
+
+<div class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <img src="data:image/png;base64,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" alt="BarTender" />
+      <span class="brand-word">BarTender<span>.</span></span>
+      <span class="brand-tag">Track &amp; Trace Simulator</span>
+    </div>
+    <nav class="nav">
+      <a href="#" class="active">Overview</a>
+      <a href="#">Devices</a>
+      <a href="#">Workflows</a>
+      <a href="#">Serialized Items</a>
+      <a href="#">Bug Reports</a>
+    </nav>
+    <div class="avatar">LB</div>
+  </div>
+</div>
+
+<div class="shell">
+
+  <div class="intro fade-in">
+    <p class="eyebrow">Design system</p>
+    <h1 class="page-title">Track &amp; Trace Design System</h1>
+    <p class="lede">Orange and white carry the brand; navy is reserved for action. Same official BarTender mark as Supplier Connect, deliberately different role for the accent pair &mdash; so the two tools read as family, not twins.</p>
+  </div>
+
+  <section class="block fade-in">
+    <div class="block-head">
+      <h2>Color</h2>
+      <p>Brand pair reused verbatim from the BarTender mark &middot; semantic colors shared with Supplier Connect</p>
+    </div>
+    <div class="swatch-grid">
+      <div class="swatch">
+        <div class="swatch-fill" style="background: var(--accent-brand);"></div>
+        <div class="swatch-body">
+          <div class="swatch-name">Brand orange</div>
+          <div class="swatch-hex">#E8472A</div>
+          <div class="swatch-use">Logo, eyebrows, active nav, tag accents</div>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-fill" style="background: var(--accent-primary);"></div>
+        <div class="swatch-body">
+          <div class="swatch-name">Seagull navy</div>
+          <div class="swatch-hex">#0D1E2C</div>
+          <div class="swatch-use">Primary buttons, links, focus rings</div>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-fill" style="background: var(--surface); border-bottom: 1px solid var(--border);"></div>
+        <div class="swatch-body">
+          <div class="swatch-name">Surface</div>
+          <div class="swatch-hex">#FFFFFF</div>
+          <div class="swatch-use">Cards, panels, the topbar</div>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-fill" style="background: var(--bg);"></div>
+        <div class="swatch-body">
+          <div class="swatch-name">Page ground</div>
+          <div class="swatch-hex">#FAF8F4</div>
+          <div class="swatch-use">Warm near-white, not cool grey</div>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-fill" style="background: var(--success);"></div>
+        <div class="swatch-body">
+          <div class="swatch-name">Success</div>
+          <div class="swatch-hex">#1E8E5A</div>
+          <div class="swatch-use">Device online, workflow complete</div>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-fill" style="background: var(--warning);"></div>
+        <div class="swatch-body">
+          <div class="swatch-name">Warning</div>
+          <div class="swatch-hex">#B4740E</div>
+          <div class="swatch-use">Banners only &mdash; never a status</div>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-fill" style="background: var(--danger);"></div>
+        <div class="swatch-body">
+          <div class="swatch-name">Danger</div>
+          <div class="swatch-hex">#C41E3A</div>
+          <div class="swatch-use">Device error, bug report</div>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-fill" style="background: var(--info);"></div>
+        <div class="swatch-body">
+          <div class="swatch-name">Neutral / info</div>
+          <div class="swatch-hex">#5B6B78</div>
+          <div class="swatch-use">Idle, unlabeled, informational</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block fade-in">
+    <div class="block-head">
+      <h2>Typography</h2>
+      <p>IBM Plex Sans &middot; IBM Plex Sans Condensed &middot; IBM Plex Mono</p>
+    </div>
+    <div class="type-row">
+      <div class="type-label">h1 / 30 / 700</div>
+      <div class="type-sample h1">Encode &amp; verify station</div>
+    </div>
+    <div class="type-row">
+      <div class="type-label">h2 / 20 / 700</div>
+      <div class="type-sample h2">Pack Station 2</div>
+    </div>
+    <div class="type-row">
+      <div class="type-label">h3 / 15 / 600</div>
+      <div class="type-sample h3">Last event 4s ago</div>
+    </div>
+    <div class="type-row">
+      <div class="type-label">body / 14 / 400</div>
+      <div class="type-sample body">Simulated devices report encode, print, and scan events to Bartender via its Track &amp; Trace API.</div>
+    </div>
+    <div class="type-row">
+      <div class="type-label">label / 11 / 700</div>
+      <div class="type-sample label">Serialized Item</div>
+    </div>
+    <div class="type-row">
+      <div class="type-label">mono / data</div>
+      <div class="type-sample mono">EPC 30 75 61 D8 12 00 00 00 00 12 34 56</div>
+    </div>
+  </section>
+
+  <section class="block fade-in">
+    <div class="block-head">
+      <h2>Buttons &amp; fields</h2>
+      <p>Navy carries the interaction &mdash; not orange</p>
+    </div>
+    <div class="row" style="margin-bottom: 22px;">
+      <button class="btn btn-primary">Start workflow</button>
+      <button class="btn btn-secondary">View log</button>
+      <button class="btn btn-danger">Stop device</button>
+      <button class="btn btn-brand">New scenario</button>
+      <button class="btn btn-primary" disabled>Disabled</button>
+    </div>
+    <div class="row">
+      <div class="field">
+        <label>Device ID</label>
+        <input type="text" value="RFID-ENC-0031" />
+      </div>
+      <div class="field">
+        <label>Workflow</label>
+        <input type="text" value="encode → verify → pack" />
+      </div>
+    </div>
+  </section>
+
+  <section class="block fade-in">
+    <div class="block-head">
+      <h2>Status chips</h2>
+      <p>Semantic colors stay separate from the brand accent</p>
+    </div>
+    <div class="row">
+      <span class="chip chip-success">Device online</span>
+      <span class="chip chip-info">Workflow idle</span>
+      <span class="chip chip-warning">Queue backing up</span>
+      <span class="chip chip-danger">Bug open</span>
+      <span class="chip chip-success">Bug resolved</span>
+    </div>
+  </section>
+
+  <section class="block fade-in">
+    <div class="block-head">
+      <h2>Devices</h2>
+      <p>Left-accent stripe encodes status, same convention as Supplier Connect</p>
+    </div>
+    <div class="card-list">
+      <div class="dev-card" style="--card-accent: var(--success); --icon-bg: var(--success-tint); --icon-fg: var(--success);">
+        <div class="dev-icon">▣</div>
+        <div class="dev-main">
+          <div class="dev-name">RFID Encoder &mdash; Line 3</div>
+          <div class="dev-meta">RFID-ENC-0031 &middot; encode → verify</div>
+        </div>
+        <div class="dev-right">
+          <div class="dev-stat"><div class="n">1,204</div><div class="l">Events / hr</div></div>
+          <span class="chip chip-success">Online</span>
+        </div>
+      </div>
+      <div class="dev-card" style="--card-accent: var(--info); --icon-bg: var(--info-tint); --icon-fg: var(--info);">
+        <div class="dev-icon">🖶</div>
+        <div class="dev-main">
+          <div class="dev-name">Label Printer &mdash; Pack Station 2</div>
+          <div class="dev-meta">LBL-PRN-0007 &middot; print → apply</div>
+        </div>
+        <div class="dev-right">
+          <div class="dev-stat"><div class="n">0</div><div class="l">Events / hr</div></div>
+          <span class="chip chip-info">Idle</span>
+        </div>
+      </div>
+      <div class="dev-card" style="--card-accent: var(--danger); --icon-bg: var(--danger-tint); --icon-fg: var(--danger);">
+        <div class="dev-icon">✕</div>
+        <div class="dev-main">
+          <div class="dev-name">Handheld Scanner &mdash; Dock 5</div>
+          <div class="dev-meta">SCN-HH-0014 &middot; scan → confirm</div>
+        </div>
+        <div class="dev-right">
+          <div class="dev-stat"><div class="n">&mdash;</div><div class="l">Events / hr</div></div>
+          <span class="chip chip-danger">Error</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block fade-in">
+    <div class="block-head">
+      <h2>Serialized items</h2>
+      <p>With a label vs. born digital</p>
+    </div>
+    <div class="si-panel">
+      <div class="si-card">
+        <h3>With a label</h3>
+        <p class="sub">Case CS-0000481922</p>
+        <div class="si-id">urn:epc:id:sgtin:0614141.812345.6789</div>
+        <div class="si-tag-preview">
+          <div class="tp-brand">Bartender &middot; simulated label</div>
+          <div class="tp-code">0614141812345</div>
+          <div class="tp-bars"></div>
+        </div>
+      </div>
+      <div class="si-card">
+        <h3>Without a label</h3>
+        <p class="sub">Pallet PL-0000102774</p>
+        <div class="si-id">urn:epc:id:sgtin:0614141.900021.4451</div>
+        <div class="si-no-label">Born digital &mdash; no physical tag simulated for this item</div>
+      </div>
+    </div>
+  </section>
+
+  <div class="notes">
+    <strong>Carried over from Supplier Connect, on purpose:</strong> border-only cards (no shadows), 0.98 press-scale on buttons, semantic colors reserved for state and never doubling as the brand accent, warning-amber for banners only.
+    <ul>
+      <li><strong>Changed:</strong> navy now carries buttons/focus/links (Supplier Connect uses orange there) &mdash; orange is reserved for brand presence only.</li>
+      <li><strong>Changed:</strong> warm near-white ground (<code>#FAF8F4</code>) instead of Supplier Connect's cool grey (<code>#F6F8FA</code>), to sit better against orange.</li>
+      <li><strong>Changed:</strong> IBM Plex family instead of Open Sans &mdash; Plex Mono gives serials/EPCs/GTINs a legible fixed-width treatment throughout.</li>
+      <li><strong>Reused as-is:</strong> the BarTender mark itself, unaltered &mdash; official logo asset, not a redraw.</li>
+    </ul>
+  </div>
+
+</div>
