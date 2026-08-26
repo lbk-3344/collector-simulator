@@ -79,7 +79,17 @@ function pageTitle(pathname: string): string {
   return TITLES[base] ?? "Bartender Track and Trace Simulator";
 }
 
-export function AppShell({ user, children }: { user: ShellUser; children: React.ReactNode }) {
+export function AppShell({
+  user,
+  version,
+  environment,
+  children,
+}: {
+  user: ShellUser;
+  version: string;
+  environment: string;
+  children: React.ReactNode;
+}) {
   const pathname = usePathname();
   const [bugModalOpen, setBugModalOpen] = useState(false);
 
@@ -103,7 +113,10 @@ export function AppShell({ user, children }: { user: ShellUser; children: React.
             </Link>
           ))}
         </nav>
-        <div className="side-foot">v0.1.0 &middot; staging</div>
+        <div className="side-foot">
+          v{version}
+          {environment && <> &middot; {environment}</>}
+        </div>
       </aside>
 
       <div className="main-col">
