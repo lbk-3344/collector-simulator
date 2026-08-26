@@ -49,10 +49,27 @@ Changed from Supplier Connect:
 - Neutral palette is warm-leaning (paired with orange) rather than cool/blue-grey.
 - Dark theme included from the start (see `style-guide.html`) — a plausible fit for a simulator that could run in a control-room/NOC context, not present in Supplier Connect today.
 
+## Iconography
+
+**Read-point type icons — integrated 2026-08-26.** A 13-icon set for the read-point/device types exposed by Bartender's `GET /reference/read-point-types` (see `CLAUDE-CONCEPT.md` section 7) — produced in a separate Claude Design session, delivered as `package/` at the repo root, and wired into the app as `components/ui/ReadPointIcon.tsx` + `public/icons/read-point/*.svg`.
+
+Design rules (source of truth: `package/README.md` and `package/manifest.json` — keep this summary in sync if either changes):
+- 64×64 viewBox, front elevation only — no perspective, no fills, line-art only.
+- 3px stroke at normal sizes, bumped to 3.5px when rendered at ≤24px so the glyph doesn't thin out.
+- Round line caps and joins throughout.
+- Stroke color is always `currentColor` — never hardcode a color on the SVG or the React component; icons inherit the surrounding text/icon color the same way the rest of the UI does.
+- Render at 20px or larger — the linework is not legible smaller than that.
+- Unknown/future type codes fall back to the `SIMPLE_READER` glyph rather than rendering nothing.
+
+Two categories, 13 codes total: **Fixed RFID** (`PORTAL`, `CONVEYOR`, `OVERHEAD`, `SHELF`, `TABLETOP`, `ENCLOSURE`, `DOORFRAME`, `LIFT_LOBBY`, `SIMPLE_READER`) and **Software** (`MIDDLEWARE`, `MES`, `WCS`, `APP`).
+
+Usage: import the default export from `components/ui/ReadPointIcon.tsx` and pass a `type` matching one of the codes above — `<ReadPointIcon type="PORTAL" size={24} />`. The raw standalone SVGs and a combined `<symbol>` sprite are also available under `public/icons/read-point/` for any non-React usage (e.g. static marketing pages).
+
 ## Reference
 
 - `style-guide.html` in this repo — the living token + component reference (also published as a Cowork Artifact for Luc's review). Regenerate/update it whenever the palette or component conventions change, the same way it was built.
 - Inspiration source: `../supplier-portal` (Supplier Connect) — `tailwind.config.ts`, `app/globals.css`, `components/ui/BartenderLogo.tsx`.
+- `package/README.md` — full source documentation for the read-point icon set (design rules, type-code table, "adding a new type" instructions).
 
 ## Next steps
 

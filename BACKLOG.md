@@ -57,6 +57,8 @@ Brought forward from "later" to now — Luc flagged it as genuinely useful. See 
 
 *(To break down once BL-001 and BL-003 are settled.)*
 
+- [x] **BL-029** — Read-point type icon set integrated 2026-08-26: 13 line-art icons (`components/ui/ReadPointIcon.tsx`, `public/icons/read-point/`), see `CHARTE-GRAPHIQUE.md` "Iconography". Delivered by a separate Claude Design session (source in `package/`), keyed off a partial/observational `GET /reference/read-point-types` type-code list (see `CLAUDE-CONCEPT.md` section 7) — **not yet confirmed with Luc** whether "read-point" is the same concept as this backlog's "Device", or related-but-distinct. Feeds into BL-003 once settled.
+
 ## 6. Workflows
 
 *(To break down once BL-003 is settled.)*

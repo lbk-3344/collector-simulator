@@ -1,0 +1,167 @@
+{
+  "name": "read-point-type-icons",
+  "version": "1.0.0",
+  "grid": 64,
+  "strokeWidth": 3,
+  "color": "currentColor",
+  "minSize": 20,
+  "fallback": "SIMPLE_READER",
+  "icons": [
+    {
+      "code": "PORTAL",
+      "slug": "portal",
+      "label": "Portal / Gate",
+      "category": "fixed_rfid",
+      "description": "Frame over a doorway or dock opening; items pass through on foot, forklift or conveyor.",
+      "files": {
+        "glyph": "svg/portal.svg",
+        "tiled": "svg-tiled/portal.svg",
+        "spriteId": "rp-portal"
+      }
+    },
+    {
+      "code": "CONVEYOR",
+      "slug": "conveyor",
+      "label": "Conveyor / Tunnel",
+      "category": "fixed_rfid",
+      "description": "Reader head over a roller conveyor — reads at full belt speed as items pass under.",
+      "files": {
+        "glyph": "svg/conveyor.svg",
+        "tiled": "svg-tiled/conveyor.svg",
+        "spriteId": "rp-conveyor"
+      }
+    },
+    {
+      "code": "OVERHEAD",
+      "slug": "overhead",
+      "label": "Overhead / Ceiling Mount",
+      "category": "fixed_rfid",
+      "description": "Ceiling or pole mounted, antennas aimed down for continuous zone presence.",
+      "files": {
+        "glyph": "svg/overhead.svg",
+        "tiled": "svg-tiled/overhead.svg",
+        "spriteId": "rp-overhead"
+      }
+    },
+    {
+      "code": "SHELF",
+      "slug": "shelf",
+      "label": "Shelf / Embedded",
+      "category": "fixed_rfid",
+      "description": "Antennas in each rack level — short read range per shelf, stock counted in place.",
+      "files": {
+        "glyph": "svg/shelf.svg",
+        "tiled": "svg-tiled/shelf.svg",
+        "spriteId": "rp-shelf"
+      }
+    },
+    {
+      "code": "TABLETOP",
+      "slug": "tabletop",
+      "label": "Open Tabletop",
+      "category": "fixed_rfid",
+      "description": "Flat antenna pad on a work surface — reads without any scanning motion.",
+      "files": {
+        "glyph": "svg/tabletop.svg",
+        "tiled": "svg-tiled/tabletop.svg",
+        "spriteId": "rp-tabletop"
+      }
+    },
+    {
+      "code": "ENCLOSURE",
+      "slug": "enclosure",
+      "label": "Shielded Enclosure",
+      "category": "fixed_rfid",
+      "description": "RF-shielded chamber — the item and its reads stay contained, so accuracy is 100%.",
+      "files": {
+        "glyph": "svg/enclosure.svg",
+        "tiled": "svg-tiled/enclosure.svg",
+        "spriteId": "rp-enclosure"
+      }
+    },
+    {
+      "code": "DOORFRAME",
+      "slug": "doorframe",
+      "label": "Room-to-Room (Doorframe)",
+      "category": "fixed_rfid",
+      "description": "Antenna pairs flush in both jambs — a tight, crossing-only read zone.",
+      "files": {
+        "glyph": "svg/doorframe.svg",
+        "tiled": "svg-tiled/doorframe.svg",
+        "spriteId": "rp-doorframe"
+      }
+    },
+    {
+      "code": "LIFT_LOBBY",
+      "slug": "lift_lobby",
+      "label": "Floor-to-Floor (Lift Lobby)",
+      "category": "fixed_rfid",
+      "description": "Lobby or stairwell transition; the car itself acts as a Faraday cage.",
+      "files": {
+        "glyph": "svg/lift_lobby.svg",
+        "tiled": "svg-tiled/lift_lobby.svg",
+        "spriteId": "rp-lift-lobby"
+      }
+    },
+    {
+      "code": "SIMPLE_READER",
+      "slug": "simple_reader",
+      "label": "Simple Reader",
+      "category": "fixed_rfid",
+      "description": "The platform fallback — a plain reader panel emitting an RF wave.",
+      "files": {
+        "glyph": "svg/simple_reader.svg",
+        "tiled": "svg-tiled/simple_reader.svg",
+        "spriteId": "rp-simple-reader"
+      }
+    },
+    {
+      "code": "MIDDLEWARE",
+      "slug": "middleware",
+      "label": "Middleware",
+      "category": "software",
+      "description": "Integration bridge forwarding physical reads on to the platform.",
+      "files": {
+        "glyph": "svg/middleware.svg",
+        "tiled": "svg-tiled/middleware.svg",
+        "spriteId": "rp-middleware"
+      }
+    },
+    {
+      "code": "MES",
+      "slug": "mes",
+      "label": "Manufacturing Execution System",
+      "category": "software",
+      "description": "Emits reads on production events from the plant floor.",
+      "files": {
+        "glyph": "svg/mes.svg",
+        "tiled": "svg-tiled/mes.svg",
+        "spriteId": "rp-mes"
+      }
+    },
+    {
+      "code": "WCS",
+      "slug": "wcs",
+      "label": "Warehouse Control System",
+      "category": "software",
+      "description": "Warehouse-side system emitting reads on conveyor, sorter and ASRS events.",
+      "files": {
+        "glyph": "svg/wcs.svg",
+        "tiled": "svg-tiled/wcs.svg",
+        "spriteId": "rp-wcs"
+      }
+    },
+    {
+      "code": "APP",
+      "slug": "app",
+      "label": "Mobile / Web Application",
+      "category": "software",
+      "description": "Camera, NFC or manual-entry submissions from a mobile or web client.",
+      "files": {
+        "glyph": "svg/app.svg",
+        "tiled": "svg-tiled/app.svg",
+        "spriteId": "rp-app"
+      }
+    }
+  ]
+}
