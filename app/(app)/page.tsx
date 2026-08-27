@@ -4,6 +4,7 @@
 export default function OverviewPage() {
   return (
     <section className="fade-in">
+      <h1 className="page-title">Overview</h1>
       <div className="stat-grid">
         <div className="stat-card accent">
           <div className="l">Devices online</div>

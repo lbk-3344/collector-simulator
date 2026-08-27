@@ -65,20 +65,6 @@ const NAV_ITEMS = [
   },
 ];
 
-const TITLES: Record<string, string> = {
-  "/": "Overview",
-  "/devices": "Devices",
-  "/workflows": "Workflows",
-  "/items": "Serialized Items",
-  "/settings": "Settings",
-};
-
-function pageTitle(pathname: string): string {
-  if (TITLES[pathname]) return TITLES[pathname];
-  const base = "/" + pathname.split("/")[1];
-  return TITLES[base] ?? "Bartender Track and Trace Simulator";
-}
-
 export function AppShell({
   user,
   version,
@@ -92,10 +78,11 @@ export function AppShell({
 }) {
   const pathname = usePathname();
   const [bugModalOpen, setBugModalOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
 
   return (
     <div className="app">
-      <aside className="sidebar">
+      <header className="topbar">
         <div className="side-brand">
           <Image src="/brand/bartender-logo.png" alt="BarTender" width={26} height={21} style={{ objectFit: "contain" }} priority />
           <div className="side-brand-text">
@@ -105,27 +92,46 @@ export function AppShell({
             <span className="side-brand-tag">Track &amp; Trace Sim.</span>
           </div>
         </div>
-        <nav className="side-nav">
-          {NAV_ITEMS.map((item) => (
-            <Link key={item.href} href={item.href} className={`side-link${pathname === item.href ? " active" : ""}`}>
-              {item.icon}
-              {item.label}
-            </Link>
-          ))}
-        </nav>
-        <div className="side-foot">
-          v{version}
-          {environment && <> &middot; {environment}</>}
+        <div className="topbar-right">
+          <UserMenu user={user} onReportBug={() => setBugModalOpen(true)} />
         </div>
-      </aside>
+      </header>
 
-      <div className="main-col">
-        <header className="topbar">
-          <div className="topbar-title">{pageTitle(pathname)}</div>
-          <div className="topbar-right">
-            <UserMenu user={user} onReportBug={() => setBugModalOpen(true)} />
-          </div>
-        </header>
+      <div className="shell-body">
+        <aside className={`sidebar${collapsed ? " collapsed" : ""}`}>
+          <nav className="side-nav">
+            {NAV_ITEMS.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`side-link${pathname === item.href ? " active" : ""}`}
+                title={collapsed ? item.label : undefined}
+              >
+                {item.icon}
+                {!collapsed && item.label}
+              </Link>
+            ))}
+          </nav>
+
+          <button
+            className="side-toggle"
+            onClick={() => setCollapsed((v) => !v)}
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7">
+              <polyline points="12,4 6,10 12,16" />
+              <polyline points="16,4 10,10 16,16" />
+            </svg>
+          </button>
+
+          {!collapsed && (
+            <div className="side-foot">
+              v{version}
+              {environment && <> &middot; {environment}</>}
+            </div>
+          )}
+        </aside>
 
         <main className="content">{children}</main>
       </div>

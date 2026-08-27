@@ -15,6 +15,8 @@ export default function StyleGuidePage() {
 
   return (
     <section className="fade-in">
+      <h1 className="page-title">Style guide</h1>
+
       <div className="panel" style={{ marginBottom: 18 }}>
         <div className="panel-head">
           <h2>Read-point type icons</h2>
@@ -30,6 +32,7 @@ export default function StyleGuidePage() {
         <div key={category} className="panel" style={{ marginBottom: 18 }}>
           <div className="panel-head">
             <h2>{CATEGORY_LABELS[category] ?? category}</h2>
+            <span className="chip chip-brand">{category.toUpperCase()}</span>
           </div>
           <div
             style={{

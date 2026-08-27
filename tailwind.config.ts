@@ -16,7 +16,6 @@ const config: Config = {
     extend: {
       fontFamily: {
         ui: ["var(--font-ui)"],
-        cond: ["var(--font-cond)"],
         mono: ["var(--font-mono)"],
       },
       colors: {
