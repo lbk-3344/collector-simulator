@@ -5,19 +5,28 @@ import { useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import Image from "next/image";
 
-// Polls /api/auth/status every 30s and leaves once an admin validates the
-// account (role no longer PENDING) — same pattern as Supplier Connect's
-// PendingPage.tsx. See CLAUDE-CONCEPT.md section 4.
+// Polls NextAuth's own /api/auth/session every 30s and leaves once an admin
+// validates the account (role no longer PENDING) — same pattern as Supplier
+// Connect's PendingPage.tsx. See CLAUDE-CONCEPT.md section 4.
+//
+// Deliberately NOT a plain "read the current role" endpoint: middleware.ts
+// checks the role via next-auth/jwt's getToken(), which only decodes the
+// existing signed session cookie — it never re-runs the jwt callback, so it
+// can't see a role change made in the DB. NextAuth's built-in session route
+// is the one call that both re-runs jwt() (via getServerSession) AND re-signs
+// the session cookie, so middleware's next check actually sees the new role.
+// A route that only reads fresh data without touching the cookie would report
+// the correct role here but still bounce the user right back to this page on
+// the next navigation or refresh.
 export default function PendingPage() {
   const router = useRouter();
 
   useEffect(() => {
     const interval = setInterval(async () => {
-      const res = await fetch("/api/auth/status").catch(() => null);
+      const res = await fetch("/api/auth/session", { cache: "no-store" }).catch(() => null);
       if (!res) return;
       const data = await res.json().catch(() => null);
-      if (!data) return;
-      if (data.role && data.role !== "PENDING") {
+      if (data?.user?.role && data.user.role !== "PENDING") {
         router.push("/");
         router.refresh();
       }
