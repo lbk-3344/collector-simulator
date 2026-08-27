@@ -15,13 +15,14 @@ function environmentLabel(): string {
 }
 
 // Wraps every authenticated route with the sidebar/topbar/avatar-menu shell,
-// ported from mockup-app-shell.html. Middleware already guarantees a signed-in,
-// non-PENDING user by the time we get here — the checks below are a defensive
-// fallback, not the primary gate.
+// ported from mockup-app-shell.html. Middleware is the primary gate and is
+// pathname-aware (a PENDING user can reach /settings but nothing else — see
+// middleware.ts and CLAUDE-CONCEPT.md section 7.1) — this layout can't
+// replicate that distinction (no pathname available here), so it only
+// enforces the one rule that's true on every route: you must be signed in.
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
   if (!session) redirect("/login");
-  if (session.user.role === "PENDING") redirect("/auth/pending");
 
   return (
     <AppShell

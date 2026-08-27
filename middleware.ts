@@ -3,10 +3,14 @@ import { NextRequest, NextResponse } from "next/server";
 
 // Requires auth on every route except /login and /auth/pending (NextAuth's own
 // /api/auth/* is excluded via the matcher below). PENDING-role users are kept on
-// /auth/pending until an admin validates them. See CLAUDE-CONCEPT.md section 4.
+// /auth/pending until an admin validates them — except /settings and its API
+// routes, which stay reachable so a PENDING user can still set up their own
+// Bartender connection (open to every role, see CLAUDE-CONCEPT.md section 7.1).
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const isPublicPage = pathname === "/login" || pathname === "/auth/pending";
+  const isPendingAllowedPage =
+    pathname === "/auth/pending" || pathname === "/settings" || pathname.startsWith("/api/settings/");
 
   const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
 
@@ -23,7 +27,7 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(new URL(role === "PENDING" ? "/auth/pending" : "/", req.url));
   }
 
-  if (role === "PENDING" && pathname !== "/auth/pending") {
+  if (role === "PENDING" && !isPendingAllowedPage) {
     return NextResponse.redirect(new URL("/auth/pending", req.url));
   }
 

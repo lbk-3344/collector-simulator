@@ -1,11 +1,12 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { UsersTable } from "./UsersTable";
+import { SettingsTabs } from "./SettingsTabs";
 
-// /settings is open to every signed-in user, tabbed. Right now the only tab is
-// Users, and it's admin-only — hidden entirely (not just disabled) for USER,
-// per CLAUDE-CONCEPT.md section 4. Other tabs will show up here as the app grows.
+// /settings is open to every signed-in user, tabbed — Bartender Connection is
+// open to every role (including PENDING, see CLAUDE-CONCEPT.md section 7.1);
+// Users is admin-only, hidden entirely (not just disabled) for everyone else,
+// per CLAUDE-CONCEPT.md section 4.
 export default async function SettingsPage() {
   const session = await getServerSession(authOptions);
   const isAdmin = session?.user.role === "ADMIN";
@@ -19,23 +20,7 @@ export default async function SettingsPage() {
         <p>Reached from the avatar menu, not the left navigation — open to every signed-in user.</p>
       </div>
 
-      {isAdmin ? (
-        <>
-          <div className="tabs">
-            <button className="tab active">
-              Users
-              {pendingCount > 0 && <span className="badge">{pendingCount}</span>}
-            </button>
-          </div>
-          <UsersTable currentUserId={session!.user.id} />
-        </>
-      ) : (
-        <div className="placeholder">
-          <span className="tag">Settings</span>
-          <h2>Nothing here yet</h2>
-          <p>There&apos;s nothing to configure here right now — check back as the app grows.</p>
-        </div>
-      )}
+      <SettingsTabs isAdmin={isAdmin} pendingCount={pendingCount} currentUserId={session!.user.id} />
     </section>
   );
 }

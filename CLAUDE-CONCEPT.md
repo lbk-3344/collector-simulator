@@ -112,7 +112,29 @@ Data model: two new fields on `User` (`bartenderTenantUrl`, `bartenderApiKeyCiph
   curl --location 'https://demotrackandtrace.sandbox.bartender-tt.com/statemachine-api-configuration/rest/configuration/locations?level=premise' \
   --header 'apikey: XCONEBOUVGDPDIOD'
   ```
-- **Response shape**: **not yet documented** — Luc gave us the request, not a sample response body. Don't hardcode an assumed JSON shape; when Claude Code wires up "Test connection" it should call this live (with a real key from Luc) and log/inspect the actual response before deciding how to parse and display it (e.g. location count, names). If the shape turns out to need dedicated modeling (a `Location`/`Site` concept feeding BL-003), come back and document it here properly rather than guessing further.
+- **Response shape** — **confirmed 2026-08-27** against the sandbox tenant (33 locations returned): a **plain JSON array** of location objects (not wrapped in `{ data: [...] }` or similar), each shaped like:
+  ```json
+  {
+    "id": 59414424685263,
+    "code": "TTMEMBASE",
+    "name": "T&TMembase",
+    "level": "premise",
+    "type": "dc",
+    "latitude": 35.06612,
+    "longitude": -89.955986,
+    "sgln": null,
+    "bizLocation": "urn:mjx:site:loc:DEMOTT.00005.0",
+    "bizLocationRegularizer": "urn:mjx:site:loc:DEMOTT.00005.0",
+    "hotspotZOffset": 0,
+    "attributes": "asn_auto_on,inventory_app_flow_transferout_receiving",
+    "addressLine1": "", "addressLine2": null, "addressLine3": null,
+    "addressPostalCode": "", "addressCity": "Memphis", "addressState": "TN", "addressCountry": "USA",
+    "hierarchy": { "organizationId": 1000, "premiseId": null, "floorId": null, "areaId": null, "zoneId": null },
+    "parent": 1000
+  }
+  ```
+  `type` seen so far: `dc`, `store`, `factory`, `customer` — likely an open set, not a fixed enum. `attributes` is a comma-separated string or `null`, not an array. `id`/`parent` are numbers (large enough that they don't fit a 32-bit int). Only used today for a location **count** ("Test connection" — BL-033); if a `Location`/`Site` concept is ever needed for BL-003, model against this shape directly rather than re-deriving it.
+- **Error behavior** — confirmed against the same sandbox tenant: an invalid `apikey` returns **HTTP 401** with a plain-text body `Unauthorized` (not JSON). A malformed/unreachable tenant URL fails at the network level (DNS/connection error) before any HTTP status is returned — handle both distinctly rather than a single generic "failed" message (see `app/api/settings/bartender/test/route.ts`).
 - **Other query levels**: the `level=premise` parameter implies other levels likely exist (e.g. a site hierarchy) — not explored yet, out of scope until needed.
 
 ## 8. Objectives
@@ -143,7 +165,8 @@ Data model: two new fields on `User` (`bartenderTenantUrl`, `bartenderApiKeyCiph
 
 Dated log of product decisions, most recent first. This is the section to check before making an undocumented product call.
 
-- **2026-08-27** — First real Bartender API provided and per-user connection settings decided (see section 7.1/7.2 above, `BACKLOG.md` BL-032/BL-033): every user — any role, not just `ADMIN` — gets a **Bartender Connection** tab in Settings to enter their own tenant URL + API key, since different users may point at different Bartender tenants. The API key is **stored encrypted at rest** (AES-256-GCM via a new `ENCRYPTION_KEY` env var), never re-displayed in plaintext after saving (masked to last 4 characters). First confirmed endpoint: `GET {tenantUrl}/statemachine-api-configuration/rest/configuration/locations?level=premise` with an `apikey` header, returning a tenant's locations/sites — used to power a "Test connection" action in Settings. Response shape not yet documented; to be filled in once actually called against a real tenant.
+- **2026-08-27** — BL-032/BL-033 implemented: Bartender Connection tab (tenant URL + AES-256-GCM-encrypted API key, masked to last 4 chars), `GET`/`POST /api/settings/bartender`, and a server-side-only `POST /api/settings/bartender/test`. Tested live against Luc's sandbox tenant — 33 locations, response shape now documented in section 7.2 below. One implementation consequence worth recording: since Bartender Connection is open to `PENDING` users too, `middleware.ts` and `app/(app)/layout.tsx` both needed a carve-out so a `PENDING` user can reach `/settings` (and its `/api/settings/*` routes) specifically, while every other route still bounces them to `/auth/pending` as before — this wasn't explicitly called out when the tab's access rule was decided, but follows directly from it.
+- **2026-08-27** — First real Bartender API provided and per-user connection settings decided (see section 7.1/7.2 above, `BACKLOG.md` BL-032/BL-033): every user — any role, not just `ADMIN` — gets a **Bartender Connection** tab in Settings to enter their own tenant URL + API key, since different users may point at different Bartender tenants. The API key is **stored encrypted at rest** (AES-256-GCM via a new `ENCRYPTION_KEY` env var), never re-displayed in plaintext after saving (masked to last 4 characters). First confirmed endpoint: `GET {tenantUrl}/statemachine-api-configuration/rest/configuration/locations?level=premise` with an `apikey` header, returning a tenant's locations/sites — used to power a "Test connection" action in Settings.
 - **2026-08-27** — App shell layout revised (see `CHARTE-GRAPHIQUE.md` "App shell layout", `BACKLOG.md` BL-031): top bar simplified to logo + software name only on the left and the avatar/user menu only on the right — the page title that used to live in the top bar now renders inside each page's own content area instead. The sidebar moves from a full-height column beside the top bar to sitting below it (top bar spans full width; sidebar + content sit side by side underneath), and becomes retractable: collapsed shows icon-only nav items, expanded shows icon+label, with the active item as a filled-orange pill in both states. Explicit request from Luc, correcting the original BL-028 shell.
 - **2026-08-26** — Typography and background revised in Cowork (supersedes part of the 2026-08-24 design system decision; see `CHARTE-GRAPHIQUE.md`): **Inter + JetBrains Mono** replace IBM Plex Sans/Condensed/Mono, self-hosted via `@fontsource/inter` and `@fontsource/jetbrains-mono` (both v5.3.0, OFL-1.1 — same no-licensing-concern status as the Plex fonts) rather than a Google Fonts CDN link, so the fonts show up as real dependencies once this repo is linked to Claude Design via `/design-sync`. Page background (`--ground` token) changed from the warm `#FAF8F4` to plain light gray `#F4F4F5`. Orange's interactive role expanded beyond logo/eyebrows/active-nav-indicator to also cover: sidebar active-item fill (filled pill, not just a thin line), avatar-menu item hover state, category badges (`FIXED_RFID`/`SOFTWARE`), and secondary/ghost buttons — primary buttons, links, and focus rings stay navy, and semantic status colors (online/offline/error) are untouched, preserving the "semantic color ≠ brand accent" rule from the original decision. Decided from a live comparison (`design-review.html`, Cowork artifact — font pairings × background options on a mini app-shell mockup). See `BACKLOG.md` BL-030.
 - **2026-08-26** — Read-point type icon set integrated: 13 line-art SVG icons (one per read-point/device type, see section 7 above and `CHARTE-GRAPHIQUE.md` "Iconography"), produced in a separate Claude Design session and delivered as `package/` at the repo root. Wired into the app as `components/ui/ReadPointIcon.tsx` (typed React component) plus raw assets under `public/icons/read-point/` (standalone SVGs, a `<symbol>` sprite, and `manifest.json`). Not a product decision on its own, but worth noting: this is the first concrete (if partial) signal of the real Bartender read-point type taxonomy, ahead of BL-002/BL-003 being formally settled — flagged for Luc to confirm whether "read-point" and this simulator's "Device" concept are the same thing or related-but-distinct.

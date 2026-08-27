@@ -73,6 +73,12 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
+  // Per-user Bartender Track & Trace connection — see CLAUDE-CONCEPT.md
+  // section 7.1, BACKLOG.md BL-032. Every role can set these, not just ADMIN.
+  bartenderTenantUrl        String?
+  bartenderApiKeyCiphertext String? // AES-256-GCM, see lib/crypto.ts — never the plaintext key
+  bartenderApiKeyLast4      String? // last 4 chars of the plaintext key, for masked display only
+
   accounts   Account[]
   sessions   Session[]
   bugReports BugReport[]
