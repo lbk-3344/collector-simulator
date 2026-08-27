@@ -23,6 +23,11 @@ enum BugStatus {
   RESOLVED
 }
 
+enum DeviceStatus {
+  ONLINE
+  OFFLINE
+}
+
 // ─── NextAuth required tables (via @auth/prisma-adapter) ────────────────────
 
 model Account {
@@ -79,9 +84,30 @@ model User {
   bartenderApiKeyCiphertext String? // AES-256-GCM, see lib/crypto.ts — never the plaintext key
   bartenderApiKeyLast4      String? // last 4 chars of the plaintext key, for masked display only
 
+  // Overview site selector — see CLAUDE-CONCEPT.md section 14, BACKLOG.md BL-037.
+  selectedLocationCode String?
+
   accounts   Account[]
   sessions   Session[]
   bugReports BugReport[]
+}
+
+// This app's own simulated read-point fixture — deliberately NOT the same
+// thing as Bartender's real DataCollector/Channel concept (location-api-v2,
+// see CLAUDE-CONCEPT.md section 7.3/14.2). Powers the Overview location map
+// (BL-038) and the Devices-online KPI (BL-039).
+model Device {
+  id           String       @id @default(cuid())
+  name         String
+  type         String // one of READ_POINT_TYPES from components/ui/ReadPointIcon.tsx (e.g. "PORTAL", "SHELF") — not enforced at the DB level, validated in code
+  locationCode String // matches a Bartender Location's `code` (location-api-v2) — plain string, not a FK
+  positionX    Int? // pixel x on that location's floor plan, nullable if unplaced
+  positionY    Int?
+  status       DeviceStatus @default(OFFLINE)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@index([locationCode])
 }
 
 // See CLAUDE-CONCEPT.md section 3 and CLAUDE.md "Bug handling" for the full

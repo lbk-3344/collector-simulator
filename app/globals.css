@@ -215,6 +215,61 @@ svg { display: block; }
 .stat-card .d { font-size: 11.5px; color: var(--ink-2); margin-top: 3px; }
 .stat-card.accent .n { color: var(--accent-primary); }
 
+/* ---- Site selector card (Overview, BL-037) ---- */
+.site-card { display: flex; align-items: center; gap: 14px; padding: 15px 16px; }
+.site-card-icon { width: 42px; height: 42px; flex-shrink: 0; color: var(--accent-primary); }
+.site-card-icon svg { width: 100%; height: 100%; stroke: currentColor; }
+.site-card-body { min-width: 0; position: relative; }
+.site-card-name-btn {
+  display: inline-flex; align-items: center; gap: 6px; max-width: 100%;
+  background: none; border: none; padding: 0; cursor: pointer;
+  font-size: 20px; font-weight: 700; color: var(--ink); text-align: left;
+}
+.site-card-name-btn span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.site-card-name-btn:hover, .site-card-name-btn:focus-visible { text-decoration: underline; }
+.site-card-name-btn svg { width: 14px; height: 14px; stroke: var(--ink-3); flex-shrink: 0; transition: transform .12s; }
+.site-card-name-btn[aria-expanded="true"] svg { transform: rotate(180deg); }
+.site-card-meta { font-size: 11.5px; color: var(--ink-2); margin-top: 2px; }
+.site-card-dropdown {
+  position: absolute; top: calc(100% + 8px); left: 0; width: 270px; max-height: 320px; overflow-y: auto;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+  box-shadow: var(--shell-shadow); z-index: 20; padding: 6px;
+}
+.site-card-dropdown-item {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 1px; width: 100%;
+  padding: 8px 10px; border-radius: 7px; background: none; border: none; cursor: pointer; text-align: left;
+  font-size: 13px; font-weight: 600; color: var(--ink); transition: background .12s, color .12s;
+}
+.site-card-dropdown-item:hover { background: var(--accent-brand-tint); color: var(--accent-brand-ink); }
+.site-card-dropdown-item.active { background: var(--surface-2); }
+.site-card-dropdown-item .meta { font-size: 11px; font-weight: 400; color: var(--ink-2); }
+
+/* ---- Location map card (Overview, BL-038) ---- */
+.map-card { position: relative; overflow: hidden; height: 480px; }
+.map-card-viewport { position: relative; width: 100%; height: 100%; overflow: hidden; }
+.map-card-viewport.pannable { cursor: grab; }
+.map-card-viewport.pannable:active { cursor: grabbing; }
+.map-card-transform { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
+.map-card-image { display: block; max-width: none; user-select: none; -webkit-user-drag: none; }
+.map-controls {
+  position: absolute; bottom: 14px; right: 14px; z-index: 10;
+  display: flex; flex-direction: column; gap: 2px;
+  background: var(--surface); border-radius: var(--radius); box-shadow: var(--shell-shadow); padding: 4px;
+}
+.map-control-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; border-radius: 6px; border: none; background: none;
+  color: var(--ink-2); cursor: pointer;
+}
+.map-control-btn:hover { background: var(--surface-2); color: var(--ink); }
+.map-control-btn.active { background: var(--accent-primary-tint); color: var(--accent-primary); }
+.map-control-btn svg { width: 16px; height: 16px; stroke: currentColor; }
+.map-marker { position: absolute; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 3px; pointer-events: none; }
+.map-marker-device { color: var(--accent-primary); background: var(--surface); border-radius: 999px; padding: 3px; box-shadow: var(--shell-shadow); }
+.map-marker-device.offline { color: var(--ink-3); }
+.map-marker-zone-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent-brand); border: 2px solid var(--surface); box-shadow: var(--shell-shadow); }
+.map-marker-label { font-size: 9.5px; font-weight: 600; background: var(--surface); color: var(--ink); padding: 1px 5px; border-radius: 4px; white-space: nowrap; box-shadow: var(--shell-shadow); }
+
 .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
 .panel-head { display: flex; align-items: center; justify-content: space-between; padding: 15px 18px; border-bottom: 1px solid var(--border); }
 .panel-head h2 { font-size: 13px; margin: 0; }
