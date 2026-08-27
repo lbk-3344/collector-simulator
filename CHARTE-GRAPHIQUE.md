@@ -96,6 +96,20 @@ Changed from Supplier Connect:
   - `.snack-warning` (`#B4740E`) → **Seagull navy** `#0D1E2C` — white text on this amber fails AA (~3.9:1).
 - Replaces the old pattern everywhere it currently appears: `BartenderConnectionTab.tsx` (Saved / Test connection result), `.error-banner` on `UsersTable.tsx` and `(auth)/login/page.tsx`, and the equivalent message in `BugReportModal.tsx` — one consistent component instead of four ad-hoc instances. The existing tint-based `.chip-*` classes (status badges on list rows, e.g. device online/offline) are untouched — this only replaces the plain-text/banner feedback pattern, not the tag/badge system.
 
+### Site selector card — added 2026-08-27
+
+First of the four Overview top cards, replacing what was previously a `.stat-card`. New class `.site-card`: `.panel`-style container (surface + border + `--radius`), flex row layout — a large world/globe icon on the left (~40-44px, line-art style consistent with the existing `ReadPointIcon` set), and on the right a stacked text block: the selected site's **name** large and bold (roughly the size of `.stat-card .n`, ~20-22px), with city/state/country beneath it in small muted text (~11-12px, `var(--ink-2)`, comma-separated, omitting any missing field rather than showing empty commas). The name is clickable — hover/focus shows it's interactive (underline or a small chevron) — and opens a dropdown (reuse the existing avatar-menu/`.user-menu-item` dropdown pattern: a small elevated panel, one row per site, current selection indicated) listing every other Location; picking one closes the dropdown and updates the card.
+
+### Location map card — added 2026-08-27
+
+Replaces the previous placeholder `.panel` beneath the KPI row. Uses the existing `.panel` container styling, sized to fill the available content width and to the largest height the viewport reasonably allows (responsive — recalculates on window resize, no fixed aspect ratio forced on the floor-plan image beyond what's needed to avoid distortion).
+
+Inside, the floor-plan image fills the card (`object-fit: contain`, so nothing crops), wrapped in a pan/zoom transform layer. A floating control widget sits `position: absolute` in the card's bottom-right corner (small gap from the edges, elevated with a subtle shadow matching `--shell-shadow`, `--radius`-rounded, `--surface` background): three icon buttons — zoom in (+), zoom out (–), and a move/pan toggle — sized and styled consistently with the existing icon-only sidebar nav buttons (BL-031) rather than full `.btn`s, since they're a persistent chrome control, not a primary action.
+
+Zone and Device markers are small icon badges positioned absolutely within the transform layer at their `{x, y}` pixel coordinates (scaled to the image's natural size so they stay correctly placed at any zoom level) — Device markers reuse `ReadPointIcon`; a Zone marker (no existing icon set yet) can start as a simple labeled dot/pin, refined later if it needs more.
+
+No-floor-plan state: when the selected site has `hasMap: false`, the card shows a centered placeholder (reusing the existing `.placeholder` pattern) rather than attempting to render a missing image.
+
 ## Iconography
 
 **Read-point type icons — integrated 2026-08-26.** A 13-icon set for the read-point/device types exposed by Bartender's `GET /reference/read-point-types` (see `CLAUDE-CONCEPT.md` section 7) — produced in a separate Claude Design session, delivered as `package/` at the repo root, and wired into the app as `components/ui/ReadPointIcon.tsx` + `public/icons/read-point/*.svg`.
