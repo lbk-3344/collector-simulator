@@ -59,7 +59,7 @@ export function BugReportsTable() {
 
   return (
     <>
-      {error && <div className="error-banner">{error}</div>}
+      {error && <div className="snack snack-danger">{error}</div>}
 
       {bugs.length === 0 ? (
         <p className="note">No open bug reports right now.</p>

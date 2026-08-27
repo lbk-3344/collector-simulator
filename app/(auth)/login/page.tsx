@@ -33,7 +33,7 @@ function LoginCard() {
       <p className="auth-sub">Sign in with your work Google account to continue.</p>
 
       {error && (
-        <div className="error-banner" style={{ textAlign: "left" }}>
+        <div className="snack snack-danger" style={{ textAlign: "left" }}>
           Sign-in failed. Please try again, or contact an admin if this keeps happening.
         </div>
       )}

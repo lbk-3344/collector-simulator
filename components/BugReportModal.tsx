@@ -76,7 +76,7 @@ export function BugReportModal({ open, onClose }: { open: boolean; onClose: () =
               </button>
             </div>
             <div className="modal-body">
-              {error && <div className="error-banner">{error}</div>}
+              {error && <div className="snack snack-danger">{error}</div>}
               <div className="field-block">
                 <label htmlFor="bugTitle">Title</label>
                 <input

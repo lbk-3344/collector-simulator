@@ -79,7 +79,7 @@ export function BartenderConnectionTab() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14, maxWidth: 440 }}>
-      {saveError && <div className="error-banner">{saveError}</div>}
+      {saveError && <div className="snack snack-danger">{saveError}</div>}
 
       <div className="field-block">
         <label>Tenant URL</label>
@@ -130,14 +130,14 @@ export function BartenderConnectionTab() {
         </button>
       </div>
 
-      {saveOk && <p className="note" style={{ color: "var(--success)" }}>Saved.</p>}
+      {saveOk && <div className="snack snack-success">Saved.</div>}
 
       {testResult && (
-        <p className="note" style={{ color: testResult.ok ? "var(--success)" : "var(--danger)" }}>
+        <div className={`snack ${testResult.ok ? "snack-success" : "snack-danger"}`}>
           {testResult.ok
             ? `Connected — found ${testResult.locationCount} location${testResult.locationCount === 1 ? "" : "s"}.`
             : testResult.error}
-        </p>
+        </div>
       )}
     </div>
   );

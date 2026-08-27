@@ -100,7 +100,7 @@ export function UsersTable({ currentUserId }: { currentUserId: string }) {
 
   return (
     <>
-      {error && <div className="error-banner">{error}</div>}
+      {error && <div className="snack snack-danger">{error}</div>}
       <div className="table-scroll">
         <table className="users">
           <thead>
