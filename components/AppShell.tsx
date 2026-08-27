@@ -89,7 +89,7 @@ export function AppShell({
             <span className="side-brand-word">
               BarTender<span>.</span>
             </span>
-            <span className="side-brand-tag">Track &amp; Trace Sim.</span>
+            <span className="side-brand-tag">Track &amp; Trace Simulator</span>
           </div>
         </div>
         <div className="topbar-right">

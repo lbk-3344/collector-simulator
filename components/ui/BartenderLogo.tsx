@@ -28,7 +28,7 @@ export function BartenderLogo({ size = "md", showWordmark = true, showTag = fals
           </span>
           {showTag && (
             <span className="side-brand-tag" style={{ fontSize: tagSize }}>
-              Track &amp; Trace Sim.
+              Track &amp; Trace Simulator
             </span>
           )}
         </div>
