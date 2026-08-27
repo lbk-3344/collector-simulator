@@ -34,17 +34,25 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ bug }, { status: 201 });
 }
 
-// Stub — full listing/admin view isn't part of this pass; BUGS.md export (BL-009)
+// Admin-only — powers the Bug Reports tab in Settings. BUGS.md export (BL-009)
 // reads from the DB directly via its own script, not this route.
 export async function GET() {
   const session = await getServerSession(authOptions);
-  if (!session) {
+  if (!session || session.user.role !== "ADMIN") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const bugs = await prisma.bugReport.findMany({
     where: { status: "OPEN" },
     orderBy: { reportedAt: "desc" },
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      screenshotUrl: true,
+      reportedAt: true,
+      reporter: { select: { name: true, email: true } },
+    },
   });
 
   return NextResponse.json({ bugs });
