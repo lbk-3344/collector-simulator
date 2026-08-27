@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { AppShell } from "@/components/AppShell";
-import { version } from "@/package.json";
+import pkg from "@/package.json";
 
 // VERCEL_ENV is only set on Vercel deployments: "production" on main,
 // "preview" on staging. Locally (plain `next dev`) it's undefined, so that
@@ -32,7 +32,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         image: session.user.image ?? null,
         role: session.user.role,
       }}
-      version={version}
+      version={pkg.version}
       environment={environmentLabel()}
     >
       {children}
