@@ -40,7 +40,7 @@ Built from day one, not deferred — mirrors Supplier Connect's mechanism (Luc: 
 
 **Safety rule (new, not in Supplier Connect)**: the last remaining `ADMIN` can't be deleted or demoted to `USER`, by anyone, including themselves — prevents an accidental full lockout with nobody able to manage users.
 
-**Settings**: a `/settings` area accessible to every signed-in user, tabbed. The first tab, **Users**, only renders for `ADMIN` (hidden entirely for `USER`, not just disabled/greyed out — mirrors Supplier Connect's `isBrandAdmin` gate, both server-side on the API routes and client-side on the tab list). Other tabs are open to everyone and will be defined as the app grows — until then, a non-admin visiting Settings may see very little, which is expected at this stage.
+**Settings**: a `/settings` area accessible to every signed-in user, tabbed. The first tab, **Users**, only renders for `ADMIN` (hidden entirely for `USER`, not just disabled/greyed out — mirrors Supplier Connect's `isBrandAdmin` gate, both server-side on the API routes and client-side on the tab list). The second tab, **Bartender Connection** (added 2026-08-27, see section 7.1 below), is open to **every** role including `PENDING` — deliberately not admin-gated, since each user configures their own connection rather than a shared org-wide one.
 
 **Users tab** (admin-only): a table of all users — name/email, avatar, auth provider, last login, role, joined date. Three actions, exactly what Luc asked for:
 - **Validate** — for a `PENDING` user, assigns them a role (default `USER`, admin can pick `ADMIN` directly) and lets them in.
@@ -88,9 +88,32 @@ flowchart TD
 
 The simulator's output (device events, workflow executions, serialized item creation/movement) is reported to the **Bartender Track & Trace platform** via its APIs. Luc will provide the relevant API specs **incrementally, one at a time**, as each integration point becomes needed — this section grows as each API is documented.
 
-*No full API documented yet — the incremental spec-by-spec handoff from Luc hasn't started. One partial, observational data point below, from a design artifact rather than a formal spec.*
+**First real API provided 2026-08-27** — see 7.1/7.2 below. Everything else is still incremental, one API at a time, as Luc provides it.
 
-**Partial/observational — 2026-08-26**: a read-point-type icon set delivered separately (see `CHARTE-GRAPHIQUE.md` "Iconography") is keyed off a `GET /reference/read-point-types` endpoint, with 13 concrete type codes: `PORTAL`, `CONVEYOR`, `OVERHEAD`, `SHELF`, `TABLETOP`, `ENCLOSURE`, `DOORFRAME`, `LIFT_LOBBY`, `SIMPLE_READER` (Fixed RFID category), and `MIDDLEWARE`, `MES`, `WCS`, `APP` (Software category). This is just the enum of codes carried by the icon package's `manifest.json` — not a full endpoint spec (no request/response shape, auth, or pagination details) and not yet confirmed by Luc as the actual contract to build against. Flagging it here per `CLAUDE.md`'s rule against silently assuming an undocumented API shape — treat as a hint for BL-002/BL-003, not a settled integration.
+### 7.1 Per-user connection settings (prerequisite for all Bartender calls)
+
+**Decided 2026-08-27.** Every call this simulator makes to the Bartender Track & Trace platform is authenticated per-user, not per-org: each signed-in user — **any role, including `PENDING`**, not just `ADMIN` — configures their own connection in **Settings → Bartender Connection** (see section 4):
+
+- **Tenant URL** — the base URL of the user's Bartender tenant, e.g. `https://demotrackandtrace.sandbox.bartender-tt.com`. Different users may point at different tenants (sandbox vs. a client's tenant, different demo environments) — this is why it's per-user rather than a single app-wide setting.
+- **API key** — sent as the `apikey` request header on every call to that tenant (see 7.2 for a confirmed working example). **Stored encrypted at rest** (AES-256-GCM, server-side `ENCRYPTION_KEY`) — decided 2026-08-27 given this key grants real access to a Bartender tenant. The UI never re-displays the plaintext key after saving; it shows only the last 4 characters, and the user must re-enter the full key to change it.
+- **Test connection**: Settings offers a "Test connection" action that calls the Locations API (7.2) server-side with the entered (or already-saved) credentials and reports success (with a location count) or a clear error — this is the mechanism a user uses to confirm their tenant URL + key actually work, and doubles as the first live proof this integration works end to end.
+
+Data model: two new fields on `User` (`bartenderTenantUrl`, `bartenderApiKeyCiphertext`) plus a `bartenderApiKeyLast4` convenience field for masked display — see `BACKLOG.md` BL-032.
+
+### 7.2 Locations (sites) API
+
+**Provided by Luc 2026-08-27** — the first concrete Bartender endpoint, and the one used to implement "Test connection" above.
+
+- **Purpose**: returns the locations (sites) configured for the calling tenant.
+- **Method / path**: `GET {tenantUrl}/statemachine-api-configuration/rest/configuration/locations?level=premise`
+- **Auth**: header `apikey: <the user's API key>` (not `Authorization: Bearer` — a plain custom header named `apikey`).
+- **Confirmed working example** (Luc's sandbox tenant):
+  ```
+  curl --location 'https://demotrackandtrace.sandbox.bartender-tt.com/statemachine-api-configuration/rest/configuration/locations?level=premise' \
+  --header 'apikey: XCONEBOUVGDPDIOD'
+  ```
+- **Response shape**: **not yet documented** — Luc gave us the request, not a sample response body. Don't hardcode an assumed JSON shape; when Claude Code wires up "Test connection" it should call this live (with a real key from Luc) and log/inspect the actual response before deciding how to parse and display it (e.g. location count, names). If the shape turns out to need dedicated modeling (a `Location`/`Site` concept feeding BL-003), come back and document it here properly rather than guessing further.
+- **Other query levels**: the `level=premise` parameter implies other levels likely exist (e.g. a site hierarchy) — not explored yet, out of scope until needed.
 
 ## 8. Objectives
 
@@ -120,6 +143,7 @@ The simulator's output (device events, workflow executions, serialized item crea
 
 Dated log of product decisions, most recent first. This is the section to check before making an undocumented product call.
 
+- **2026-08-27** — First real Bartender API provided and per-user connection settings decided (see section 7.1/7.2 above, `BACKLOG.md` BL-032/BL-033): every user — any role, not just `ADMIN` — gets a **Bartender Connection** tab in Settings to enter their own tenant URL + API key, since different users may point at different Bartender tenants. The API key is **stored encrypted at rest** (AES-256-GCM via a new `ENCRYPTION_KEY` env var), never re-displayed in plaintext after saving (masked to last 4 characters). First confirmed endpoint: `GET {tenantUrl}/statemachine-api-configuration/rest/configuration/locations?level=premise` with an `apikey` header, returning a tenant's locations/sites — used to power a "Test connection" action in Settings. Response shape not yet documented; to be filled in once actually called against a real tenant.
 - **2026-08-27** — App shell layout revised (see `CHARTE-GRAPHIQUE.md` "App shell layout", `BACKLOG.md` BL-031): top bar simplified to logo + software name only on the left and the avatar/user menu only on the right — the page title that used to live in the top bar now renders inside each page's own content area instead. The sidebar moves from a full-height column beside the top bar to sitting below it (top bar spans full width; sidebar + content sit side by side underneath), and becomes retractable: collapsed shows icon-only nav items, expanded shows icon+label, with the active item as a filled-orange pill in both states. Explicit request from Luc, correcting the original BL-028 shell.
 - **2026-08-26** — Typography and background revised in Cowork (supersedes part of the 2026-08-24 design system decision; see `CHARTE-GRAPHIQUE.md`): **Inter + JetBrains Mono** replace IBM Plex Sans/Condensed/Mono, self-hosted via `@fontsource/inter` and `@fontsource/jetbrains-mono` (both v5.3.0, OFL-1.1 — same no-licensing-concern status as the Plex fonts) rather than a Google Fonts CDN link, so the fonts show up as real dependencies once this repo is linked to Claude Design via `/design-sync`. Page background (`--ground` token) changed from the warm `#FAF8F4` to plain light gray `#F4F4F5`. Orange's interactive role expanded beyond logo/eyebrows/active-nav-indicator to also cover: sidebar active-item fill (filled pill, not just a thin line), avatar-menu item hover state, category badges (`FIXED_RFID`/`SOFTWARE`), and secondary/ghost buttons — primary buttons, links, and focus rings stay navy, and semantic status colors (online/offline/error) are untouched, preserving the "semantic color ≠ brand accent" rule from the original decision. Decided from a live comparison (`design-review.html`, Cowork artifact — font pairings × background options on a mini app-shell mockup). See `BACKLOG.md` BL-030.
 - **2026-08-26** — Read-point type icon set integrated: 13 line-art SVG icons (one per read-point/device type, see section 7 above and `CHARTE-GRAPHIQUE.md` "Iconography"), produced in a separate Claude Design session and delivered as `package/` at the repo root. Wired into the app as `components/ui/ReadPointIcon.tsx` (typed React component) plus raw assets under `public/icons/read-point/` (standalone SVGs, a `<symbol>` sprite, and `manifest.json`). Not a product decision on its own, but worth noting: this is the first concrete (if partial) signal of the real Bartender read-point type taxonomy, ahead of BL-002/BL-003 being formally settled — flagged for Luc to confirm whether "read-point" and this simulator's "Device" concept are the same thing or related-but-distinct.
