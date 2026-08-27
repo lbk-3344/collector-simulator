@@ -83,6 +83,19 @@ Changed from Supplier Connect:
 - Neutral palette is now a plain light gray (`#F4F4F5`) rather than warm-leaning or cool-blue-grey.
 - Dark theme included from the start (see `style-guide.html`) — a plausible fit for a simulator that could run in a control-room/NOC context, not present in Supplier Connect today.
 
+### Inline feedback ("snacks") — revised 2026-08-27
+
+**Decided 2026-08-27**, replacing the plain colored-text pattern used for save/error/test-connection results (first noticed on Settings → Bartender Connection, e.g. `BartenderConnectionTab.tsx`'s "Saved." and "Connected — found N locations." lines, plus the bare `.error-banner` used there and on the Users tab and login page). Luc's explicit ask: a filled, rounded-rectangle "snack" — solid semantic-color background, not the existing light tint — with text color chosen per-color for contrast, instead of colored text sitting directly on the page/card background.
+
+- New component class `.snack`, with modifiers `.snack-success` / `.snack-danger` / `.snack-warning` (no `.snack-info` needed yet — nothing currently uses neutral/info for this pattern).
+- Shape: rounded rectangle, same radius as the app's standard `--radius` (8px, matching cards/buttons) — a pill (999px) is *not* the intent here, that's reserved for the existing `.chip`/`.badge` components. Padding roughly `10px 14px`, `inline-flex`, small gap for an optional leading icon (checkmark / triangle / x — optional, not required for v1).
+- Backgrounds are the **solid** semantic colors already defined above (not the `-tint` variants used by `.chip`/`.error-banner`): success `#1E8E5A`, danger `#C41E3A`, warning `#B4740E`.
+- Text color is picked per background for WCAG AA contrast (4.5:1), not a single fixed choice:
+  - `.snack-success` (`#1E8E5A`) → **Seagull navy** `#0D1E2C` (the app's existing dark-text token) — white text on this green falls just under AA (~4.1:1).
+  - `.snack-danger` (`#C41E3A`) → **white** `#FFFFFF` — navy text on this red fails AA (~3.6:1).
+  - `.snack-warning` (`#B4740E`) → **Seagull navy** `#0D1E2C` — white text on this amber fails AA (~3.9:1).
+- Replaces the old pattern everywhere it currently appears: `BartenderConnectionTab.tsx` (Saved / Test connection result), `.error-banner` on `UsersTable.tsx` and `(auth)/login/page.tsx`, and the equivalent message in `BugReportModal.tsx` — one consistent component instead of four ad-hoc instances. The existing tint-based `.chip-*` classes (status badges on list rows, e.g. device online/offline) are untouched — this only replaces the plain-text/banner feedback pattern, not the tag/badge system.
+
 ## Iconography
 
 **Read-point type icons — integrated 2026-08-26.** A 13-icon set for the read-point/device types exposed by Bartender's `GET /reference/read-point-types` (see `CLAUDE-CONCEPT.md` section 7) — produced in a separate Claude Design session, delivered as `package/` at the repo root, and wired into the app as `components/ui/ReadPointIcon.tsx` + `public/icons/read-point/*.svg`.
