@@ -2,21 +2,20 @@ import { prisma } from "@/lib/prisma";
 import { decrypt } from "@/lib/crypto";
 
 // Client for Bartender's location-api-v2 — see CLAUDE-CONCEPT.md section 7.3.
-// NOTE: as of 2026-08-27 this has been live-tested and does NOT authenticate
-// successfully with the one known-good sandbox key (see section 7.3 for the
-// exact requests/responses tried) — the staging gateway is also unreachable.
-// This module is built exactly to the documented spec so it's ready to work
-// once Luc resolves the auth question; callers must degrade gracefully
-// rather than assume success.
+// Corrected 2026-08-27 (Luc): the second gateway is "sandbox", not "staging" —
+// live-tested successfully against api.sandbox.bartender-tt.com using the
+// lowercase `apikey` header (not `X-API-Key` as originally spec'd). The map
+// endpoint returns 403 for this key's permission scope — a real, distinct
+// outcome from the 404 "no map for this location type" case — so callers
+// must still degrade gracefully rather than assume every call succeeds.
 
 const PRODUCTION_GATEWAY = "https://api.bartender-tt.com";
-const STAGING_GATEWAY = "https://api.staging.bartender-tt.com";
+const SANDBOX_GATEWAY = "https://api.sandbox.bartender-tt.com";
 
-// Pure — kept isolated from call sites because the exact substring match may
-// need adjusting once tested against a real staging tenant URL (see
-// CLAUDE-CONCEPT.md section 7.3's open question).
+// Pure — kept isolated from call sites since the substring match is the
+// single place that decides which gateway a tenant routes through.
 export function resolveGatewayUrl(tenantUrl: string): string {
-  return tenantUrl.includes("staging.bartender-tt.com") ? STAGING_GATEWAY : PRODUCTION_GATEWAY;
+  return tenantUrl.includes("sandbox") ? SANDBOX_GATEWAY : PRODUCTION_GATEWAY;
 }
 
 export interface BartenderLocation {
@@ -47,6 +46,16 @@ export interface LocationZone {
   position: { x: number; y: number };
 }
 
+// Raw shape of a zone entry as returned by GET /locations/{code}/zones —
+// zoneCode/zoneName identify the zone itself; code/name (unused here) are
+// the parent location's, repeated on every entry.
+interface RawZone {
+  zoneCode?: string;
+  zoneName?: string;
+  type?: string | null;
+  position: { x: number; y: number };
+}
+
 export type GatewayResult<T> = { ok: true; data: T } | { ok: false; error: string; status?: number };
 
 // Same two error modes as section 7.2's client (app/api/settings/bartender/test/route.ts):
@@ -57,7 +66,7 @@ async function callGateway<T>(tenantUrl: string, apiKey: string, path: string): 
 
   let response: Response;
   try {
-    response = await fetch(url, { headers: { "X-API-Key": apiKey }, cache: "no-store" });
+    response = await fetch(url, { headers: { apikey: apiKey }, cache: "no-store" });
   } catch {
     return { ok: false, error: "Could not reach the location-api-v2 gateway." };
   }
@@ -91,8 +100,13 @@ export async function getUserBartenderCredentials(
   return { tenantUrl: user.bartenderTenantUrl, apiKey };
 }
 
-export function listLocations(tenantUrl: string, apiKey: string) {
-  return callGateway<BartenderLocation[]>(tenantUrl, apiKey, "/locations");
+// GET /locations returns a paginated envelope ({ page, total, pageSize,
+// locations: [...] }), not a bare array — unwrap it here so callers just get
+// the list.
+export async function listLocations(tenantUrl: string, apiKey: string): Promise<GatewayResult<BartenderLocation[]>> {
+  const result = await callGateway<{ locations: BartenderLocation[] }>(tenantUrl, apiKey, "/locations");
+  if (!result.ok) return result;
+  return { ok: true, data: result.data.locations };
 }
 
 // A location with no floor plan is a normal, expected outcome (SUPPLIER/CUSTOMER
@@ -107,7 +121,7 @@ export async function getLocationMap(
 
   let response: Response;
   try {
-    response = await fetch(url, { headers: { "X-API-Key": apiKey }, cache: "no-store" });
+    response = await fetch(url, { headers: { apikey: apiKey }, cache: "no-store" });
   } catch {
     return { ok: false, error: "Could not reach the location-api-v2 gateway." };
   }
@@ -130,6 +144,23 @@ export async function getLocationMap(
   return { ok: true, data: data as LocationMap };
 }
 
-export function getLocationZones(tenantUrl: string, apiKey: string, code: string) {
-  return callGateway<LocationZone[]>(tenantUrl, apiKey, `/locations/${encodeURIComponent(code)}/zones`);
+// GET /locations/{code}/zones returns { locationCode, zones: [...] }, with
+// each zone's own identity under zoneCode/zoneName (code/name on the entry
+// are the parent location's, not the zone's) — normalize to LocationZone.
+export async function getLocationZones(
+  tenantUrl: string,
+  apiKey: string,
+  code: string
+): Promise<GatewayResult<LocationZone[]>> {
+  const result = await callGateway<{ zones: RawZone[] }>(tenantUrl, apiKey, `/locations/${encodeURIComponent(code)}/zones`);
+  if (!result.ok) return result;
+  return {
+    ok: true,
+    data: result.data.zones.map((z) => ({
+      code: z.zoneCode,
+      name: z.zoneName,
+      type: z.type ?? undefined,
+      position: z.position,
+    })),
+  };
 }
