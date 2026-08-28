@@ -87,6 +87,8 @@ Along the way: `devices` state was lifted from `LocationMapCard.tsx` into `Overv
 
 Along the way (Phase 5): `prisma/seed-devices.mjs` re-run with the new shape — every previously-configured fixture now also carries `publishedAt`, two Devices got 2-Channel lists mixing Presence and Directional, and one new fixture (`TTMEMBASE-OVERHEAD-01`, "Overhead Reader — Membase Staging") is `configured: true` but `publishedAt: null` specifically to demonstrate the new gate on both the Devices list and the Overview map.
 
+- [x] **BL-049a** — Done 2026-08-28, direct follow-up from Luc right after BL-049 shipped: each Channel row now has an optional, freely editable Name (e.g. "Entry sensor") next to its fixed `CH{n}` id — same id/name split as Device's own `collectorId`/`name`. `DeviceChannel` (`lib/deviceConfig.ts`) gains `name?: string`; no schema migration needed since `channels` is a `Json` column. Restructured `.channel-row` in `DeviceConfigModal.tsx`/`globals.css` into a two-line layout (id + name input + remove button on top, type/sub-type toggles below) to fit the new field. Along the way, fixed a real bug caught during this pass: `setChannelType` was rebuilding the row from scratch on a Presence/Directional switch and silently dropping any `name` already typed — now preserves it. Live-verified: typing a name, switching the row's type, saving, and reopening the device all keep the name intact.
+
 ## 6. Workflows
 
 *(To break down once BL-003 is settled.)*

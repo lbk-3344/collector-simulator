@@ -323,8 +323,8 @@ export function DeviceConfigModal({
       rows.map((row, i) =>
         i === index
           ? type === "PRESENCE"
-            ? { id: row.id, type, presenceEvent: "PRESENT" }
-            : { id: row.id, type, direction: "INBOUND" }
+            ? { id: row.id, name: row.name, type, presenceEvent: "PRESENT" }
+            : { id: row.id, name: row.name, type, direction: "INBOUND" }
           : row
       )
     );
@@ -334,6 +334,9 @@ export function DeviceConfigModal({
   }
   function setChannelDirection(index: number, direction: DeviceChannel["direction"]) {
     setChannels((rows) => rows.map((row, i) => (i === index ? { ...row, direction } : row)));
+  }
+  function setChannelName(index: number, name: string) {
+    setChannels((rows) => rows.map((row, i) => (i === index ? { ...row, name } : row)));
   }
 
   const siteName = siteOptions.find((s) => s.code === locationCode)?.name ?? locationCode;
@@ -500,7 +503,30 @@ export function DeviceConfigModal({
             </label>
             {channels.map((row, i) => (
               <div className="channel-row" key={i}>
-                <span className="channel-row-id">{row.id}</span>
+                <div className="channel-row-top">
+                  <span className="channel-row-id">{row.id}</span>
+                  <input
+                    type="text"
+                    className="channel-name-input"
+                    placeholder="Channel name (optional)"
+                    value={row.name ?? ""}
+                    onChange={(e) => setChannelName(i, e.target.value)}
+                    aria-label={`${row.id} name`}
+                  />
+                  <button
+                    type="button"
+                    className="attr-remove-btn"
+                    aria-label="Remove channel"
+                    disabled={channels.length <= 1}
+                    style={channels.length <= 1 ? { visibility: "hidden" } : undefined}
+                    onClick={() => removeChannel(i)}
+                  >
+                    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7">
+                      <line x1="5" y1="5" x2="15" y2="15" />
+                      <line x1="15" y1="5" x2="5" y2="15" />
+                    </svg>
+                  </button>
+                </div>
                 <div className="channel-row-toggles">
                   <div className="icon-toggle" role="group" aria-label="Channel type">
                     <button
@@ -576,19 +602,6 @@ export function DeviceConfigModal({
                     </div>
                   )}
                 </div>
-                <button
-                  type="button"
-                  className="attr-remove-btn"
-                  aria-label="Remove channel"
-                  disabled={channels.length <= 1}
-                  style={channels.length <= 1 ? { visibility: "hidden" } : undefined}
-                  onClick={() => removeChannel(i)}
-                >
-                  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7">
-                    <line x1="5" y1="5" x2="15" y2="15" />
-                    <line x1="15" y1="5" x2="5" y2="15" />
-                  </svg>
-                </button>
               </div>
             ))}
             <button type="button" className="attr-add-link" onClick={addChannel}>

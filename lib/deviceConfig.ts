@@ -6,10 +6,13 @@ export interface WorkflowRecord {
 
 // One Channel entry on a Device — repeatable list, see CLAUDE-CONCEPT.md
 // section 15.1 (BL-049). `id` is a per-Device sequence ("CH1", "CH2", …),
-// not derived from collectorId. Only `presenceEvent` or `direction` applies
+// not derived from collectorId, and not user-edited — same id/name split as
+// Device's own collectorId/name. `name` (BL-049a) is an optional freeform
+// label, e.g. "Entry sensor". Only `presenceEvent` or `direction` applies
 // depending on `type`, never both.
 export interface DeviceChannel {
   id: string;
+  name?: string;
   type: "PRESENCE" | "DIRECTIONAL";
   presenceEvent?: "FIRST_SEEN" | "PRESENT" | "LAST_SEEN";
   direction?: "INBOUND" | "OUTBOUND";
