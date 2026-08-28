@@ -4,9 +4,9 @@ import { useEffect, useState } from "react";
 import { SiteSelectorCard } from "./SiteSelectorCard";
 import { LocationMapCard } from "./LocationMapCard";
 import { ConnectBartenderModal } from "./ConnectBartenderModal";
+import { getDeviceState } from "@/lib/deviceState";
+import type { DeviceRecord } from "@/lib/deviceConfig";
 import type { BartenderLocation } from "@/lib/bartenderLocations";
-
-type ApiDevice = { id: string; status: "ONLINE" | "OFFLINE" };
 
 // Orchestrates the Overview page's site selection + KPI cards — see
 // CLAUDE-CONCEPT.md section 14, BACKLOG.md BL-037/BL-039. Lifts the selected
@@ -15,7 +15,10 @@ export function OverviewClient({ initialSelectedLocationCode }: { initialSelecte
   const [locations, setLocations] = useState<BartenderLocation[] | null>(null);
   const [locationsError, setLocationsError] = useState<string | null>(null);
   const [selectedCode, setSelectedCode] = useState<string | null>(null);
-  const [devices, setDevices] = useState<ApiDevice[] | null>(null);
+  // Owned here (not inside LocationMapCard) so Edit-mode changes made on the
+  // map — create/reposition/reconfigure — immediately reflect in the KPI
+  // card too, via the same onDevicesChange setter passed down.
+  const [devices, setDevices] = useState<DeviceRecord[] | null>(null);
   const [showConnectModal, setShowConnectModal] = useState(false);
 
   // Nudges the user to Settings if any of the four Bartender credential
@@ -88,7 +91,10 @@ export function OverviewClient({ initialSelectedLocationCode }: { initialSelecte
     }).catch(() => {});
   }
 
-  const onlineCount = devices?.filter((d) => d.status === "ONLINE").length ?? 0;
+  // "Devices online" counts Active + Automated (configured, regardless of
+  // workflow) — see CLAUDE-CONCEPT.md section 15.3, redefining BL-039's
+  // original ONLINE/OFFLINE-based count now that that field no longer exists.
+  const onlineCount = devices?.filter((d) => ["ACTIVE", "AUTOMATED"].includes(getDeviceState(d))).length ?? 0;
   const totalCount = devices?.length ?? 0;
 
   return (
@@ -125,7 +131,13 @@ export function OverviewClient({ initialSelectedLocationCode }: { initialSelecte
         </div>
       </div>
 
-      <LocationMapCard locationCode={selectedCode} />
+      <LocationMapCard
+        locationCode={selectedCode}
+        devices={devices ?? []}
+        onDevicesChange={(update) =>
+          setDevices((prev) => (typeof update === "function" ? update(prev ?? []) : update))
+        }
+      />
 
       <ConnectBartenderModal open={showConnectModal} onClose={() => setShowConnectModal(false)} />
     </>

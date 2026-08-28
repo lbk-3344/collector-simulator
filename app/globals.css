@@ -33,6 +33,12 @@
   --danger:  #C41E3A; --danger-tint:  #FBE9EC; --danger-border:  #F5C2CB;
   --info:    #5B6B78; --info-tint:    #F0F3F5; --info-border:    #DCE2E6;
 
+  /* Device states (BL-042 to BL-047) — see CHARTE-GRAPHIQUE.md "Device states" */
+  --device-off:       #93A0A6;
+  --device-active:    #1E8E5A;
+  --device-automated: #63B88A;
+  --device-problem:   #C41E3A;
+
   --radius: 8px;
   --shell-shadow: 0 10px 30px rgba(13, 30, 44, 0.14);
 
@@ -51,6 +57,10 @@
     --warning: #F5B542; --warning-tint: rgba(245,181,66,0.12); --warning-border: rgba(245,181,66,0.35);
     --danger:  #FF6B7F; --danger-tint:  rgba(255,107,127,0.12); --danger-border: rgba(255,107,127,0.35);
     --info:    #93A5AF; --info-tint:    rgba(147,165,175,0.12); --info-border:   rgba(147,165,175,0.35);
+    --device-off:       #6A7880;
+    --device-active:    #4ADE94;
+    --device-automated: #8FE3B0;
+    --device-problem:   #FF6B7F;
     --shell-shadow: 0 10px 30px rgba(0,0,0,0.5);
   }
 }
@@ -64,6 +74,10 @@
   --warning: #F5B542; --warning-tint: rgba(245,181,66,0.12); --warning-border: rgba(245,181,66,0.35);
   --danger:  #FF6B7F; --danger-tint:  rgba(255,107,127,0.12); --danger-border: rgba(255,107,127,0.35);
   --info:    #93A5AF; --info-tint:    rgba(147,165,175,0.12); --info-border:   rgba(147,165,175,0.35);
+  --device-off:       #6A7880;
+  --device-active:    #4ADE94;
+  --device-automated: #8FE3B0;
+  --device-problem:   #FF6B7F;
   --shell-shadow: 0 10px 30px rgba(0,0,0,0.5);
 }
 
@@ -265,10 +279,19 @@ svg { display: block; }
 .map-control-btn.active { background: var(--accent-primary-tint); color: var(--accent-primary); }
 .map-control-btn svg { width: 16px; height: 16px; stroke: currentColor; }
 .map-marker { position: absolute; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 3px; pointer-events: none; }
-.map-marker-device { color: var(--accent-primary); background: var(--surface); border-radius: 999px; padding: 3px; box-shadow: var(--shell-shadow); }
-.map-marker-device.offline { color: var(--ink-3); }
+.map-marker-device { background: var(--surface); border-radius: 999px; padding: 3px; box-shadow: var(--shell-shadow); cursor: pointer; border: none; }
+.map-marker-device.draggable { cursor: grab; }
+.map-marker-device.draggable:active { cursor: grabbing; }
 .map-marker-zone-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent-brand); border: 2px solid var(--surface); box-shadow: var(--shell-shadow); }
 .map-marker-label { font-size: 9.5px; font-weight: 600; background: var(--surface); color: var(--ink); padding: 1px 5px; border-radius: 4px; white-space: nowrap; box-shadow: var(--shell-shadow); }
+
+/* Device state badge (BL-043) — colored dot + label, driven by lib/deviceState.ts */
+.device-state { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: var(--ink); }
+.device-state-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+.device-state-off       { color: var(--device-off); }
+.device-state-active    { color: var(--device-active); }
+.device-state-automated { color: var(--device-automated); }
+.device-state-problem   { color: var(--device-problem); }
 
 .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
 .panel-head { display: flex; align-items: center; justify-content: space-between; padding: 15px 18px; border-bottom: 1px solid var(--border); }
@@ -401,6 +424,49 @@ select.role-select:disabled { opacity: .5; cursor: not-allowed; }
 }
 .attach-btn svg { width: 15px; height: 15px; }
 .modal-foot { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 18px; border-top: 1px solid var(--border); }
+
+.field-block select {
+  font-family: var(--font-ui); font-size: 13px; padding: 9px 11px; color: var(--ink);
+  border: 1px solid var(--border-strong); border-radius: 7px; background: var(--surface);
+}
+.field-block select:focus { outline: none; border-color: var(--accent-primary); box-shadow: 0 0 0 3px var(--accent-primary-tint); }
+.field-block select:disabled, .field-block input:disabled { opacity: .6; cursor: not-allowed; }
+.field-row { display: flex; gap: 12px; }
+.field-row > .field-block { flex: 1; }
+.checkbox-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink); }
+.attr-row { display: flex; gap: 8px; align-items: center; }
+.attr-row input { flex: 1; }
+.attr-add-link { align-self: flex-start; background: none; border: none; color: var(--accent-primary); font-size: 12.5px; font-weight: 600; cursor: pointer; padding: 0; }
+.attr-remove-btn { background: none; border: none; color: var(--ink-3); cursor: pointer; padding: 4px; border-radius: 4px; display: flex; }
+.attr-remove-btn:hover { background: var(--surface-2); color: var(--danger); }
+.attr-remove-btn svg { width: 14px; height: 14px; }
+
+.info-row { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+.info-row:last-child { border-bottom: none; }
+.info-row .k { color: var(--ink-2); }
+.info-row .v { color: var(--ink); font-weight: 600; text-align: right; }
+
+/* Device type palette (Overview map Edit mode, BL-044) */
+.device-palette {
+  position: absolute; top: 14px; left: 14px; z-index: 10;
+  background: var(--surface); border-radius: var(--radius); box-shadow: var(--shell-shadow); padding: 10px;
+  max-width: 190px;
+}
+.device-palette-label { font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 8px; }
+.device-palette-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+.device-palette-item {
+  display: flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; border-radius: 6px; border: none; background: none;
+  color: var(--ink-2); cursor: grab;
+}
+.device-palette-item:hover { background: var(--surface-2); color: var(--ink); }
+.device-palette-item:active { cursor: grabbing; }
+.device-drag-ghost {
+  position: fixed; z-index: 200; pointer-events: none;
+  transform: translate(-50%, -50%);
+  color: var(--ink-2); background: var(--surface); border-radius: 999px; padding: 4px; box-shadow: var(--shell-shadow);
+  opacity: .85;
+}
 
 .toast {
   position: fixed; bottom: 22px; right: 22px; z-index: 200;

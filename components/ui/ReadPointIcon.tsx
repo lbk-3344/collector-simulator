@@ -132,6 +132,25 @@ export type ReadPointType = keyof typeof READ_POINT_GLYPHS;
 
 export const READ_POINT_TYPES = Object.keys(READ_POINT_GLYPHS) as ReadPointType[];
 
+// Human-readable labels, from public/icons/read-point/manifest.json — kept
+// in sync manually since that file is a static asset, not importable at
+// build time. Used by the device config screen / palette (BL-042 to BL-047).
+export const READ_POINT_LABELS: Record<ReadPointType, string> = {
+  PORTAL: "Portal / Gate",
+  CONVEYOR: "Conveyor / Tunnel",
+  OVERHEAD: "Overhead / Ceiling Mount",
+  SHELF: "Shelf / Embedded",
+  TABLETOP: "Open Tabletop",
+  ENCLOSURE: "Shielded Enclosure",
+  DOORFRAME: "Room-to-Room (Doorframe)",
+  LIFT_LOBBY: "Floor-to-Floor (Lift Lobby)",
+  SIMPLE_READER: "Simple Reader",
+  MIDDLEWARE: "Middleware",
+  MES: "Manufacturing Execution System",
+  WCS: "Warehouse Control System",
+  APP: "Mobile / Web Application",
+};
+
 export interface ReadPointIconProps extends Omit<SVGProps<SVGSVGElement>, "type"> {
   type: string;
   size?: number;

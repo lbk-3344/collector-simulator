@@ -23,9 +23,9 @@ enum BugStatus {
   RESOLVED
 }
 
-enum DeviceStatus {
-  ONLINE
-  OFFLINE
+enum WorkflowStatus {
+  RUNNING
+  STOPPED
 }
 
 // ─── NextAuth required tables (via @auth/prisma-adapter) ────────────────────
@@ -103,19 +103,63 @@ model User {
 // This app's own simulated read-point fixture — deliberately NOT the same
 // thing as Bartender's real DataCollector/Channel concept (location-api-v2,
 // see CLAUDE-CONCEPT.md section 7.3/14.2). Powers the Overview location map
-// (BL-038) and the Devices-online KPI (BL-039).
+// (BL-038) and the Devices-online KPI (BL-039). Redesigned 2026-08-28 (BL-042,
+// see CLAUDE-CONCEPT.md section 15.1) to carry the fields a real Bartender
+// Collector registration (section 7.5, datacollector-api-v3) needs, so a
+// Device is realistic enough to eventually be registered for real — no real
+// registration call is ever made by this app, this is field-shape parity only.
 model Device {
-  id           String       @id @default(cuid())
-  name         String
-  type         String // one of READ_POINT_TYPES from components/ui/ReadPointIcon.tsx (e.g. "PORTAL", "SHELF") — not enforced at the DB level, validated in code
+  id           String  @id @default(cuid())
+  collectorId  String? @unique // stable Bartender-facing id — nullable until configured
+  name         String // understood as `collectorName` in DataCollector API terms
+  type         String // READ_POINT_TYPES from components/ui/ReadPointIcon.tsx — same enum as the API's `readPointType`
   locationCode String // matches a Bartender Location's `code` (location-api-v2) — plain string, not a FK
   positionX    Int? // pixel x on that location's floor plan, nullable if unplaced
   positionY    Int?
-  status       DeviceStatus @default(OFFLINE)
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
+
+  model         String?
+  vendor        String?
+  configVersion String?
+
+  heartbeatEnabled        Boolean @default(true)
+  heartbeatTimeoutSeconds Int     @default(120)
+  attributes              Json? // free-form flat scalar key/value map
+
+  // Single default Channel, flattened onto Device rather than a separate
+  // table — explicit v1 scope decision (section 15.1): every configured
+  // Device gets exactly one, auto-populated, not user-edited.
+  channelId            String?
+  channelType           String? @default("PRESENCE")
+  channelDirection      String? // DIRECTIONAL channels only — unused in v1, schema-ready
+  channelPresenceEvent  String? @default("PRESENT")
+  channelAttributes     Json?
+
+  // Explicitly set, not derived from collectorId's presence — becomes true
+  // only once the config screen's required fields are saved (15.4). Drives
+  // the Off state (15.3) when false.
+  configured Boolean @default(false)
+
+  workflowId String?
+  workflow   Workflow? @relation(fields: [workflowId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([locationCode])
+}
+
+// Minimal Workflow model pulled forward from BACKLOG.md section 6 — just
+// enough to drive Device's Automated/Problem states (15.3). Not the real
+// workflow engine (step chains, execution) — see CLAUDE-CONCEPT.md section
+// 15.2. No creation/editing UI; exists as seed/fixture data for now.
+model Workflow {
+  id        String         @id @default(cuid())
+  name      String
+  status    WorkflowStatus @default(RUNNING)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  devices Device[]
 }
 
 // See CLAUDE-CONCEPT.md section 3 and CLAUDE.md "Bug handling" for the full
