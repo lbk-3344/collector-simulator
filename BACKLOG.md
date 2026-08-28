@@ -79,6 +79,8 @@ Along the way: `devices` state was lifted from `LocationMapCard.tsx` into `Overv
 
 - [x] **BL-044b** — Done 2026-08-28, direct follow-up from Luc: the circle size on BL-044a's device markers was right, but the icon glyph inside it read too small on both the map markers and the Edit-mode device-type palette. Bumped the `ReadPointIcon` `size` prop (map marker 20→26px, palette items and the drag-ghost 22→28px) while leaving the 36px circle/box unchanged. Live-verified via zoomed screenshots on both the map and the palette.
 
+- [x] **BL-044c** — Done 2026-08-28, second follow-up from Luc asking for the glyphs bigger still, plus consistency in two places BL-044b missed — the Devices list table and `DeviceConfigModal.tsx`'s two icon spots. Map marker 26→30px; palette/drag-ghost 28→32px (palette item box also grown 36→40px so the bigger glyph keeps breathing room); Devices list table icon 20→28px; the config modal's big top-left icon 26→32px and its read-only "locked type" row icon 22→26px. Live-verified via zoomed screenshots across all four locations (map, palette, list, modal).
+
 ## 6. Workflows
 
 *(To break down once BL-003 is settled.)*

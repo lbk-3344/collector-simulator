@@ -188,7 +188,7 @@ export function DeviceConfigModal({
         <div className="modal-head">
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <div className="modal-head-icon" aria-hidden="true">
-              <ReadPointIcon type={type} size={26} />
+              <ReadPointIcon type={type} size={32} />
             </div>
             <h2 id="deviceConfigTitle">{device ? "Edit device" : "Add device"}</h2>
           </div>
@@ -223,7 +223,7 @@ export function DeviceConfigModal({
               <label>Read point type</label>
               {lockTypeAndSite ? (
                 <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 0" }}>
-                  <ReadPointIcon type={type} size={22} />
+                  <ReadPointIcon type={type} size={26} />
                   <span>{READ_POINT_LABELS[type as ReadPointType] ?? type}</span>
                 </div>
               ) : (

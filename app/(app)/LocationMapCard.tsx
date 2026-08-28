@@ -406,7 +406,7 @@ export function LocationMapCard({ locationCode, devices, onDevicesChange }: Loca
                     onMouseDown={editMode ? (e) => handleDeviceMouseDown(e, device) : undefined}
                     onClick={!editMode ? () => handleDeviceClick(device) : undefined}
                   >
-                    <ReadPointIcon type={device.type} size={26} title={device.name} />
+                    <ReadPointIcon type={device.type} size={30} title={device.name} />
                   </span>
                 </div>
               );
@@ -425,7 +425,7 @@ export function LocationMapCard({ locationCode, devices, onDevicesChange }: Loca
                   title={READ_POINT_LABELS[t]}
                   onMouseDown={(e) => handlePaletteMouseDown(e, t)}
                 >
-                  <ReadPointIcon type={t} size={28} />
+                  <ReadPointIcon type={t} size={32} />
                 </button>
               ))}
             </div>
@@ -435,7 +435,7 @@ export function LocationMapCard({ locationCode, devices, onDevicesChange }: Loca
 
       {draggingPaletteType && paletteDragPos && (
         <div className="device-drag-ghost" style={{ left: paletteDragPos.x, top: paletteDragPos.y }}>
-          <ReadPointIcon type={draggingPaletteType} size={28} />
+          <ReadPointIcon type={draggingPaletteType} size={32} />
         </div>
       )}
 

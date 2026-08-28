@@ -105,7 +105,7 @@ export default function DevicesPage() {
                   <tr key={device.id}>
                     <td>
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <ReadPointIcon type={device.type} size={20} />
+                        <ReadPointIcon type={device.type} size={28} />
                         <span>{READ_POINT_LABELS[device.type as ReadPointType] ?? device.type}</span>
                       </div>
                     </td>
