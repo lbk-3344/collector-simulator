@@ -44,6 +44,10 @@ export function LocationMapCard({ locationCode, devices, onDevicesChange }: Loca
   const [scale, setScale] = useState(1);
   const [minScale, setMinScale] = useState(0.1);
   const [translate, setTranslate] = useState({ x: 0, y: 0 });
+  // Counteracts .map-card-transform's own zoom scale so markers stay a
+  // constant on-screen size at any zoom level instead of shrinking to
+  // sub-pixel size at the default zoomed-out "fit to screen" scale.
+  const markerCounterScale = scale > 0 ? 1 / scale : 1;
   const [panMode, setPanMode] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
@@ -187,6 +191,11 @@ export function LocationMapCard({ locationCode, devices, onDevicesChange }: Loca
 
   function handlePaletteMouseDown(e: React.MouseEvent, type: string) {
     e.preventDefault();
+    // The palette lives inside .map-card-viewport, so without this the
+    // mousedown bubbles up to the viewport's own onMouseDown — if pan mode
+    // is also on, that starts a pan drag at the same time as this palette
+    // drag, moving the map and the not-yet-placed icon together.
+    e.stopPropagation();
     setDraggingPaletteType(type);
     setPaletteDragPos({ x: e.clientX, y: e.clientY });
   }
@@ -369,7 +378,11 @@ export function LocationMapCard({ locationCode, devices, onDevicesChange }: Loca
           />
 
           {zones.map((zone, i) => (
-            <div key={zone.code ?? i} className="map-marker" style={{ left: zone.position.x, top: zone.position.y }}>
+            <div
+              key={zone.code ?? i}
+              className="map-marker"
+              style={{ left: zone.position.x, top: zone.position.y, transform: `translate(-50%, -50%) scale(${markerCounterScale})` }}
+            >
               <div className="map-marker-zone-dot" title={zone.name} />
               {zone.name && <span className="map-marker-label">{zone.name}</span>}
             </div>
@@ -382,10 +395,14 @@ export function LocationMapCard({ locationCode, devices, onDevicesChange }: Loca
               const left = isDragging ? draggingDeviceVisual!.x : (device.positionX as number);
               const top = isDragging ? draggingDeviceVisual!.y : (device.positionY as number);
               return (
-                <div key={device.id} className="map-marker" style={{ left, top }}>
+                <div
+                  key={device.id}
+                  className="map-marker"
+                  style={{ left, top, transform: `translate(-50%, -50%) scale(${markerCounterScale})` }}
+                >
                   <span
                     className={`map-marker-device${editMode ? " draggable" : ""}`}
-                    style={{ color: `var(--device-${getDeviceState(device).toLowerCase()})`, pointerEvents: "auto" }}
+                    style={{ background: `var(--device-${getDeviceState(device).toLowerCase()})`, pointerEvents: "auto" }}
                     onMouseDown={editMode ? (e) => handleDeviceMouseDown(e, device) : undefined}
                     onClick={!editMode ? () => handleDeviceClick(device) : undefined}
                   >

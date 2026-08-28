@@ -278,8 +278,16 @@ svg { display: block; }
 .map-control-btn:hover { background: var(--surface-2); color: var(--ink); }
 .map-control-btn.active { background: var(--accent-primary-tint); color: var(--accent-primary); }
 .map-control-btn svg { width: 16px; height: 16px; stroke: currentColor; }
-.map-marker { position: absolute; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 3px; pointer-events: none; }
-.map-marker-device { background: var(--surface); border-radius: 999px; padding: 3px; box-shadow: var(--shell-shadow); cursor: pointer; border: none; }
+/* position/left/top come from inline styles (floor-plan pixel coords); the
+   transform's scale() is also set inline, counteracting .map-card-transform's
+   own zoom scale so markers stay a constant on-screen size at any zoom level
+   instead of shrinking to invisibility at the default zoomed-out fit. */
+.map-marker { position: absolute; display: flex; flex-direction: column; align-items: center; gap: 3px; pointer-events: none; }
+.map-marker-device {
+  display: flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; border-radius: 50%;
+  color: #fff; box-shadow: var(--shell-shadow); cursor: pointer; border: none;
+}
 .map-marker-device.draggable { cursor: grab; }
 .map-marker-device.draggable:active { cursor: grabbing; }
 .map-marker-zone-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent-brand); border: 2px solid var(--surface); box-shadow: var(--shell-shadow); }
@@ -404,6 +412,11 @@ select.role-select:disabled { opacity: .5; cursor: not-allowed; }
 }
 .modal-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 18px; border-bottom: 1px solid var(--border); }
 .modal-head h2 { margin: 0; font-size: 15px; }
+.modal-head-icon {
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  width: 44px; height: 44px; border-radius: 50%;
+  background: var(--accent-brand); color: #fff;
+}
 .modal-close { background: none; border: none; cursor: pointer; color: var(--ink-2); padding: 4px; border-radius: 6px; }
 .modal-close:hover { background: var(--surface-2); color: var(--ink); }
 .modal-close svg { width: 16px; height: 16px; }
