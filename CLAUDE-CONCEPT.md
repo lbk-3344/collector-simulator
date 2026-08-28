@@ -186,6 +186,17 @@ The reliable link is **structural**, not name-based: every floor's `parent` fiel
 
 **This is explicitly temporary.** The moment Bartender grants this API key's `Local Map[read]` permission (section 7.3), the map card should revert to calling `location-api-v2`'s own `/locations/{code}/map` directly — the floor-lookup + Basic-Auth detour goes away entirely. Leave the Username/Password fields and schema columns in place rather than ripping them out the moment that happens (harmless if unused); just log a follow-up decision-log entry here once it's confirmed the permission gap is closed and the workaround has been removed.
 
+### 7.5 DataCollector API (`datacollector-api-v3`) — provided 2026-08-28
+
+Added directly to the claude.ai Project as `datacollector-api-v3 (2) (2).yaml`. Defines how a real reader or software collector registers itself with Bartender and submits tag reads — this is the API this app's own simulated `Device`/"Collector" concept (section 15) is modeled after. **Not yet called live by this app** — see section 15's explicit scoping note before assuming any of this is wired up.
+
+- **Server**: `https://api.bartender-tt.com/datacollector` — the spec lists only a "Production environment" here, unlike `location-api-v2` (section 7.3), which turned out to need a second `.sandbox.` gateway once tested live. Confirm empirically whether a sandbox equivalent exists for this API too, before ever registering a real collector against it — don't assume the production host doubles for sandbox tenants.
+- **Auth**: `apikey` header, or HTTP Basic (`Authorization: Basic base64(username:password)` **plus** a required `x-tenant` header carrying the tenant code) — same two-scheme pattern as `location-api-v2` and the legacy maps endpoint (section 7.4), not yet tested against Luc's tenant for this specific API.
+- **Key concepts**: a **DataCollector** is a device or app, identified by a caller-chosen `collectorId`; a **Channel** is a logical stream of observations it produces (`PRESENCE` — reports tags currently in a Zone, needs `presenceEvent`; or `DIRECTIONAL` — reports tags crossing a boundary, needs `direction`); **read point type** (`GET /reference/read-point-types`) — confirmed to be the **exact same 13-code set** already integrated as `READ_POINT_TYPES`/`ReadPointIcon` (BL-029): `PORTAL`, `CONVEYOR`, `OVERHEAD`, `SHELF`, `TABLETOP`, `ENCLOSURE`, `DOORFRAME`, `LIFT_LOBBY`, `SIMPLE_READER`, `MIDDLEWARE`, `MES`, `WCS`, `APP`. This resolves BL-029's open question for good — read-point type and this app's Device `type` are exactly the same enum, straight from Bartender's own reference data.
+- **`POST /collectors/register`** — the registration payload is what section 15's `Device` model is shaped after: `collectorId` (string, unique, stable across restarts), `collectorName`, `locationId` (must match a Location's `code`), `model`, `vendor`, `readPointType`, `configVersion` (optional opaque version token), `heartbeatConfig` (`{enabled, timeoutSeconds}`, defaults `true`/`120`), `attributes` (free-form flat key/value map — string/number/boolean values only, no nesting), `channels[]` (each with `channelId`, `channelType`, `direction` **or** `presenceEvent` depending on type, `attributes`). Re-registration is idempotent on `collectorId` and replaces the whole stored Channel list.
+- **`PUT /collectors/{collectorId}/heartbeat`**, **`POST /reads`** — heartbeat keepalive and tag-observation ingestion. Not modeled by this app yet — no simulated "send" capability exists (see section 15's manual-send scoping note).
+- The real API's own Collector status (`ONLINE`/`OFFLINE`/`CONFIG_PENDING`, from heartbeat freshness and config-version drift) is **Bartender's** concept, entirely separate from this app's own 4-state Device visualization (section 15.3) — don't conflate the two even though both use similar-sounding words.
+
 ## 8. Objectives
 
 *Draft, to confirm:*
@@ -214,6 +225,7 @@ The reliable link is **structural**, not name-based: every floor's `parent` fiel
 
 Dated log of product decisions, most recent first. This is the section to check before making an undocumented product call.
 
+- **2026-08-28** — Devices/Collectors feature decided (see section 15 above, `BACKLOG.md` BL-042 to BL-047): a Device is redesigned to carry the fields a real Bartender Collector registration needs (section 7.5, a new API provided same day), gets a 4-state color-coded visualization (Off/Active/Automated/Problem) driven by whether it's configured and, if attached to one, its Workflow's status, and gains an Overview-map Edit mode (drag device-type icons from a floating palette to place new ones, drag existing ones to reposition) plus a dedicated Devices list page. Two explicit scope decisions made with Luc: (1) a minimal `Workflow` model (RUNNING/STOPPED only) is pulled forward now, same reasoning as BL-036 pulling Device forward from BL-003 — real workflow authoring stays section 6's job; (2) each Device gets exactly one auto-populated Channel for now, not a full multi-Channel editor. Actually calling Bartender's real DataCollector API (register/heartbeat/reads) is explicitly out of scope here — this is the local simulated model only.
 - **2026-08-28** — Temporary Basic-Auth floor-plan map workaround decided (see section 7.4 above, `BACKLOG.md` BL-040/BL-041): `location-api-v2`'s own map endpoint is blocked by a permission gap on the current API key (section 7.3's `403 Local Map[read]`), so Luc identified a fallback via the older `statemachine-api-configuration` API — look up the site's `level=floor` sub-location by matching name, then call that floor's `/maps` endpoint, which requires a Track & Trace **username/password** (HTTP Basic Auth) rather than the `apikey` header used everywhere else in this app. A new, temporary third credential type, added to Settings → Bartender Connection. To be removed once the API key's map-read permission is granted and `location-api-v2`'s map endpoint works directly.
 - **2026-08-27** — `location-api-v2` second gateway corrected by Luc: it's **sandbox**, not staging — `https://api.sandbox.bartender-tt.com`, selected when `bartenderTenantUrl` contains `sandbox` (not `staging.bartender-tt.com` as first documented). Combined with also switching the auth header to lowercase `apikey` (not `X-API-Key`), this is now **live-verified working** — `/locations` and `/locations/{code}/zones` both return real data against Luc's sandbox tenant; `/locations/{code}/map` returns a `403` permission-scope error for this key, unrelated to the gateway/header fix. Supersedes the "flagged, not wired up as working" conclusion in the entry directly below and in `lib/bartenderLocations.ts`'s header comment — see section 7.3 for the full corrected findings.
 - **2026-08-27** — `location-api-v2` gateway architecture clarified by Luc (see section 7.3): the API is reached at one of two **fixed gateway hosts** (`https://api.bartender-tt.com` production, `https://api.staging.bartender-tt.com` staging) rather than the user's per-tenant `bartenderTenantUrl`, which was the assumption in the Overview/homepage redesign decision below when it was first written. The per-user API key is unchanged — it's what the gateway uses to resolve the correct tenant. Which gateway to call is derived from whether `bartenderTenantUrl` contains `staging.bartender-tt.com`. Updates the earlier "flagged, unresolved" note in section 7.3 and the BL-036-039 Claude Code prompt; doesn't change anything else about the Overview redesign decision.
@@ -264,3 +276,93 @@ Zones (`GET /locations/{code}/zones`) and this app's simulated Devices attached 
 ### 14.4 Overview KPI cards revised
 
 The other three top cards keep the existing `.stat-card` styling, narrowed to what's actually simulated: **Devices online** (from the new `Device` model, X online / Y total for the selected site), **Workflows running** (still 0 — section 6 unbuilt), **Serialized items generated** (still 0 — section 7 unbuilt). The previous fourth card, **Bug reports open**, is removed — bug reports already have a dedicated admin view (`BugReportsTable.tsx`, BL-034), so a duplicate count added nothing.
+
+## 15. Devices / Collectors — configuration, states, map editing, device list
+
+Decided 2026-08-28 per Luc's explicit request. A "Device" in this app effectively **is** a simulated Collector — the two terms are used interchangeably in this section, a different framing from section 14.2's earlier, explicit distinction against Bartender's own `DataCollector` platform concept. Data will eventually flow out of a configured Device either **manually** (a user clicks it and sends a one-off batch) or **automatically** through a **Workflow**. The manual-send screen itself is explicitly deferred — Luc: "on verra ça plus tard" — and actually calling Bartender's real DataCollector API (registration/heartbeat/reads, section 7.5) to publish that data for real is **out of scope for this entire batch of work**: everything below is the local simulated data model and its UI, not a live Bartender integration.
+
+### 15.1 Device model redesign — Collector fields, single default Channel
+
+BL-036's minimal `Device` model (`id`/`name`/`type`/`locationCode`/`positionX`/`positionY`/`status`) is extended to carry the fields a real Collector registration (section 7.5) requires, so a Device is realistic enough to eventually be registered for real:
+
+- `collectorId` (string, unique, nullable until configured) — the Bartender-facing stable id a real registration would use.
+- `name` — already existed; now understood as `collectorName`.
+- `type` — already existed (`READ_POINT_TYPES`); now confirmed identical to the DataCollector API's `readPointType` enum (section 7.5).
+- `model`, `vendor`, `configVersion` — new, optional strings, straight from `CollectorRegistration`.
+- `heartbeatEnabled` (default `true`), `heartbeatTimeoutSeconds` (default `120`) — flattened from the API's `heartbeatConfig` object.
+- `attributes` (`Json?`) — free-form scalar key/value metadata, same shape/purpose as the API's `attributes`.
+- A **single default Channel**, flattened directly onto `Device` rather than a separate table (`channelId`, `channelType` default `PRESENCE`, `channelDirection` nullable — `DIRECTIONAL` only, `channelPresenceEvent` default `PRESENT` — `PRESENCE` only, `channelAttributes` `Json?`). **Explicit scope decision made with Luc**: v1 gives every configured Device exactly one Channel, auto-populated, not user-edited — full multi-Channel management (add/remove several Channels per Device, edit `PRESENCE`/`DIRECTIONAL` per Channel) is deferred to a future BL. The flattened fields don't block introducing a proper `Channel` table later.
+- `configured` (boolean, default `false`) — **explicitly set**, not derived from `collectorId`'s presence — becomes `true` only once the config screen's (15.4) required fields are saved. A freshly-dropped, not-yet-configured Device is a real, reachable state (drives the Off color, 15.3).
+- `workflowId` (nullable, FK to the new `Workflow` model, 15.2) + relation.
+- `locationCode`/`positionX`/`positionY` unchanged from BL-036.
+- The old `status: DeviceStatus` (`ONLINE`/`OFFLINE`) field and `DeviceStatus` enum are **removed** — superseded entirely by the derived 4-state model (15.3), which factors in `configured` and `workflow.status` rather than a flat online/offline flag.
+
+This is a breaking schema change to BL-036's `Device` table — existing seeded fixture rows need re-seeding with real values for the new required-shaped fields (Channel defaults), not a mechanical column rename.
+
+### 15.2 Minimal `Workflow` model — pulled forward from section 6
+
+**Explicit choice made with Luc**: rather than a cosmetic "in a workflow" flag on Device, a real (if intentionally minimal) `Workflow` model is introduced now — same reasoning as BL-036 pulling `Device` forward ahead of BL-003. This is **not** the real workflow engine (section 6, still fully open — step chains, device assignment logic, execution) — just enough of a `Workflow` entity that (a) a Device can be genuinely attached to one via `workflowId`, and (b) that workflow can be `RUNNING` or `STOPPED`, which is what drives the Automated/Problem device states (15.3):
+
+```prisma
+enum WorkflowStatus {
+  RUNNING
+  STOPPED
+}
+
+model Workflow {
+  id        String         @id @default(cuid())
+  name      String
+  status    WorkflowStatus @default(RUNNING)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  devices Device[]
+}
+```
+
+No Workflow creation/editing UI is in scope here — Workflows exist for now only as seed/fixture data (a couple of named fixtures, one `RUNNING` and one `STOPPED`, so the config screen's Workflow picker and all four device states are demonstrable end to end). Real Workflow authoring is section 6's job, whenever it's tackled.
+
+### 15.3 Device state — four colors, derived not stored
+
+A pure function (`lib/deviceState.ts`, not a stored column) computes one of four states from `configured` + `workflow?.status`:
+
+| State | Condition | Color |
+|---|---|---|
+| **Off** | `!configured` | Dark gray (`--device-off`) |
+| **Active** | `configured && !workflowId` | Green (`--device-active`) |
+| **Automated** | `configured && workflow.status === "RUNNING"` | Lighter green (`--device-automated`) |
+| **Problem** | `configured && workflow.status === "STOPPED"` | Red (`--device-problem`) |
+
+Used everywhere a Device renders as a colored marker or badge: the Overview map (15.5/15.6) and the Devices list (15.7). See `CHARTE-GRAPHIQUE.md` "Device states" for exact token values.
+
+**Consequence for BL-039's "Devices online" KPI**: redefined as the count of devices in the **Active** or **Automated** state (i.e. configured, regardless of workflow) out of the site's total device count — the binary `ONLINE`/`OFFLINE` status this KPI originally read no longer exists (15.1).
+
+### 15.4 Device config screen
+
+A modal (same structural pattern as `BugReportModal.tsx`), opened from three places: dropping a palette icon on the map (15.5 — type + position pre-filled), clicking an existing Device marker on the map, either in Edit mode or in its Off state outside Edit mode (15.6 — editing that Device), and the Devices list's "+ Add device"/row-edit actions (15.7 — nothing pre-filled except an explicit Site picker, since there's no map-drop position to infer it from).
+
+Fields: Collector ID, Name, Read point type (icon+label — editable only when not already implied by which palette icon was dragged), Site (editable only when opened from the Devices list), Model, Vendor, Config version, Heartbeat (enabled toggle + timeout seconds), Attributes (freeform add/remove key-value rows), Workflow (select — "None" or one of the seeded `Workflow` fixtures, 15.2). Saving sets `configured = true` and persists everything, including auto-populating the single default Channel (`channelId` derived from `collectorId`, e.g. `${collectorId}-ch1`, `channelType`/`presenceEvent` defaulted to `PRESENCE`/`PRESENT` — not shown as form fields per the 15.1 scope decision). Canceling a config screen opened for a **brand-new** Device (just dropped, never previously configured) deletes that just-created shell row rather than leaving an orphaned unconfigured Device on the map; canceling while editing an already-configured Device leaves it unchanged.
+
+### 15.5 Overview map — Edit mode
+
+A toggle button on the Location map card (near the existing zoom/pan widget) switches the card into **Edit mode**. While on:
+
+- A floating palette (`CHARTE-GRAPHIQUE.md` "Device type palette") appears, listing all 13 read-point-type icons as drag sources.
+- Dragging a palette icon onto the map creates a new Device at the drop position (converted from screen coordinates to floor-plan pixel coordinates by inverting the map's current pan/zoom transform — the same math the existing Zone/Device marker rendering already needs) with that `type`, the current site's `locationCode`, and `configured: false` — then immediately opens the config screen (15.4) to complete it.
+- Existing Device markers become drag targets **for repositioning only** — dropping one elsewhere on the map updates just `positionX`/`positionY`, nothing else, no config screen ("sans conséquences sur sa configuration" — Luc's own words).
+- Clicking (not dragging) an existing Device marker while in Edit mode opens the config screen for that Device — creation and editing both happen through the same palette/map surface.
+- Turning Edit mode off hides the palette and returns marker clicks to their normal, non-edit behavior (15.6).
+
+Recommend implementing the drag interactions with pointer events (mousedown/mousemove/mouseup), matching the map card's existing custom pan implementation, rather than the HTML5 Drag-and-Drop API, which behaves inconsistently over a CSS-transformed (scaled/panned) drop target.
+
+### 15.6 Overview map — non-Edit-mode click behavior
+
+Clicking a Device marker when Edit mode is off:
+
+- **Active** (configured, no workflow) → opens the manual data-send screen. **Explicitly deferred by Luc** ("on verra ça plus tard") — for now, a placeholder modal (device name/Collector ID, a "Coming soon" note) stands in for it; no actual send capability exists yet.
+- **Off** (not configured) → opens the config screen (15.4), so an incomplete Device can be finished without switching to Edit mode.
+- **Automated** or **Problem** (in a workflow) → opens a read-only info panel (Device fields + the workflow's name/status) — no edit action from here, to avoid casually altering a Device that's actively part of a (simulated) running workflow; editing one of these goes through the Devices list instead (15.7).
+
+### 15.7 Devices list page
+
+Replaces the current `app/(app)/devices/page.tsx` placeholder. A **tenant-wide** table (all sites, not just the selected one — mirrors the real DataCollector API's own two-tier listing, `GET /collectors` tenant-wide vs. `GET /locations/{code}/collectors` site-scoped, section 7.5) — columns: read-point-type icon, Name (+ Collector ID beneath, small), Site (resolved from `locationCode` via the same site list `SiteSelectorCard` already fetches), State (15.3's colored dot + label), Workflow (name, or "—"), row actions (Edit → config screen, Delete → confirm then remove). A "+ Add device" button opens the config screen with an explicit Site field (since there's no map-drop position to infer it from) — the created Device has no `positionX`/`positionY` until someone later drags it into place via the Overview map's Edit mode.

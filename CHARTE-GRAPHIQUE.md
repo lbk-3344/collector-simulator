@@ -110,6 +110,47 @@ Zone and Device markers are small icon badges positioned absolutely within the t
 
 No-floor-plan state: when the selected site has `hasMap: false`, the card shows a centered placeholder (reusing the existing `.placeholder` pattern) rather than attempting to render a missing image.
 
+### Device states — added 2026-08-28
+
+Four states, each driving the color of a Device's marker icon (Overview map) and its status badge (Devices list, `BACKLOG.md` BL-042 to BL-047). New dedicated tokens — not a direct inline reuse of `--success`/`--danger`, so they can be tuned independently later — add to `app/globals.css` alongside the existing semantic tokens.
+
+Light mode:
+```css
+--device-off:       #93A0A6; /* = --ink-3 */
+--device-active:    #1E8E5A; /* = --success */
+--device-automated: #63B88A; /* lighter, less saturated green than --device-active */
+--device-problem:   #C41E3A; /* = --danger */
+```
+
+Dark mode (both the `@media (prefers-color-scheme: dark)` block and `:root[data-theme="dark"]`):
+```css
+--device-off:       #6A7880; /* = --ink-3 dark */
+--device-active:    #4ADE94; /* = --success dark */
+--device-automated: #8FE3B0; /* lighter than --device-active dark */
+--device-problem:   #FF6B7F; /* = --danger dark */
+```
+
+| State | Meaning | Color |
+|---|---|---|
+| Off | Not configured yet | `--device-off` (dark gray) |
+| Active | Configured, ready, not in a workflow | `--device-active` (green) |
+| Automated | Configured, sending data through a running workflow | `--device-automated` (lighter green) |
+| Problem | Configured, in a workflow, but that workflow is stopped/has a problem | `--device-problem` (red) |
+
+Applied as the marker icon's `color` on the map (`ReadPointIcon` already renders with `currentColor`, so wrapping it in an element with the state color as `color` is enough — no icon-level change needed) and as a small colored dot + label on the Devices list table.
+
+### Device type palette (Edit mode) — added 2026-08-28
+
+A floating panel, anchored top-left of the Location map card (mirrors the bottom-right zoom/pan widget's `--surface`/`--shell-shadow`/`--radius` treatment, just top-left instead), shown only while Edit mode is on. Lists all 13 `READ_POINT_TYPES` as a small grid of icon buttons (`ReadPointIcon` at ~28px, `--ink-2` stroke, label as a `title` tooltip) — each is a drag source. A short label at the panel's top: "Drag a device onto the map".
+
+### Device config screen — added 2026-08-28
+
+A modal, same structural pattern as `BugReportModal.tsx` (centered overlay, `.panel`-styled card, close button top-right) — used both from map Edit mode (dropping/clicking a device) and the Devices list page (BL-047). Fields, top to bottom: Collector ID, Name, Read point type (icon + label, read-only when pre-set by a palette drag, otherwise a select), Site (read-only when pre-set by a map drop, otherwise a select — the Devices-list "+ Add device" case), Model, Vendor, Config version, Heartbeat (enabled toggle + timeout seconds, one row), Attributes (repeatable key/value row pairs with a small "+ Add attribute" link), Workflow (select: "None" + existing Workflows). Primary button "Save" (navy, `.btn-primary`), secondary "Cancel" (`.btn-secondary`).
+
+### Devices list page — added 2026-08-28
+
+Same table pattern as `UsersTable.tsx`/`BugReportsTable.tsx` — a `.panel`-wrapped `<table>`, header row in `--ink-3` uppercase-small per existing convention. Columns: icon+type, Name (+ Collector ID beneath in `--ink-3` small text, mirroring the site-card's name+meta pattern), Site, State (colored dot + label per the token table above), Workflow (name, or "—" in `--ink-3`), row actions (Edit, Delete). "+ Add device" button top-right of the page, same placement/style as other list-page primary actions.
+
 ## Iconography
 
 **Read-point type icons — integrated 2026-08-26.** A 13-icon set for the read-point/device types exposed by Bartender's `GET /reference/read-point-types` (see `CLAUDE-CONCEPT.md` section 7) — produced in a separate Claude Design session, delivered as `package/` at the repo root, and wired into the app as `components/ui/ReadPointIcon.tsx` + `public/icons/read-point/*.svg`.
