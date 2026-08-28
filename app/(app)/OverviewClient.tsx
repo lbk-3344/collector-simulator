@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { SiteSelectorCard } from "./SiteSelectorCard";
 import { LocationMapCard } from "./LocationMapCard";
+import { ConnectBartenderModal } from "./ConnectBartenderModal";
 import type { BartenderLocation } from "@/lib/bartenderLocations";
 
 type ApiDevice = { id: string; status: "ONLINE" | "OFFLINE" };
@@ -15,6 +16,24 @@ export function OverviewClient({ initialSelectedLocationCode }: { initialSelecte
   const [locationsError, setLocationsError] = useState<string | null>(null);
   const [selectedCode, setSelectedCode] = useState<string | null>(null);
   const [devices, setDevices] = useState<ApiDevice[] | null>(null);
+  const [showConnectModal, setShowConnectModal] = useState(false);
+
+  // Nudges the user to Settings if any of the four Bartender credential
+  // fields aren't set yet — see BACKLOG.md BL-048.
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/settings/bartender")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (cancelled || !data) return;
+        const missing = !data.tenantUrl || !data.apiKeyLast4 || !data.username || !data.hasPassword;
+        if (missing) setShowConnectModal(true);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -107,6 +126,8 @@ export function OverviewClient({ initialSelectedLocationCode }: { initialSelecte
       </div>
 
       <LocationMapCard locationCode={selectedCode} />
+
+      <ConnectBartenderModal open={showConnectModal} onClose={() => setShowConnectModal(false)} />
     </>
   );
 }
