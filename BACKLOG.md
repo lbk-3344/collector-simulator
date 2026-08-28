@@ -81,6 +81,10 @@ Along the way: `devices` state was lifted from `LocationMapCard.tsx` into `Overv
 
 - [x] **BL-044c** — Done 2026-08-28, second follow-up from Luc asking for the glyphs bigger still, plus consistency in two places BL-044b missed — the Devices list table and `DeviceConfigModal.tsx`'s two icon spots. Map marker 26→30px; palette/drag-ghost 28→32px (palette item box also grown 36→40px so the bigger glyph keeps breathing room); Devices list table icon 20→28px; the config modal's big top-left icon 26→32px and its read-only "locked type" row icon 22→26px. Live-verified via zoomed screenshots across all four locations (map, palette, list, modal).
 
+- [ ] **BL-049** — Device Channels: replace the v1 single flattened default Channel with a real, repeatable Channel list (`Device.channels` `Json[]`) — icon-driven Type (Presence/Directional) + Presence-event or Direction toggle per row, add/remove, at least one required. See `CLAUDE-CONCEPT.md` section 15.1/15.4, `CHARTE-GRAPHIQUE.md` "Device config screen". Depends on BL-045. *(M)*
+- [ ] **BL-050** — Auto-suggested Collector ID: `{locationCode}-{TYPE}-{NN}` proposed in the config screen whenever type+site are set and the field is empty, plus a "regenerate" icon action — always freely editable. See `CLAUDE-CONCEPT.md` section 15.1, `CHARTE-GRAPHIQUE.md` "Device config screen". Depends on BL-045. *(S)*
+- [ ] **BL-051** — Publish to platform: new `Device.publishedAt` field: gates the Off/"Not configured" (grey) state alongside `configured`, decoupling "config saved" from "live on the platform." Config screen footer gains Save draft / Publish to platform actions (icon-marked primary CTA) instead of a single Save once a Device is new/unpublished; a live state pill shows current status inline. No real Bartender call — a local, simulated status flip. See `CLAUDE-CONCEPT.md` section 15.1/15.3/15.4, `CHARTE-GRAPHIQUE.md` "Device config screen". Depends on BL-042, BL-043, BL-045. *(S)*
+
 ## 6. Workflows
 
 *(To break down once BL-003 is settled.)*
