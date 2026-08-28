@@ -82,6 +82,15 @@ Brought forward from "later" to now — Luc flagged it as genuinely useful. See 
 - **2026-08-27** — a second, much more complete `location-api-v2` OpenAPI spec was provided by Luc (added directly to the claude.ai Project) — full CRUD for Locations/Zones/Location Types/Zone Types/Channel Mappings/floor-plan upload, see `CLAUDE-CONCEPT.md` section 7.3. Chosen (over the already-tested `statemachine-api-configuration` endpoint) as the API the new site selector/map feature builds against — see section 9 below.
 - **2026-08-27** — **corrected same day, now live-verified working**: the second gateway is `https://api.sandbox.bartender-tt.com` (**sandbox**, not staging as first documented — `https://api.staging.bartender-tt.com` was never a real endpoint), selected when `bartenderTenantUrl` contains `sandbox`; auth header is lowercase `apikey`, same convention as BL-032/033, not `X-API-Key`. Live-tested against Luc's sandbox tenant: `/locations` and `/locations/{code}/zones` both return real data (200); `/locations/{code}/map` returns `403` (permission-scope gap on this key, unrelated to the gateway/header fix — flagged for Luc, not something to fix in this app). `lib/bartenderLocations.ts` updated to the corrected gateway/header/response-envelope shapes — see `CLAUDE-CONCEPT.md` section 7.3 for full details.
 
+- **2026-08-28** — `location-api-v2`'s `/locations/{code}/map` 403 (section 7.3's `Local Map[read]` permission gap) isn't resolvable from this app — Luc identified a temporary workaround via the older `statemachine-api-configuration` API, using a `level=floor` lookup plus a Basic-Auth-only `/maps` endpoint. See `CLAUDE-CONCEPT.md` section 7.4 and BL-040/BL-041 below.
+
+## 8b. Temporary legacy map workaround (Basic Auth)
+
+Added 2026-08-28 per Luc, see `CLAUDE-CONCEPT.md` section 7.4 for the full spec. Temporary — remove once `location-api-v2`'s own map endpoint (BL-038) is unblocked for the stored API key.
+
+- [ ] **BL-040** — Track & Trace Basic Auth credentials (Username/Password) added to Settings → Bartender Connection: a new, temporary third credential type, needed only to authenticate BL-041's legacy maps endpoint. `User.bartenderUsername`/`bartenderPasswordCiphertext` (password encrypted like the API key, no masked preview — just set/not-set), extends `GET`/`POST /api/settings/bartender` and `BartenderConnectionTab.tsx`. *(S)*
+- [ ] **BL-041** — `LocationMapCard`'s map fetch (BL-038) falls back to the legacy floor-plan endpoint when `location-api-v2`'s map call comes back permission-denied: look up the `level=floor` sub-location whose name matches the selected site, then call its `/maps` endpoint with BL-040's Basic Auth credentials. Depends on BL-040. *(M)*
+
 ## 9. Overview / Homepage
 
 Redesign decided 2026-08-27 per Luc's explicit request — see `CLAUDE-CONCEPT.md` section 14 for the full spec, including the three product decisions made with him: a floor-plan-based map (not a geographic map), `location-api-v2` as the source of truth for site data (see section 8 above), and a minimal Device model (BL-036) built now rather than deferred to BL-003. Replaces the previous static-KPI-only Overview page.
