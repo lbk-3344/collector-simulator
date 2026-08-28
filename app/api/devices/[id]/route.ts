@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { buildDeviceConfigData } from "@/lib/deviceConfig";
+import { buildDeviceConfigData, validateChannels } from "@/lib/deviceConfig";
 
 const WORKFLOW_SELECT = { id: true, name: true, status: true } as const;
 
@@ -41,6 +41,13 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
   const body = await req.json().catch(() => ({}));
   const isConfigSave = typeof body?.name === "string";
+
+  if (isConfigSave) {
+    const channelsError = validateChannels(body);
+    if (channelsError) {
+      return NextResponse.json({ error: channelsError }, { status: 400 });
+    }
+  }
 
   const data = isConfigSave ? buildDeviceConfigData(body) : buildPositionData(body);
   if (!isConfigSave && Object.keys(data).length === 0) {

@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import ReadPointIcon, { READ_POINT_TYPES, READ_POINT_LABELS, type ReadPointType } from "@/components/ui/ReadPointIcon";
-import type { DeviceRecord, WorkflowRecord } from "@/lib/deviceConfig";
+import { getDeviceState } from "@/lib/deviceState";
+import type { DeviceChannel, DeviceRecord, WorkflowRecord } from "@/lib/deviceConfig";
 
 interface SiteOption {
   code: string;
@@ -14,9 +15,119 @@ interface AttrRow {
   value: string;
 }
 
+const STATE_LABELS: Record<string, string> = {
+  OFF: "Off",
+  ACTIVE: "Active",
+  AUTOMATED: "Automated",
+  PROBLEM: "Problem",
+};
+
 function attributesToRows(attrs: DeviceRecord["attributes"]): AttrRow[] {
   if (!attrs) return [];
   return Object.entries(attrs).map(([key, value]) => ({ key, value: String(value) }));
+}
+
+function renumberChannels(rows: DeviceChannel[]): DeviceChannel[] {
+  return rows.map((row, i) => ({ ...row, id: `CH${i + 1}` }));
+}
+
+const DEFAULT_CHANNELS: DeviceChannel[] = [{ id: "CH1", type: "PRESENCE", presenceEvent: "PRESENT" }];
+
+// Small inline icon set for this modal's Channels/Collector-ID/Publish
+// additions (BL-049/050/051) — see CHARTE-GRAPHIQUE.md "Device config
+// screen" for the glyph descriptions. 20px viewBox, currentColor stroke,
+// matching the modal's existing close-button icon weight.
+function RegenerateIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 10a6 6 0 0 1 10.5-4" />
+      <path d="M16 10a6 6 0 0 1-10.5 4" />
+      <path d="M14 2.5V6h-3.5" />
+      <path d="M6 17.5V14h3.5" />
+    </svg>
+  );
+}
+function AntennaIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+      <circle cx="10" cy="16" r="1.2" fill="currentColor" stroke="none" />
+      <path d="M6.5 12.5a5 5 0 0 1 7 0" />
+      <path d="M4 9.5a9 9 0 0 1 12 0" />
+      <path d="M1.5 6.5a13 13 0 0 1 17 0" />
+    </svg>
+  );
+}
+function PresenceTypeIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6">
+      <circle cx="10" cy="10" r="1.3" fill="currentColor" stroke="none" />
+      <circle cx="10" cy="10" r="4" />
+      <circle cx="10" cy="10" r="7" opacity="0.55" />
+    </svg>
+  );
+}
+function DirectionalTypeIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 10h14" />
+      <path d="M6.2 6.5 3 10l3.2 3.5" />
+      <path d="M13.8 6.5 17 10l-3.2 3.5" />
+    </svg>
+  );
+}
+function FirstSeenIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M13 5v10" />
+      <path d="M11 5h2M11 15h2" />
+      <path d="M3 10h7" />
+      <path d="M7 7l3 3-3 3" />
+    </svg>
+  );
+}
+function PresentIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7">
+      <circle cx="10" cy="10" r="3" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+function LastSeenIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M7 5v10" />
+      <path d="M7 5h2M7 15h2" />
+      <path d="M10 10h7" />
+      <path d="M13 7l3 3-3 3" />
+    </svg>
+  );
+}
+function InboundIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M10 3v9" />
+      <path d="M6.5 9 10 12.5 13.5 9" />
+      <path d="M4 15.5h12" />
+    </svg>
+  );
+}
+function OutboundIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M10 17V8" />
+      <path d="M6.5 11 10 7.5 13.5 11" />
+      <path d="M4 4.5h12" />
+    </svg>
+  );
+}
+function CloudUploadIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" style={{ width: 18, height: 18 }}>
+      <path d="M6.2 14a3.4 3.4 0 0 1-.5-6.76A4.4 4.4 0 0 1 13.9 6.1a3.2 3.2 0 0 1-.4 7.9H6.2Z" />
+      <path d="M10 15V9" />
+      <path d="M7.5 11.5 10 9l2.5 2.5" />
+    </svg>
+  );
 }
 
 export interface DeviceConfigModalProps {
@@ -39,8 +150,8 @@ export interface DeviceConfigModalProps {
 }
 
 // Same structural pattern as BugReportModal.tsx — see CHARTE-GRAPHIQUE.md
-// "Device config screen", BACKLOG.md BL-045. Shared by the Overview map's
-// Edit mode (BL-044) and the Devices list (BL-047).
+// "Device config screen", BACKLOG.md BL-045, revised for BL-049/050/051
+// (Channels, Collector ID auto-suggest, Publish to platform).
 export function DeviceConfigModal({
   open,
   device,
@@ -63,10 +174,13 @@ export function DeviceConfigModal({
   const [heartbeatEnabled, setHeartbeatEnabled] = useState(true);
   const [heartbeatTimeoutSeconds, setHeartbeatTimeoutSeconds] = useState(120);
   const [attrs, setAttrs] = useState<AttrRow[]>([]);
+  const [channels, setChannels] = useState<DeviceChannel[]>(DEFAULT_CHANNELS);
   const [workflowId, setWorkflowId] = useState("");
   const [workflows, setWorkflows] = useState<WorkflowRecord[]>([]);
 
-  const [saving, setSaving] = useState(false);
+  // "draft" | "publish" | "save" while a save request for that action is in
+  // flight — tracks which footer button to show a busy label on.
+  const [saving, setSaving] = useState<"draft" | "publish" | "save" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -81,6 +195,7 @@ export function DeviceConfigModal({
     setHeartbeatEnabled(device?.heartbeatEnabled ?? true);
     setHeartbeatTimeoutSeconds(device?.heartbeatTimeoutSeconds ?? 120);
     setAttrs(attributesToRows(device?.attributes ?? null));
+    setChannels(device?.channels && device.channels.length ? device.channels : DEFAULT_CHANNELS);
     setWorkflowId(device?.workflowId ?? "");
     setError(null);
   }, [open, device, presetType, presetLocationCode]);
@@ -92,6 +207,26 @@ export function DeviceConfigModal({
       .then((data) => setWorkflows(data.workflows ?? []))
       .catch(() => setWorkflows([]));
   }, [open]);
+
+  // Collector ID auto-suggestion (BL-050) — pulls a fresh {site}-{TYPE}-{NN}
+  // suggestion, used both by the effect below (automatic, only when the
+  // field is currently empty) and the regenerate icon button (explicit,
+  // always overwrites).
+  const suggestCollectorId = useCallback(async () => {
+    if (!type || !locationCode) return;
+    const res = await fetch(`/api/devices/suggest-code?locationCode=${encodeURIComponent(locationCode)}&type=${encodeURIComponent(type)}`);
+    if (!res.ok) return;
+    const data = await res.json().catch(() => null);
+    if (data?.code) setCollectorId(data.code);
+  }, [type, locationCode]);
+
+  useEffect(() => {
+    if (!open) return;
+    if (collectorId.trim()) return; // never overwrite a value already present
+    if (!type || !locationCode) return;
+    suggestCollectorId();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, type, locationCode]);
 
   useEffect(() => {
     if (!open) return;
@@ -113,7 +248,7 @@ export function DeviceConfigModal({
     onClose();
   }
 
-  async function handleSave() {
+  async function handleSave(action: "draft" | "publish" | "save") {
     if (!name.trim()) {
       setError("Name is required.");
       return;
@@ -122,7 +257,7 @@ export function DeviceConfigModal({
       setError("Site is required.");
       return;
     }
-    setSaving(true);
+    setSaving(action);
     setError(null);
 
     const attributes = attrs.reduce<Record<string, string>>((acc, row) => {
@@ -141,7 +276,9 @@ export function DeviceConfigModal({
       heartbeatEnabled,
       heartbeatTimeoutSeconds,
       attributes: Object.keys(attributes).length ? attributes : null,
+      channels,
       workflowId: workflowId || null,
+      publish: action === "publish",
     };
 
     const res = device
@@ -159,12 +296,12 @@ export function DeviceConfigModal({
     if (!res.ok) {
       const data = await res.json().catch(() => null);
       setError(data?.error ?? "Couldn't save this device.");
-      setSaving(false);
+      setSaving(null);
       return;
     }
 
     const data = await res.json();
-    setSaving(false);
+    setSaving(null);
     onSaved(data.device);
   }
 
@@ -175,7 +312,33 @@ export function DeviceConfigModal({
     setAttrs((rows) => rows.filter((_, i) => i !== index));
   }
 
+  function addChannel() {
+    setChannels((rows) => renumberChannels([...rows, { id: "", type: "PRESENCE", presenceEvent: "PRESENT" }]));
+  }
+  function removeChannel(index: number) {
+    setChannels((rows) => (rows.length <= 1 ? rows : renumberChannels(rows.filter((_, i) => i !== index))));
+  }
+  function setChannelType(index: number, type: "PRESENCE" | "DIRECTIONAL") {
+    setChannels((rows) =>
+      rows.map((row, i) =>
+        i === index
+          ? type === "PRESENCE"
+            ? { id: row.id, type, presenceEvent: "PRESENT" }
+            : { id: row.id, type, direction: "INBOUND" }
+          : row
+      )
+    );
+  }
+  function setChannelPresenceEvent(index: number, presenceEvent: DeviceChannel["presenceEvent"]) {
+    setChannels((rows) => rows.map((row, i) => (i === index ? { ...row, presenceEvent } : row)));
+  }
+  function setChannelDirection(index: number, direction: DeviceChannel["direction"]) {
+    setChannels((rows) => rows.map((row, i) => (i === index ? { ...row, direction } : row)));
+  }
+
   const siteName = siteOptions.find((s) => s.code === locationCode)?.name ?? locationCode;
+  const isPublished = Boolean(device?.publishedAt);
+  const stateForPill = device ? getDeviceState(device) : null;
 
   return (
     <div
@@ -191,6 +354,12 @@ export function DeviceConfigModal({
               <ReadPointIcon type={type} size={32} />
             </div>
             <h2 id="deviceConfigTitle">{device ? "Edit device" : "Add device"}</h2>
+            {stateForPill && (
+              <span className={`device-state device-state-${stateForPill.toLowerCase()}`}>
+                <span className="device-state-dot" />
+                {STATE_LABELS[stateForPill]}
+              </span>
+            )}
           </div>
           <button className="modal-close" aria-label="Close" onClick={handleCancel}>
             <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7">
@@ -204,13 +373,25 @@ export function DeviceConfigModal({
 
           <div className="field-block">
             <label htmlFor="deviceCollectorId">Collector ID</label>
-            <input
-              id="deviceCollectorId"
-              type="text"
-              value={collectorId}
-              onChange={(e) => setCollectorId(e.target.value)}
-              placeholder="e.g. TTMEMBASE-PORTAL-02"
-            />
+            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              <input
+                id="deviceCollectorId"
+                type="text"
+                value={collectorId}
+                onChange={(e) => setCollectorId(e.target.value)}
+                placeholder="e.g. TTMEMBASE-PORTAL-02"
+                style={{ flex: 1 }}
+              />
+              <button
+                type="button"
+                className="field-icon-btn"
+                aria-label="Suggest a new Collector ID"
+                title="Suggest a new Collector ID"
+                onClick={suggestCollectorId}
+              >
+                <RegenerateIcon />
+              </button>
+            </div>
           </div>
 
           <div className="field-block">
@@ -311,6 +492,111 @@ export function DeviceConfigModal({
           </div>
 
           <div className="field-block">
+            <label>
+              <span className="field-label-icon" aria-hidden="true">
+                <AntennaIcon />
+              </span>
+              Channels
+            </label>
+            {channels.map((row, i) => (
+              <div className="channel-row" key={i}>
+                <span className="channel-row-id">{row.id}</span>
+                <div className="channel-row-toggles">
+                  <div className="icon-toggle" role="group" aria-label="Channel type">
+                    <button
+                      type="button"
+                      className={`icon-toggle-btn${row.type === "PRESENCE" ? " selected" : ""}`}
+                      title="Presence"
+                      aria-label="Presence"
+                      onClick={() => setChannelType(i, "PRESENCE")}
+                    >
+                      <PresenceTypeIcon />
+                    </button>
+                    <button
+                      type="button"
+                      className={`icon-toggle-btn${row.type === "DIRECTIONAL" ? " selected" : ""}`}
+                      title="Directional"
+                      aria-label="Directional"
+                      onClick={() => setChannelType(i, "DIRECTIONAL")}
+                    >
+                      <DirectionalTypeIcon />
+                    </button>
+                  </div>
+
+                  {row.type === "PRESENCE" ? (
+                    <div className="icon-toggle" role="group" aria-label="Presence event">
+                      <button
+                        type="button"
+                        className={`icon-toggle-btn${row.presenceEvent === "FIRST_SEEN" ? " selected" : ""}`}
+                        title="First seen"
+                        aria-label="First seen"
+                        onClick={() => setChannelPresenceEvent(i, "FIRST_SEEN")}
+                      >
+                        <FirstSeenIcon />
+                      </button>
+                      <button
+                        type="button"
+                        className={`icon-toggle-btn${row.presenceEvent === "PRESENT" ? " selected" : ""}`}
+                        title="Present"
+                        aria-label="Present"
+                        onClick={() => setChannelPresenceEvent(i, "PRESENT")}
+                      >
+                        <PresentIcon />
+                      </button>
+                      <button
+                        type="button"
+                        className={`icon-toggle-btn${row.presenceEvent === "LAST_SEEN" ? " selected" : ""}`}
+                        title="Last seen"
+                        aria-label="Last seen"
+                        onClick={() => setChannelPresenceEvent(i, "LAST_SEEN")}
+                      >
+                        <LastSeenIcon />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="icon-toggle" role="group" aria-label="Direction">
+                      <button
+                        type="button"
+                        className={`icon-toggle-btn${row.direction === "INBOUND" ? " selected" : ""}`}
+                        title="Inbound"
+                        aria-label="Inbound"
+                        onClick={() => setChannelDirection(i, "INBOUND")}
+                      >
+                        <InboundIcon />
+                      </button>
+                      <button
+                        type="button"
+                        className={`icon-toggle-btn${row.direction === "OUTBOUND" ? " selected" : ""}`}
+                        title="Outbound"
+                        aria-label="Outbound"
+                        onClick={() => setChannelDirection(i, "OUTBOUND")}
+                      >
+                        <OutboundIcon />
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  className="attr-remove-btn"
+                  aria-label="Remove channel"
+                  disabled={channels.length <= 1}
+                  style={channels.length <= 1 ? { visibility: "hidden" } : undefined}
+                  onClick={() => removeChannel(i)}
+                >
+                  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7">
+                    <line x1="5" y1="5" x2="15" y2="15" />
+                    <line x1="15" y1="5" x2="5" y2="15" />
+                  </svg>
+                </button>
+              </div>
+            ))}
+            <button type="button" className="attr-add-link" onClick={addChannel}>
+              + Add channel
+            </button>
+          </div>
+
+          <div className="field-block">
             <label htmlFor="deviceWorkflow">Workflow</label>
             <select id="deviceWorkflow" value={workflowId} onChange={(e) => setWorkflowId(e.target.value)}>
               <option value="">None</option>
@@ -326,9 +612,21 @@ export function DeviceConfigModal({
           <button className="btn btn-secondary" onClick={handleCancel}>
             Cancel
           </button>
-          <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
-            {saving ? "Saving…" : "Save"}
-          </button>
+          {!isPublished ? (
+            <>
+              <button className="btn btn-secondary" onClick={() => handleSave("draft")} disabled={saving !== null}>
+                {saving === "draft" ? "Saving…" : "Save draft"}
+              </button>
+              <button className="btn btn-primary" onClick={() => handleSave("publish")} disabled={saving !== null}>
+                <CloudUploadIcon />
+                {saving === "publish" ? "Publishing…" : "Publish to platform"}
+              </button>
+            </>
+          ) : (
+            <button className="btn btn-primary" onClick={() => handleSave("save")} disabled={saving !== null}>
+              {saving === "save" ? "Saving…" : "Save"}
+            </button>
+          )}
         </div>
       </div>
     </div>

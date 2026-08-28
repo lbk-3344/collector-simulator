@@ -125,19 +125,22 @@ model Device {
   heartbeatTimeoutSeconds Int     @default(120)
   attributes              Json? // free-form flat scalar key/value map
 
-  // Single default Channel, flattened onto Device rather than a separate
-  // table — explicit v1 scope decision (section 15.1): every configured
-  // Device gets exactly one, auto-populated, not user-edited.
-  channelId            String?
-  channelType           String? @default("PRESENCE")
-  channelDirection      String? // DIRECTIONAL channels only — unused in v1, schema-ready
-  channelPresenceEvent  String? @default("PRESENT")
-  channelAttributes     Json?
+  // Repeatable Channel list — supersedes the v1 single flattened default
+  // Channel (BL-049). Array of { id, type: "PRESENCE" | "DIRECTIONAL",
+  // presenceEvent?: "FIRST_SEEN" | "PRESENT" | "LAST_SEEN", direction?: "INBOUND" | "OUTBOUND" }.
+  // id is a simple per-Device sequence ("CH1", "CH2", …), not derived from
+  // collectorId, so it stays stable if the Collector ID is edited later.
+  channels Json?
 
   // Explicitly set, not derived from collectorId's presence — becomes true
   // only once the config screen's required fields are saved (15.4). Drives
-  // the Off state (15.3) when false.
+  // the Off state (15.3) when false, alongside publishedAt below.
   configured Boolean @default(false)
+
+  // Null until explicitly published to the platform (BL-051) — see
+  // CLAUDE-CONCEPT.md section 15.3. Gates the Off/"Not configured" state
+  // alongside `configured`. No real Bartender call happens on publish.
+  publishedAt DateTime?
 
   workflowId String?
   workflow   Workflow? @relation(fields: [workflowId], references: [id], onDelete: SetNull)

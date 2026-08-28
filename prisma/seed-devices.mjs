@@ -6,6 +6,10 @@
 // Device model and the derived 4-state visualization (section 15.3) — seeds
 // a mix of all 4 states (Off/Active/Automated/Problem) so BL-043's color
 // coding and BL-047's list page both have something real to show.
+// Revised again 2026-08-28 (BL-049/050/051, section 15.1/15.3): real
+// repeatable Channels lists (some multi-Channel, mixing Presence and
+// Directional), and publishedAt — including at least one Device that's
+// configured but not yet published, to prove the new Off-state gate.
 // Run with: node prisma/seed-devices.mjs
 import { PrismaClient } from "@prisma/client";
 
@@ -17,18 +21,12 @@ await prisma.workflow.deleteMany({});
 const packLine = await prisma.workflow.create({ data: { name: "Pack Line A", status: "RUNNING" } });
 const inboundQc = await prisma.workflow.create({ data: { name: "Inbound QC", status: "STOPPED" } });
 
-function defaultChannel(collectorId) {
-  return {
-    channelId: `${collectorId}-ch1`,
-    channelType: "PRESENCE",
-    channelPresenceEvent: "PRESENT",
-  };
-}
+const NOW = new Date();
 
 // TTMEMBASE (dc), TANDTWAREHOUSE (store), GRANITEFALLSSHOP (dc) — real codes
 // from the sandbox tenant's GET .../locations?level=premise response.
 const devices = [
-  // TTMEMBASE — one of each state
+  // TTMEMBASE — one of each state, plus a configured-but-unpublished example
   {
     name: "Portal — Membase Dock 1",
     type: "PORTAL",
@@ -36,11 +34,15 @@ const devices = [
     positionX: 120,
     positionY: 220,
     configured: true,
+    publishedAt: NOW,
     collectorId: "TTMEMBASE-PORTAL-01",
     model: "RX-9000",
     vendor: "Zebra",
     configVersion: "1.4.0",
-    ...defaultChannel("TTMEMBASE-PORTAL-01"),
+    channels: [
+      { id: "CH1", type: "PRESENCE", presenceEvent: "PRESENT" },
+      { id: "CH2", type: "DIRECTIONAL", direction: "INBOUND" },
+    ],
     workflowId: packLine.id,
   },
   {
@@ -50,11 +52,12 @@ const devices = [
     positionX: 340,
     positionY: 180,
     configured: true,
+    publishedAt: NOW,
     collectorId: "TTMEMBASE-CONVEYOR-01",
     model: "FX9600",
     vendor: "Zebra",
     configVersion: "2.1.0",
-    ...defaultChannel("TTMEMBASE-CONVEYOR-01"),
+    channels: [{ id: "CH1", type: "DIRECTIONAL", direction: "OUTBOUND" }],
     workflowId: inboundQc.id,
   },
   {
@@ -64,11 +67,12 @@ const devices = [
     positionX: 560,
     positionY: 410,
     configured: true,
+    publishedAt: NOW,
     collectorId: "TTMEMBASE-SHELF-01",
     model: "IH45",
     vendor: "Impinj",
     configVersion: "1.0.2",
-    ...defaultChannel("TTMEMBASE-SHELF-01"),
+    channels: [{ id: "CH1", type: "PRESENCE", presenceEvent: "PRESENT" }],
     workflowId: null,
   },
   {
@@ -79,6 +83,24 @@ const devices = [
     positionY: 520,
     configured: false,
   },
+  {
+    // Fully configured, never published — should render Off/"Not
+    // configured" (grey) same as an unconfigured shell, proving the new
+    // configured && publishedAt gate (BL-051).
+    name: "Overhead Reader — Membase Staging",
+    type: "OVERHEAD",
+    locationCode: "TTMEMBASE",
+    positionX: 460,
+    positionY: 130,
+    configured: true,
+    publishedAt: null,
+    collectorId: "TTMEMBASE-OVERHEAD-01",
+    model: "ArcReader",
+    vendor: "Impinj",
+    configVersion: "3.0.1",
+    channels: [{ id: "CH1", type: "PRESENCE", presenceEvent: "FIRST_SEEN" }],
+    workflowId: null,
+  },
 
   // TANDTWAREHOUSE
   {
@@ -88,11 +110,15 @@ const devices = [
     positionX: 90,
     positionY: 150,
     configured: true,
+    publishedAt: NOW,
     collectorId: "TANDTWAREHOUSE-PORTAL-01",
     model: "RX-9000",
     vendor: "Zebra",
     configVersion: "1.4.0",
-    ...defaultChannel("TANDTWAREHOUSE-PORTAL-01"),
+    channels: [
+      { id: "CH1", type: "DIRECTIONAL", direction: "INBOUND" },
+      { id: "CH2", type: "DIRECTIONAL", direction: "OUTBOUND" },
+    ],
     workflowId: packLine.id,
   },
   {
@@ -102,11 +128,12 @@ const devices = [
     positionX: 420,
     positionY: 300,
     configured: true,
+    publishedAt: NOW,
     collectorId: "TANDTWAREHOUSE-OVERHEAD-01",
     model: "ArcReader",
     vendor: "Impinj",
     configVersion: "3.0.1",
-    ...defaultChannel("TANDTWAREHOUSE-OVERHEAD-01"),
+    channels: [{ id: "CH1", type: "PRESENCE", presenceEvent: "PRESENT" }],
     workflowId: null,
   },
   {
@@ -124,11 +151,12 @@ const devices = [
     positionX: 250,
     positionY: 620,
     configured: true,
+    publishedAt: NOW,
     collectorId: "TANDTWAREHOUSE-SIMPLE-01",
     model: "SR-100",
     vendor: "Alien",
     configVersion: "0.9.5",
-    ...defaultChannel("TANDTWAREHOUSE-SIMPLE-01"),
+    channels: [{ id: "CH1", type: "PRESENCE", presenceEvent: "LAST_SEEN" }],
     workflowId: inboundQc.id,
   },
 
@@ -140,11 +168,12 @@ const devices = [
     positionX: 160,
     positionY: 100,
     configured: true,
+    publishedAt: NOW,
     collectorId: "GRANITEFALLSSHOP-PORTAL-01",
     model: "RX-9000",
     vendor: "Zebra",
     configVersion: "1.4.0",
-    ...defaultChannel("GRANITEFALLSSHOP-PORTAL-01"),
+    channels: [{ id: "CH1", type: "PRESENCE", presenceEvent: "PRESENT" }],
     workflowId: null,
   },
   {
