@@ -35,8 +35,11 @@ export interface BartenderLocation {
 
 export interface LocationMap {
   mapUrl: string;
-  width: number;
-  height: number;
+  // Optional: the legacy-map-image fallback (section 7.4) doesn't know the
+  // image's pixel dimensions ahead of time — omitted rather than guessed, so
+  // callers fall back to the <img>'s own natural size.
+  width?: number;
+  height?: number;
 }
 
 export interface LocationZone {
@@ -100,6 +103,20 @@ export async function getUserBartenderCredentials(
   return { tenantUrl: user.bartenderTenantUrl, apiKey };
 }
 
+// Basic Auth credentials for the legacy map workaround (section 7.4,
+// BL-040/041) — a separate, optional credential pair from the API key above.
+export async function getUserBartenderBasicAuthCredentials(
+  userId: string
+): Promise<{ username: string; password: string } | null> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { bartenderUsername: true, bartenderPasswordCiphertext: true },
+  });
+  if (!user?.bartenderUsername || !user.bartenderPasswordCiphertext) return null;
+  const password = decrypt(user.bartenderPasswordCiphertext);
+  return { username: user.bartenderUsername, password };
+}
+
 // GET /locations returns a paginated envelope ({ page, total, pageSize,
 // locations: [...] }), not a bare array — unwrap it here so callers just get
 // the list.
@@ -147,6 +164,128 @@ export async function getLocationMap(
 // GET /locations/{code}/zones returns { locationCode, zones: [...] }, with
 // each zone's own identity under zoneCode/zoneName (code/name on the entry
 // are the parent location's, not the zone's) — normalize to LocationZone.
+// Legacy floor-plan map workaround — see CLAUDE-CONCEPT.md section 7.4.
+// Both functions below hit {tenantUrl}/statemachine-api-configuration/...,
+// NOT the location-api-v2 gateway — same base URL as section 7.2's
+// premise-level call (app/api/settings/bartender/test/route.ts).
+
+export interface LegacyLocation {
+  id: number;
+  code: string;
+  name: string;
+  level: string; // "premise" | "floor" | ...
+  parent?: number | null; // for a floor, the id of its parent premise
+  [key: string]: unknown;
+}
+
+export interface LegacyFloorMapImage {
+  bytes: Buffer;
+  contentType: string;
+}
+
+// Shared fetch/error-handling for tenant-URL-direct (statemachine-api-configuration)
+// calls — same two error modes as callGateway (HTTP error vs. network/DNS
+// failure), just against the tenant's own subdomain instead of a gateway host.
+async function callTenantApi<T>(tenantUrl: string, apiKey: string, path: string): Promise<GatewayResult<T>> {
+  const url = `${tenantUrl.replace(/\/+$/, "")}${path}`;
+
+  let response: Response;
+  try {
+    response = await fetch(url, { headers: { apikey: apiKey }, cache: "no-store" });
+  } catch {
+    return { ok: false, error: "Could not reach that tenant URL — check it's correct." };
+  }
+
+  if (!response.ok) {
+    return { ok: false, error: `Bartender returned an error (HTTP ${response.status}).`, status: response.status };
+  }
+
+  const data = await response.json().catch(() => null);
+  if (data === null) return { ok: false, error: "Unexpected response from Bartender." };
+  return { ok: true, data: data as T };
+}
+
+async function listLegacyLocations(
+  tenantUrl: string,
+  apiKey: string,
+  level: "premise" | "floor"
+): Promise<GatewayResult<LegacyLocation[]>> {
+  const result = await callTenantApi<unknown>(
+    tenantUrl,
+    apiKey,
+    `/statemachine-api-configuration/rest/configuration/locations?level=${level}`
+  );
+  if (!result.ok) return result;
+  if (!Array.isArray(result.data)) return { ok: false, error: "Unexpected response shape from Bartender." };
+  return { ok: true, data: result.data as LegacyLocation[] };
+}
+
+// GET {tenantUrl}/statemachine-api-configuration/rest/configuration/locations?level=floor
+// header apikey — same auth as the already-working premise-level call.
+export function listFloorLocations(tenantUrl: string, apiKey: string): Promise<GatewayResult<LegacyLocation[]>> {
+  return listLegacyLocations(tenantUrl, apiKey, "floor");
+}
+
+// Finds the floor sub-location for a given premise (site) code. CORRECTED
+// 2026-08-28 after live-testing: section 7.4's original assumption — match
+// the floor whose `name` equals the premise's `name` — never holds (checked
+// against 3 real sites; a floor's `name` mirrors its own code, e.g.
+// "TTMEMBASE", not the premise's display name "T&TMembase"). The reliable
+// link is structural: a floor's `parent` field holds its premise's `id`.
+// Returns null if no premise or floor is found (not an error).
+export async function findFloorForPremiseCode(
+  tenantUrl: string,
+  apiKey: string,
+  premiseCode: string
+): Promise<GatewayResult<LegacyLocation | null>> {
+  const premisesResult = await listLegacyLocations(tenantUrl, apiKey, "premise");
+  if (!premisesResult.ok) return premisesResult;
+  const premise = premisesResult.data.find((p) => p.code === premiseCode);
+  if (!premise) return { ok: true, data: null };
+
+  const floorsResult = await listLegacyLocations(tenantUrl, apiKey, "floor");
+  if (!floorsResult.ok) return floorsResult;
+  const floor = floorsResult.data.find((f) => f.parent === premise.id) ?? null;
+  return { ok: true, data: floor };
+}
+
+// GET {tenantUrl}/statemachine-api-configuration/rest/configuration/locations/{floorLocationId}/maps
+// header Authorization: Basic base64(username:password) — NOT apikey.
+// CONFIRMED live 2026-08-28 (see CLAUDE-CONCEPT.md section 7.4): returns the
+// RAW image bytes directly (Content-Type: image/png), not JSON metadata —
+// callers must stream this server-side rather than expose a mapUrl.
+export async function getLegacyFloorMap(
+  tenantUrl: string,
+  username: string,
+  password: string,
+  floorLocationId: number
+): Promise<GatewayResult<LegacyFloorMapImage>> {
+  const url = `${tenantUrl.replace(/\/+$/, "")}/statemachine-api-configuration/rest/configuration/locations/${floorLocationId}/maps`;
+  const authHeader = `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`;
+
+  let response: Response;
+  try {
+    response = await fetch(url, { headers: { Authorization: authHeader }, cache: "no-store" });
+  } catch {
+    return { ok: false, error: "Could not reach the Track & Trace tenant for the legacy map endpoint." };
+  }
+
+  if (!response.ok) {
+    const raw = await response.text().catch(() => "");
+    let message = raw;
+    try {
+      const parsed = JSON.parse(raw);
+      message = typeof parsed?.message === "string" ? parsed.message : raw;
+    } catch {
+      // Not JSON — keep the raw text.
+    }
+    return { ok: false, error: message || `Legacy map endpoint returned HTTP ${response.status}.`, status: response.status };
+  }
+
+  const bytes = Buffer.from(await response.arrayBuffer());
+  return { ok: true, data: { bytes, contentType: response.headers.get("content-type") ?? "image/png" } };
+}
+
 export async function getLocationZones(
   tenantUrl: string,
   apiKey: string,

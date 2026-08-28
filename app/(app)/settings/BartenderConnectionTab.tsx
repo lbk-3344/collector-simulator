@@ -5,6 +5,8 @@ import { useCallback, useEffect, useState } from "react";
 type ConnectionState = {
   tenantUrl: string | null;
   apiKeyLast4: string | null;
+  username: string | null;
+  hasPassword: boolean;
 };
 
 type TestResult = { ok: true; locationCount: number } | { ok: false; error: string };
@@ -18,6 +20,11 @@ export function BartenderConnectionTab() {
   const [savedApiKeyLast4, setSavedApiKeyLast4] = useState<string | null>(null);
   const [editingKey, setEditingKey] = useState(false);
   const [newApiKey, setNewApiKey] = useState("");
+
+  const [username, setUsername] = useState("");
+  const [savedHasPassword, setSavedHasPassword] = useState(false);
+  const [editingPassword, setEditingPassword] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
 
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -33,6 +40,9 @@ export function BartenderConnectionTab() {
     setTenantUrl(data.tenantUrl ?? "");
     setSavedApiKeyLast4(data.apiKeyLast4);
     setEditingKey(!data.apiKeyLast4);
+    setUsername(data.username ?? "");
+    setSavedHasPassword(data.hasPassword);
+    setEditingPassword(!data.hasPassword);
     setLoaded(true);
   }, []);
 
@@ -47,7 +57,12 @@ export function BartenderConnectionTab() {
     const res = await fetch("/api/settings/bartender", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tenantUrl, ...(newApiKey && { apiKey: newApiKey }) }),
+      body: JSON.stringify({
+        tenantUrl,
+        ...(newApiKey && { apiKey: newApiKey }),
+        username,
+        ...(newPassword && { password: newPassword }),
+      }),
     });
     if (!res.ok) {
       const data = await res.json().catch(() => null);
@@ -55,6 +70,7 @@ export function BartenderConnectionTab() {
     } else {
       setSaveOk(true);
       setNewApiKey("");
+      setNewPassword("");
       await load();
     }
     setSaving(false);
@@ -119,6 +135,50 @@ export function BartenderConnectionTab() {
             }}
           />
         )}
+      </div>
+
+      <div className="field-block">
+        <label>Track &amp; Trace username</label>
+        <input
+          type="text"
+          placeholder="Your Track & Trace login"
+          value={username}
+          onChange={(e) => {
+            setUsername(e.target.value);
+            setSaveOk(false);
+          }}
+        />
+      </div>
+
+      <div className="field-block">
+        <label>Track &amp; Trace password</label>
+        {!editingPassword && savedHasPassword ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <code>Set</code>
+            <button
+              type="button"
+              className="auth-foot-link"
+              style={{ margin: 0 }}
+              onClick={() => setEditingPassword(true)}
+            >
+              Change password
+            </button>
+          </div>
+        ) : (
+          <input
+            type="password"
+            placeholder="Your Track & Trace password"
+            value={newPassword}
+            onChange={(e) => {
+              setNewPassword(e.target.value);
+              setSaveOk(false);
+            }}
+          />
+        )}
+        <p className="note">
+          Used only as a temporary fallback for loading floor-plan maps, until this is no longer needed — see
+          BACKLOG.md BL-040/041.
+        </p>
       </div>
 
       <div className="row" style={{ display: "flex", gap: 10 }}>

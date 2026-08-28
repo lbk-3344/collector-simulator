@@ -84,6 +84,14 @@ model User {
   bartenderApiKeyCiphertext String? // AES-256-GCM, see lib/crypto.ts — never the plaintext key
   bartenderApiKeyLast4      String? // last 4 chars of the plaintext key, for masked display only
 
+  // Track & Trace login/password — HTTP Basic Auth, used ONLY by the
+  // temporary legacy floor-plan map workaround (BL-040/041, see
+  // CLAUDE-CONCEPT.md section 7.4). Not used by any other Bartender call.
+  bartenderUsername           String?
+  bartenderPasswordCiphertext String? // AES-256-GCM, see lib/crypto.ts — never plaintext.
+                                       // Deliberately no "last4" field like the API key has —
+                                       // don't surface any fragment of a login password in the UI.
+
   // Overview site selector — see CLAUDE-CONCEPT.md section 14, BACKLOG.md BL-037.
   selectedLocationCode String?
 

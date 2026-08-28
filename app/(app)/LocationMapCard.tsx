@@ -141,8 +141,7 @@ export function LocationMapCard({ locationCode }: { locationCode: string | null 
           <img
             src={map.mapUrl}
             alt="Floor plan"
-            width={map.width}
-            height={map.height}
+            {...(map.width && map.height ? { width: map.width, height: map.height } : {})}
             className="map-card-image"
             draggable={false}
           />
