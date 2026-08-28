@@ -97,6 +97,19 @@ export function LocationMapCard({ locationCode }: { locationCode: string | null 
     };
   }, [locationCode]);
 
+  // Re-fit on any viewport size change (window resize, sidebar collapse/
+  // expand) — otherwise a fit computed for the old size goes stale. Only
+  // attaches once the real card (not the loading/error placeholder) is
+  // actually in the DOM, hence the hasMap/map/loading deps re-triggering
+  // this after that swap.
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    const observer = new ResizeObserver(() => applyFit());
+    observer.observe(viewport);
+    return () => observer.disconnect();
+  }, [applyFit, hasMap, map, loading]);
+
   const zoomIn = () => setScale((s) => Math.min(MAX_SCALE, +(s + SCALE_STEP).toFixed(2)));
   const zoomOut = () => setScale((s) => Math.max(minScale, +(s - SCALE_STEP).toFixed(2)));
 
