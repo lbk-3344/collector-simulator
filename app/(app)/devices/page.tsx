@@ -43,6 +43,7 @@ export default function DevicesPage() {
   const [devices, setDevices] = useState<DeviceRecord[] | null>(null);
   const [locations, setLocations] = useState<BartenderLocation[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
   const [configModal, setConfigModal] = useState<{ device: DeviceRecord | null } | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const { confirm } = useDialog();
@@ -83,12 +84,35 @@ export default function DevicesPage() {
       danger: true,
     });
     if (!ok) return;
+
+    // Published Devices get a second, opt-in-every-time question (BL-054):
+    // also deregister the real Bartender collector? Local delete happens
+    // either way.
+    let deregister = false;
+    if (device.publishedAt) {
+      deregister = await confirm({
+        variant: "warning",
+        title: "Deregister from Bartender?",
+        message:
+          "Also deregister this collector from the real Bartender platform? That removes its Zone mappings there and can't be undone on their side. The device is deleted here either way.",
+        confirmLabel: "Deregister too",
+        cancelLabel: "Just delete here",
+      });
+    }
+
     setBusyId(device.id);
     setError(null);
-    const res = await fetch(`/api/devices/${device.id}`, { method: "DELETE" });
+    setWarning(null);
+    const res = await fetch(`/api/devices/${device.id}${deregister ? "?deregister=true" : ""}`, {
+      method: "DELETE",
+    });
+    const data = await res.json().catch(() => null);
     if (!res.ok) {
-      const data = await res.json().catch(() => null);
       setError(data?.error ?? "Couldn't delete this device.");
+    } else if (data?.platformDeregisterError) {
+      setWarning(
+        `Deleted here — platform deregistration failed: ${data.platformDeregisterError} It may still exist on Bartender.`
+      );
     }
     await load();
     setBusyId(null);
@@ -106,6 +130,7 @@ export default function DevicesPage() {
       </div>
 
       {error && <div className="snack snack-danger">{error}</div>}
+      {warning && <div className="snack snack-warning">{warning}</div>}
 
       {!devices ? (
         <p className="note">Loading devices…</p>

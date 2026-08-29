@@ -516,6 +516,11 @@ select.role-select:disabled { opacity: .5; cursor: not-allowed; }
 .channel-row:last-of-type { border-bottom: none; }
 .channel-row-top { display: flex; align-items: center; gap: 8px; }
 .channel-row-id { font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-3); width: 28px; flex-shrink: 0; }
+/* Per-Channel platform reconciliation flag (BL-054) — only CONFLICT/BROKEN
+   from the last register response (CLAUDE-CONCEPT.md 15.8). Hover for detail. */
+.channel-recon-flag { font-size: 14px; line-height: 1; flex-shrink: 0; cursor: help; }
+.channel-recon-flag[data-status="CONFLICT"] { color: var(--warning); }
+.channel-recon-flag[data-status="BROKEN"] { color: var(--danger); }
 .channel-name-input {
   flex: 1; font-family: var(--font-ui); font-size: 13px; padding: 7px 10px; color: var(--ink);
   border: 1px solid var(--border-strong); border-radius: 7px; background: var(--surface);

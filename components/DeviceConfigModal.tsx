@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import ReadPointIcon, { READ_POINT_TYPES, READ_POINT_LABELS, type ReadPointType } from "@/components/ui/ReadPointIcon";
 import { getDeviceState } from "@/lib/deviceState";
-import type { DeviceChannel, DeviceRecord, WorkflowRecord } from "@/lib/deviceConfig";
+import type { DeviceChannel, DeviceRecord, ReconciliationMapping, WorkflowRecord } from "@/lib/deviceConfig";
 
 interface SiteOption {
   code: string;
@@ -182,6 +182,11 @@ export function DeviceConfigModal({
   // flight — tracks which footer button to show a busy label on.
   const [saving, setSaving] = useState<"draft" | "publish" | "save" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Set to the saved Device when a platform-syncing save came back with a
+  // problem (lastSyncError, or a CONFLICT/BROKEN reconciliation) — the modal
+  // then stays open showing the banner/flags, and the foot becomes a single
+  // "Close" that hands this Device up via onSaved. Null on a clean save.
+  const [postSave, setPostSave] = useState<DeviceRecord | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -198,6 +203,7 @@ export function DeviceConfigModal({
     setChannels(device?.channels && device.channels.length ? device.channels : DEFAULT_CHANNELS);
     setWorkflowId(device?.workflowId ?? "");
     setError(null);
+    setPostSave(null);
   }, [open, device, presetType, presetLocationCode]);
 
   useEffect(() => {
@@ -300,9 +306,26 @@ export function DeviceConfigModal({
       return;
     }
 
-    const data = await res.json();
+    const saved: DeviceRecord = (await res.json()).device;
     setSaving(null);
-    onSaved(data.device);
+
+    // A platform-syncing save (Publish, or Save on an already-published
+    // Device) can come back with the config persisted locally but the
+    // register call failed, or succeeded with per-Channel reconciliation
+    // flags — keep the modal open so that's visible (section 15.8). A draft
+    // save or a clean sync just closes as before.
+    if (action !== "draft" && (saved.lastSyncError || conflictOrBrokenMappings(saved).length > 0)) {
+      setPostSave(saved);
+      return;
+    }
+    onSaved(saved);
+  }
+
+  // CONFLICT / BROKEN reconciliation entries only — OFFLINE is expected
+  // (this app never sends heartbeats) and not surfaced. Section 15.8.
+  function conflictOrBrokenMappings(d: DeviceRecord | null): ReconciliationMapping[] {
+    const mappings = d?.platformReconciliation?.affectedMappings ?? [];
+    return mappings.filter((m) => m.mappingStatus === "CONFLICT" || m.mappingStatus === "BROKEN");
   }
 
   function updateAttr(index: number, field: "key" | "value", value: string) {
@@ -343,6 +366,14 @@ export function DeviceConfigModal({
   const isPublished = Boolean(device?.publishedAt);
   const stateForPill = device ? getDeviceState(device) : null;
 
+  // Platform-sync feedback: the just-saved Device if we're holding the modal
+  // open on a sync problem, otherwise the Device as passed in (so a stored
+  // lastSyncError from a past failed publish shows on reopen).
+  const syncSource = postSave ?? device;
+  const syncBanner = syncSource?.lastSyncError ?? null;
+  const reconByChannel = new Map<string, ReconciliationMapping>();
+  for (const m of conflictOrBrokenMappings(syncSource)) reconByChannel.set(m.channelId, m);
+
   return (
     <div
       className="modal-overlay"
@@ -372,6 +403,13 @@ export function DeviceConfigModal({
           </button>
         </div>
         <div className="modal-body">
+          {syncBanner && <div className="error-banner">{syncBanner}</div>}
+          {postSave?.lastSyncError && (
+            <div className="snack snack-danger">Saved here — publishing to Bartender failed.</div>
+          )}
+          {postSave && !postSave.lastSyncError && reconByChannel.size > 0 && (
+            <div className="snack snack-warning">Published — some channels need review on Bartender.</div>
+          )}
           {error && <div className="snack snack-danger">{error}</div>}
 
           <div className="field-block">
@@ -505,6 +543,20 @@ export function DeviceConfigModal({
               <div className="channel-row" key={i}>
                 <div className="channel-row-top">
                   <span className="channel-row-id">{row.id}</span>
+                  {reconByChannel.get(row.id) && (
+                    <span
+                      className="channel-recon-flag"
+                      data-status={reconByChannel.get(row.id)!.mappingStatus}
+                      title={
+                        reconByChannel.get(row.id)!.detail ||
+                        reconByChannel.get(row.id)!.issue ||
+                        reconByChannel.get(row.id)!.mappingStatus
+                      }
+                      aria-label={`Platform: ${reconByChannel.get(row.id)!.mappingStatus}`}
+                    >
+                      ▲
+                    </span>
+                  )}
                   <input
                     type="text"
                     className="channel-name-input"
@@ -622,23 +674,33 @@ export function DeviceConfigModal({
           </div>
         </div>
         <div className="modal-foot">
-          <button className="btn btn-secondary" onClick={handleCancel}>
-            Cancel
-          </button>
-          {!isPublished ? (
-            <>
-              <button className="btn btn-secondary" onClick={() => handleSave("draft")} disabled={saving !== null}>
-                {saving === "draft" ? "Saving…" : "Save draft"}
-              </button>
-              <button className="btn btn-primary" onClick={() => handleSave("publish")} disabled={saving !== null}>
-                <CloudUploadIcon />
-                {saving === "publish" ? "Publishing…" : "Publish to platform"}
-              </button>
-            </>
-          ) : (
-            <button className="btn btn-primary" onClick={() => handleSave("save")} disabled={saving !== null}>
-              {saving === "save" ? "Saving…" : "Save"}
+          {postSave ? (
+            // Held open on a sync problem — the save already persisted; this
+            // just hands the saved Device up and closes.
+            <button className="btn btn-primary" onClick={() => onSaved(postSave)}>
+              Close
             </button>
+          ) : (
+            <>
+              <button className="btn btn-secondary" onClick={handleCancel}>
+                Cancel
+              </button>
+              {!isPublished ? (
+                <>
+                  <button className="btn btn-secondary" onClick={() => handleSave("draft")} disabled={saving !== null}>
+                    {saving === "draft" ? "Saving…" : "Save draft"}
+                  </button>
+                  <button className="btn btn-primary" onClick={() => handleSave("publish")} disabled={saving !== null}>
+                    <CloudUploadIcon />
+                    {saving === "publish" ? "Publishing…" : "Publish to platform"}
+                  </button>
+                </>
+              ) : (
+                <button className="btn btn-primary" onClick={() => handleSave("save")} disabled={saving !== null}>
+                  {saving === "save" ? "Saving…" : "Save"}
+                </button>
+              )}
+            </>
           )}
         </div>
       </div>

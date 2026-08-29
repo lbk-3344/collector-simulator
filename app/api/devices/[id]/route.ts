@@ -4,7 +4,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { buildDeviceConfigData, validateChannels } from "@/lib/deviceConfig";
+import { buildDeviceConfigData, resolveConfigVersion, validateChannels } from "@/lib/deviceConfig";
+import { buildPlatformSyncData, toRegistrableDevice } from "@/lib/deviceSync";
+import { getUserBartenderCredentials } from "@/lib/bartenderLocations";
+import { deregisterCollector } from "@/lib/bartenderDataCollector";
 
 const WORKFLOW_SELECT = { id: true, name: true, status: true } as const;
 
@@ -42,16 +45,51 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const body = await req.json().catch(() => ({}));
   const isConfigSave = typeof body?.name === "string";
 
-  if (isConfigSave) {
-    const channelsError = validateChannels(body);
-    if (channelsError) {
-      return NextResponse.json({ error: channelsError }, { status: 400 });
+  if (!isConfigSave) {
+    const data = buildPositionData(body);
+    if (Object.keys(data).length === 0) {
+      return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
+    }
+    try {
+      const device = await prisma.device.update({
+        where: { id: params.id },
+        data,
+        include: { workflow: { select: WORKFLOW_SELECT } },
+      });
+      return NextResponse.json({ device });
+    } catch {
+      return NextResponse.json({ error: "Device not found" }, { status: 404 });
     }
   }
 
-  const data = isConfigSave ? buildDeviceConfigData(body) : buildPositionData(body);
-  if (!isConfigSave && Object.keys(data).length === 0) {
-    return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
+  const channelsError = validateChannels(body);
+  if (channelsError) {
+    return NextResponse.json({ error: channelsError }, { status: 400 });
+  }
+
+  const existing = await prisma.device.findUnique({
+    where: { id: params.id },
+    select: { configVersion: true, publishedAt: true },
+  });
+  if (!existing) {
+    return NextResponse.json({ error: "Device not found" }, { status: 404 });
+  }
+
+  // A save syncs to the platform if the Device is already published, or this
+  // save is an explicit Publish (section 15.8).
+  const willSync = Boolean(existing.publishedAt) || body.publish === true;
+  // configVersion: auto-increment only on a syncing save the user didn't
+  // touch, and only for a purely-numeric stored value.
+  body.configVersion = resolveConfigVersion(existing.configVersion, body.configVersion, willSync);
+
+  let data = buildDeviceConfigData(body);
+  if (willSync) {
+    const syncData = await buildPlatformSyncData(
+      session.user.id,
+      toRegistrableDevice(data),
+      Boolean(existing.publishedAt)
+    );
+    data = { ...data, ...syncData } as typeof data;
   }
 
   try {
@@ -66,10 +104,40 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 }
 
+// `?deregister=true` (BL-054) additionally calls DELETE /collectors/{id} on
+// the real platform *before* the local delete — opt-in, asked every time by
+// the client, only meaningful for a published Device. The local row is
+// deleted regardless of the remote call's outcome; a remote failure comes
+// back as `platformDeregisterError` for a follow-up warning, never a block.
 export async function DELETE(req: Request, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const wantDeregister = new URL(req.url).searchParams.get("deregister") === "true";
+  let platformDeregisterError: string | undefined;
+
+  if (wantDeregister) {
+    const device = await prisma.device.findUnique({
+      where: { id: params.id },
+      select: { collectorId: true, publishedAt: true },
+    });
+    if (device?.publishedAt && device.collectorId) {
+      try {
+        const creds = await getUserBartenderCredentials(session.user.id);
+        if (!creds) {
+          platformDeregisterError = "No Bartender connection configured.";
+        } else {
+          const result = await deregisterCollector(creds.tenantUrl, creds.apiKey, device.collectorId);
+          if (!result.ok) {
+            platformDeregisterError = result.errorMessage ?? "The deregister call failed.";
+          }
+        }
+      } catch {
+        platformDeregisterError = "The stored Bartender API key could not be decrypted.";
+      }
+    }
   }
 
   try {
@@ -78,7 +146,7 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
     return NextResponse.json({ error: "Device not found" }, { status: 404 });
   }
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, ...(platformDeregisterError ? { platformDeregisterError } : {}) });
 }
 
 function buildPositionData(body: Record<string, unknown>) {

@@ -139,8 +139,17 @@ model Device {
 
   // Null until explicitly published to the platform (BL-051) — see
   // CLAUDE-CONCEPT.md section 15.3. Gates the Off/"Not configured" state
-  // alongside `configured`. No real Bartender call happens on publish.
+  // alongside `configured`. Since BL-053 (section 15.8) this is set only
+  // once a real POST /collectors/register succeeds — never again after the
+  // first publish, and never cleared by a later failed resync.
   publishedAt DateTime?
+
+  // Platform sync-health tracking (BL-053, CLAUDE-CONCEPT.md section 15.8).
+  // Kept separate from the 4-state Device model (15.3) — a sync failure
+  // shows as an in-modal banner, not a 5th colour.
+  lastSyncedAt           DateTime? // last successful POST /collectors/register
+  lastSyncError          String? // message from the most recent failed register/deregister call; cleared on the next success
+  platformReconciliation Json? // the register response's `reconciliation` block, if any — { affectedMappings: [{ channelId, mappingStatus, issue, detail, ... }] }
 
   workflowId String?
   workflow   Workflow? @relation(fields: [workflowId], references: [id], onDelete: SetNull)

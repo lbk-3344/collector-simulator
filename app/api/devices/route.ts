@@ -5,6 +5,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { buildDeviceConfigData, validateChannels } from "@/lib/deviceConfig";
+import { buildPlatformSyncData, toRegistrableDevice } from "@/lib/deviceSync";
 
 const WORKFLOW_SELECT = { id: true, name: true, status: true } as const;
 
@@ -61,8 +62,14 @@ export async function POST(req: NextRequest) {
     if (channelsError) {
       return NextResponse.json({ error: channelsError }, { status: 400 });
     }
+    // Brand-new full config: default configVersion to "1" when empty. No
+    // auto-increment here — nothing to increment from (section 15.8).
+    if (!(typeof body.configVersion === "string" && body.configVersion.trim())) {
+      body.configVersion = "1";
+    }
   }
-  const data = isConfigCreate
+
+  let data = isConfigCreate
     ? buildDeviceConfigData(body)
     : {
         name: `New ${type}`,
@@ -72,6 +79,18 @@ export async function POST(req: NextRequest) {
         positionY: typeof body?.positionY === "number" ? body.positionY : null,
         configured: false,
       };
+
+  // Publish to the real platform (BL-053) — only on an explicit publish of a
+  // full config. Never blocks the local create; a failure just records
+  // lastSyncError and leaves publishedAt null (Device stays grey).
+  if (isConfigCreate && body.publish === true) {
+    const syncData = await buildPlatformSyncData(
+      session.user.id,
+      toRegistrableDevice(data),
+      false
+    );
+    data = { ...data, ...syncData } as typeof data;
+  }
 
   const device = await prisma.device.create({
     data,

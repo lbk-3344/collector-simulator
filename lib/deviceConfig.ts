@@ -38,8 +38,29 @@ export interface DeviceRecord {
   channels: DeviceChannel[] | null;
   configured: boolean;
   publishedAt: string | null;
+  // Platform sync-health (BL-053, CLAUDE-CONCEPT.md section 15.8).
+  lastSyncedAt: string | null;
+  lastSyncError: string | null;
+  platformReconciliation: PlatformReconciliation | null;
   workflowId: string | null;
   workflow: WorkflowRecord | null;
+}
+
+// Shape of the `reconciliation` block on a POST /collectors/register response,
+// as observed live in Phase 0 (2026-08-29) — the spec's assumed shape was
+// wrong. `mappingStatus` is the coarse flag the UI acts on (CONFLICT / BROKEN
+// surface per-Channel; OFFLINE is expected and ignored since this app never
+// sends heartbeats); `issue`/`detail` are a finer code + human text.
+export interface ReconciliationMapping {
+  channelId: string;
+  zoneId: string | null;
+  zoneName: string | null;
+  issue: string;
+  detail: string;
+  mappingStatus: "OFFLINE" | "CONFLICT" | "BROKEN" | string;
+}
+export interface PlatformReconciliation {
+  affectedMappings?: ReconciliationMapping[];
 }
 
 const DEFAULT_CHANNELS: DeviceChannel[] = [{ id: "CH1", type: "PRESENCE", presenceEvent: "PRESENT" }];
@@ -65,12 +86,31 @@ export function validateChannels(body: any): string | null {
   return null;
 }
 
+// configVersion version management (BL-053, CLAUDE-CONCEPT.md section 15.8).
+// Only bumps on a save that will sync to the platform, and only when the user
+// left the field untouched *and* the stored value is purely numeric — a
+// hand-typed value (numeric or not) always wins as-is, no auto-increment on
+// top of it. `willSync` is Publish, or any Save on an already-published Device.
+export function resolveConfigVersion(
+  existing: string | null,
+  submitted: string | null | undefined,
+  willSync: boolean
+): string | null {
+  const sub = typeof submitted === "string" && submitted.trim() ? submitted.trim() : null;
+  if (!willSync) return sub;
+  const unchanged = (sub ?? "") === (existing ?? "");
+  if (unchanged && existing && /^\d+$/.test(existing)) {
+    return String(parseInt(existing, 10) + 1);
+  }
+  return sub;
+}
+
 // Shared "full config save" data-shaping for Device create/update — used by
 // both POST /api/devices (Devices-list "+ Add device", BL-047) and
 // PATCH /api/devices/[id] (config screen save, BL-045). Sets configured:
-// true unconditionally; publishedAt is only ever set (never cleared) here,
-// and only when body.publish === true — see CLAUDE-CONCEPT.md section
-// 15.1/15.3/15.4 (BL-049/050/051).
+// true unconditionally. Since BL-053 (section 15.8) it no longer sets
+// publishedAt — that's set only once a real POST /collectors/register
+// succeeds, handled by lib/deviceSync.ts.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function buildDeviceConfigData(body: any) {
   const collectorId = typeof body.collectorId === "string" && body.collectorId.trim() ? body.collectorId.trim() : null;
@@ -92,7 +132,6 @@ export function buildDeviceConfigData(body: any) {
     channels,
     workflowId: typeof body.workflowId === "string" && body.workflowId ? body.workflowId : null,
     configured: true,
-    ...(body.publish === true ? { publishedAt: new Date() } : {}),
     ...(typeof body.positionX === "number" ? { positionX: body.positionX } : {}),
     ...(typeof body.positionY === "number" ? { positionY: body.positionY } : {}),
   };
