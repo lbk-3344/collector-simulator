@@ -81,16 +81,32 @@ export function LocationMapCard({ locationCode, devices, onDevicesChange }: Loca
   // thousands of pixels wide (see CLAUDE-CONCEPT.md section 7.4), so showing
   // them at native size on load left most of the map off-screen. Also used
   // by the "Fit to screen" control to recenter after panning/zooming.
+  //
+  // The fit leaves a safe inset between the floor-plan edge and the viewport
+  // edge so markers sitting right on the plan's border stay fully visible:
+  // ~half a device-icon height up top, and more on the sides / bottom where
+  // a Zone's name label (centred under its dot, `white-space: nowrap`) can
+  // extend well past the marker itself. Fixed px (markers are screen-constant
+  // via their counter-scale), clamped so it can't eat a small viewport.
   const applyFit = useCallback(() => {
     const img = imgRef.current;
     const viewport = viewportRef.current;
     if (!img || !viewport || !img.naturalWidth || !img.naturalHeight) return;
-    const fit = Math.min(viewport.clientWidth / img.naturalWidth, viewport.clientHeight / img.naturalHeight);
+
+    const vw = viewport.clientWidth;
+    const vh = viewport.clientHeight;
+    const padTop = Math.min(18, vh * 0.15);
+    const padBottom = Math.min(40, vh * 0.15);
+    const padX = Math.min(64, vw * 0.12);
+
+    const availW = Math.max(1, vw - padX * 2);
+    const availH = Math.max(1, vh - padTop - padBottom);
+    const fit = Math.min(availW / img.naturalWidth, availH / img.naturalHeight);
     setMinScale(fit);
     setScale(fit);
     setTranslate({
-      x: (viewport.clientWidth - img.naturalWidth * fit) / 2,
-      y: (viewport.clientHeight - img.naturalHeight * fit) / 2,
+      x: padX + (availW - img.naturalWidth * fit) / 2,
+      y: padTop + (availH - img.naturalHeight * fit) / 2,
     });
   }, []);
 
