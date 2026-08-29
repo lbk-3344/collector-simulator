@@ -162,9 +162,15 @@ A "+ Add channel" link below the rows, same styling as "+ Add attribute" (`.attr
 
 **Live state pill** — reuses the Devices list's existing dot+label state treatment (`.device-state*` classes), placed inline next to the modal's title (to the right of the big type icon, before the close button), so the current Off/Active/Automated/Problem status is visible the instant the modal opens.
 
+**Revised 2026-08-29 (BL-053/BL-054)** — Publish/Save now make a real platform call (`CLAUDE-CONCEPT.md` section 15.8); two additions to the screen above to make sync health visible without adding a fifth device state:
+
+- **Sync error banner** — reuses the existing `.error-banner` component verbatim (no new class), placed at the top of the modal body, above the fields. Shown whenever `lastSyncError` is set on the Device being edited: the plain-language message from the failed `POST /collectors/register` call (e.g. "Bartender rejected this device: locationId TTMEMBASE is not bound to this API key."), so a sync failure is visible the moment the modal opens, not just at the instant it happened. Cleared the next time a sync succeeds; a Device that's never been published simply never shows it.
+- **Per-Channel reconciliation flag** — when the most recent successful publish/resync reported a `CONFLICT` or `BROKEN` mapping issue for a specific Channel (`platformReconciliation`), that Channel's row gets a small inline warning triangle (14px, `--warning` for `CONFLICT`, `--danger` for `BROKEN`) right after its id, with the platform's own short status word as a `title` tooltip — informational only, doesn't block editing or re-saving that row.
+- **Delete confirmation, published Device only** — no new modal; still the existing native `confirm()` pattern (`app/(app)/devices/page.tsx`), just a second sequential call after the existing "Delete permanently?" one: *"Also deregister it from the real Bartender platform? This removes its Zone mappings there and can't be undone."* Answering either way still deletes the local row.
+
 ### Devices list page — added 2026-08-28
 
-Same table pattern as `UsersTable.tsx`/`BugReportsTable.tsx` — a `.panel`-wrapped `<table>`, header row in `--ink-3` uppercase-small per existing convention. Columns: icon+type, Name (+ Collector ID beneath in `--ink-3` small text, mirroring the site-card's name+meta pattern), Site, State (colored dot + label per the token table above), Workflow (name, or "—" in `--ink-3`), row actions (Edit, Delete). "+ Add device" button top-right of the page, same placement/style as other list-page primary actions.
+Same table pattern as `UsersTable.tsx`/`BugReportsTable.tsx` — a `.panel`-wrapped `<table>`, header row in `--ink-3` uppercase-small per existing convention. Columns: icon+type, Name (+ Collector ID beneath in `--ink-3` small text, mirroring the site-card's name+meta pattern), Site, State (colored dot + label per the token table above), Workflow (name, or "—"), row actions (Edit, Delete). "+ Add device" button top-right of the page, same placement/style as other list-page primary actions.
 
 ## Iconography
 
