@@ -377,15 +377,27 @@ select.role-select:disabled { opacity: .5; cursor: not-allowed; }
 .btn:focus-visible { outline: 2px solid var(--accent-primary); outline-offset: 2px; }
 .btn.small { font-size: 12.5px; padding: 7px 13px; }
 .row-actions { display: flex; align-items: center; gap: 8px; justify-content: flex-end; }
+.row-icon-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; border-radius: 7px; border: none; cursor: pointer;
+}
+.row-icon-btn svg { width: 16px; height: 16px; }
+.row-icon-btn:disabled { opacity: .5; cursor: not-allowed; }
+.row-icon-btn-edit { background: var(--accent-brand); color: #fff; }
+.row-icon-btn-edit:hover { background: var(--accent-brand-ink); }
+.row-icon-btn-delete { background: transparent; color: var(--ink-2); border: 1px solid var(--border-strong); }
+.row-icon-btn-delete:hover { background: var(--danger-tint); color: var(--danger); border-color: var(--danger-border); }
 
 .note { margin-top: 18px; font-size: 12px; color: var(--ink-3); }
 .error-banner { margin-bottom: 14px; padding: 10px 14px; border-radius: var(--radius); background: var(--danger-tint); color: var(--danger); border: 1px solid var(--danger-border); font-size: 12.5px; }
 
-/* Inline feedback ("snacks") — solid semantic-color background, framed, WCAG AA text.
+/* Inline feedback ("snacks") — solid semantic-color background, framed.
    Uses literal hex values rather than var(--success)/var(--danger)/var(--warning) on
    purpose: those tokens swap to lighter dark-theme tints (see the @media block and
-   :root[data-theme="dark"] further up this file) which would break the AA contrast
-   math below. The snack keeps the same light-theme solid colors in both themes. */
+   :root[data-theme="dark"] further up this file), which would break the fixed
+   background/text pairing below. The snack keeps the same light-theme solid colors
+   in both themes. Text color per variant: white on success/danger (explicit request,
+   2026-08-29 — success was navy for WCAG AA contrast until then), navy on warning. */
 .snack {
   display: inline-flex;
   align-items: center;
@@ -396,7 +408,7 @@ select.role-select:disabled { opacity: .5; cursor: not-allowed; }
   font-weight: 600;
   line-height: 1.35;
 }
-.snack-success { background: #1E8E5A; color: #0D1E2C; }
+.snack-success { background: #1E8E5A; color: #FFFFFF; }
 .snack-warning { background: #B4740E; color: #0D1E2C; }
 .snack-danger  { background: #C41E3A; color: #FFFFFF; }
 
@@ -499,11 +511,24 @@ select.role-select:disabled { opacity: .5; cursor: not-allowed; }
 .device-palette-label { font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 8px; }
 .device-palette-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
 .device-palette-item {
+  position: relative;
   display: flex; align-items: center; justify-content: center;
   width: 40px; height: 40px; border-radius: 6px; border: none; background: none;
   color: var(--ink-2); cursor: grab;
 }
 .device-palette-item:hover { background: var(--surface-2); color: var(--ink); }
+/* Custom hover tooltip (device type label) — styled to match the app rather
+   than relying on the browser's own delayed/unstyled title tooltip. */
+.device-palette-item::after {
+  content: attr(data-tooltip);
+  position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+  background: var(--ink); color: var(--surface);
+  font-size: 11px; font-weight: 600; white-space: nowrap;
+  padding: 4px 8px; border-radius: 5px; box-shadow: var(--shell-shadow);
+  opacity: 0; pointer-events: none; transition: opacity .12s;
+  z-index: 30;
+}
+.device-palette-item:hover::after { opacity: 1; }
 .device-palette-item:active { cursor: grabbing; }
 .device-drag-ghost {
   position: fixed; z-index: 200; pointer-events: none;

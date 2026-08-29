@@ -422,7 +422,8 @@ export function LocationMapCard({ locationCode, devices, onDevicesChange }: Loca
                   key={t}
                   type="button"
                   className="device-palette-item"
-                  title={READ_POINT_LABELS[t]}
+                  aria-label={READ_POINT_LABELS[t]}
+                  data-tooltip={READ_POINT_LABELS[t]}
                   onMouseDown={(e) => handlePaletteMouseDown(e, t)}
                 >
                   <ReadPointIcon type={t} size={32} />
