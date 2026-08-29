@@ -263,10 +263,20 @@ svg { display: block; }
 
 /* On the Overview page, let the map card grow to fill whatever vertical room
    is left below the KPI row so the floor plan uses as much of the screen as
-   possible on large displays, instead of a fixed 480px. Falls back to a
-   360px floor on short viewports (the .content area then scrolls). */
-.overview-page { display: flex; flex-direction: column; min-height: 100%; }
-.overview-page .map-card { flex: 1 1 auto; height: auto; min-height: 360px; }
+   possible on large displays, instead of a fixed 480px. Two mechanisms, so
+   the map never collapses even if one doesn't apply:
+   1. `.content` becomes a flex column (only when the Overview page is mounted)
+      and the card flex-grows to fill the space under the KPI row.
+   2. `height: calc(100vh - <chrome>)` is the flex-basis / standalone fallback —
+      a real length, so the viewport's height resolves against it.
+   `min-height` keeps a 360px floor on short screens (`.content` then scrolls);
+   the viewport is absolutely filled rather than `height:100%` so it always
+   gets a box regardless of how the card's height was derived. */
+.content:has(.overview-page) { display: flex; flex-direction: column; }
+.overview-page { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+.overview-page > .page-title, .overview-page > .stat-grid { flex: 0 0 auto; }
+.overview-page .map-card { flex: 1 1 auto; height: calc(100vh - 320px); min-height: 360px; }
+.overview-page .map-card-viewport { position: absolute; inset: 0; width: auto; height: auto; }
 .map-card-viewport { position: relative; width: 100%; height: 100%; overflow: hidden; }
 .map-card-viewport.pannable { cursor: grab; }
 .map-card-viewport.pannable:active { cursor: grabbing; }
