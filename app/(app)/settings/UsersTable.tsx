@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useDialog } from "@/components/AppDialog";
 
 type ApiUser = {
   id: string;
@@ -30,6 +31,7 @@ export function UsersTable({ currentUserId }: { currentUserId: string }) {
   const [users, setUsers] = useState<ApiUser[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const { confirm } = useDialog();
 
   const load = useCallback(async () => {
     setError(null);
@@ -82,7 +84,14 @@ export function UsersTable({ currentUserId }: { currentUserId: string }) {
 
   async function handleDelete(user: ApiUser) {
     const label = user.name ?? user.email;
-    if (!confirm(`Delete ${label} permanently? This can't be undone.`)) return;
+    const ok = await confirm({
+      variant: "warning",
+      title: "Delete user",
+      message: `Delete ${label} permanently? This can't be undone.`,
+      confirmLabel: "Delete",
+      danger: true,
+    });
+    if (!ok) return;
     setBusyId(user.id);
     setError(null);
     const res = await fetch(`/api/users/${user.id}`, { method: "DELETE" });

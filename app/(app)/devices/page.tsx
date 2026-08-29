@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useDialog } from "@/components/AppDialog";
 import ReadPointIcon, { READ_POINT_LABELS, type ReadPointType } from "@/components/ui/ReadPointIcon";
 import { DeviceConfigModal } from "@/components/DeviceConfigModal";
 import { getDeviceState } from "@/lib/deviceState";
@@ -44,6 +45,7 @@ export default function DevicesPage() {
   const [error, setError] = useState<string | null>(null);
   const [configModal, setConfigModal] = useState<{ device: DeviceRecord | null } | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const { confirm } = useDialog();
 
   const load = useCallback(async () => {
     setError(null);
@@ -73,7 +75,14 @@ export default function DevicesPage() {
   }
 
   async function handleDelete(device: DeviceRecord) {
-    if (!confirm(`Delete ${device.name} permanently? This can't be undone.`)) return;
+    const ok = await confirm({
+      variant: "warning",
+      title: "Delete device",
+      message: `Delete ${device.name} permanently? This can't be undone.`,
+      confirmLabel: "Delete",
+      danger: true,
+    });
+    if (!ok) return;
     setBusyId(device.id);
     setError(null);
     const res = await fetch(`/api/devices/${device.id}`, { method: "DELETE" });

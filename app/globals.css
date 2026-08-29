@@ -450,6 +450,25 @@ select.role-select:disabled { opacity: .5; cursor: not-allowed; }
 .attach-btn svg { width: 15px; height: 15px; }
 .modal-foot { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 18px; border-top: 1px solid var(--border); }
 
+/* ---- In-app dialog (confirmations & alerts) — replaces native confirm()/alert().
+   Reuses .modal-overlay/.modal/.modal-head/.modal-foot; adds a big variant-
+   colored icon beside the message. See CHARTE-GRAPHIQUE.md "In-app dialogs".
+   Sits above other modals so a confirm triggered from within one stays on top. */
+.dialog-overlay { z-index: 200; }
+.dialog-body { display: flex; gap: 14px; align-items: flex-start; padding: 18px; }
+.dialog-icon {
+  flex-shrink: 0; width: 44px; height: 44px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+}
+.dialog-icon svg { width: 24px; height: 24px; }
+.dialog-icon-success { background: var(--success-tint); color: var(--success); }
+.dialog-icon-info    { background: var(--accent-primary-tint); color: var(--accent-primary); }
+.dialog-icon-warning { background: var(--warning-tint); color: var(--warning); }
+.dialog-icon-error   { background: var(--danger-tint);  color: var(--danger); }
+.dialog-message { font-size: 13px; line-height: 1.5; color: var(--ink); padding-top: 3px; }
+.dialog-message p { margin: 0 0 8px; }
+.dialog-message p:last-child { margin-bottom: 0; }
+
 .field-block select {
   font-family: var(--font-ui); font-size: 13px; padding: 9px 11px; color: var(--ink);
   border: 1px solid var(--border-strong); border-radius: 7px; background: var(--surface);

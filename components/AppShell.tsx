@@ -6,6 +6,7 @@ import Image from "next/image";
 import { useState } from "react";
 import { UserMenu, type ShellUser } from "@/components/UserMenu";
 import { BugReportModal } from "@/components/BugReportModal";
+import { AppDialogProvider } from "@/components/AppDialog";
 
 const NAV_ITEMS = [
   {
@@ -81,6 +82,7 @@ export function AppShell({
   const [collapsed, setCollapsed] = useState(false);
 
   return (
+    <AppDialogProvider>
     <div className="app">
       <header className="topbar">
         <div className="side-brand">
@@ -138,5 +140,6 @@ export function AppShell({
 
       <BugReportModal open={bugModalOpen} onClose={() => setBugModalOpen(false)} />
     </div>
+    </AppDialogProvider>
   );
 }
