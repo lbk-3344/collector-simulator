@@ -17,7 +17,7 @@ export default async function OverviewPage() {
     : null;
 
   return (
-    <section className="fade-in">
+    <section className="fade-in overview-page">
       <h1 className="page-title">Overview</h1>
       <OverviewClient initialSelectedLocationCode={user?.selectedLocationCode ?? null} />
     </section>
