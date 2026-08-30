@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Item Feeds &amp; Flow Links — concept draft</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+:root {
+  --bg: #F4F4F5;
+  --surface: #FFFFFF;
+  --surface-2: #ECECEE;
+  --border: #E1E1E4;
+  --border-strong: #CBCBD1;
+  --ink: #1B2228;
+  --ink-2: #5B6B78;
+  --ink-3: #93A0A6;
+
+  --accent-brand: #E8472A;
+  --accent-brand-tint: #FDEDE7;
+  --accent-brand-ink: #B23A1F;
+
+  --accent-primary: #0D1E2C;
+  --accent-primary-hover: #16324A;
+  --accent-primary-tint: #E7ECEF;
+
+  --success: #1E8E5A; --success-tint: #E7F6EE; --success-border: #BFE6D2;
+  --warning: #B4740E; --warning-tint: #FFF6E5; --warning-border: #F3DDA6;
+  --danger:  #C41E3A; --danger-tint:  #FBE9EC; --danger-border:  #F5C2CB;
+  --info:    #5B6B78; --info-tint:    #F0F3F5; --info-border:    #DCE2E6;
+
+  --radius: 8px;
+  --shell-shadow: 0 10px 30px rgba(13,30,44,0.10);
+  --font-ui: "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--font-ui); font-size: 14px; line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 1180px; margin: 0 auto; padding: 40px 28px 90px; }
+
+.eyebrow {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--accent-brand); margin: 0 0 8px;
+}
+h1 { font-size: 24px; font-weight: 700; letter-spacing: -0.01em; margin: 0 0 6px; }
+.subtitle { color: var(--ink-2); font-size: 14px; margin: 0 0 36px; max-width: 760px; }
+
+h2 { font-size: 16px; font-weight: 700; margin: 0 0 4px; }
+.section-note { color: var(--ink-2); font-size: 12.5px; margin: 0 0 16px; max-width: 780px; }
+section.block { margin-bottom: 44px; }
+
+.panel {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+}
+
+/* ---- naming proposal ---- */
+.naming-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.naming-card { padding: 18px 20px; }
+.naming-card .role { font-family: var(--font-mono); font-size: 10.5px; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+.naming-card .pick { font-size: 18px; font-weight: 700; color: var(--accent-primary); margin-bottom: 6px; }
+.naming-card .alts { font-size: 12.5px; color: var(--ink-2); }
+.naming-card .alts b { color: var(--ink); font-weight: 600; }
+
+/* ---- kind badges ---- */
+.badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: 0.02em; }
+.badge-new     { background: var(--accent-brand-tint); color: var(--accent-brand-ink); }
+.badge-present { background: var(--accent-primary-tint); color: var(--accent-primary); }
+.badge-fixed   { background: var(--info-tint); color: var(--info); }
+.badge-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+/* ---- item source library list ---- */
+.lib-row {
+  display: flex; align-items: center; gap: 14px; padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+}
+.lib-row:last-child { border-bottom: none; }
+.lib-icon {
+  width: 34px; height: 34px; border-radius: 7px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--surface-2); color: var(--ink-2);
+}
+.lib-icon svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2; }
+.lib-main { flex: 1; min-width: 0; }
+.lib-name { font-weight: 600; font-size: 13.5px; margin-bottom: 2px; }
+.lib-meta { font-size: 12px; color: var(--ink-2); font-family: var(--font-mono); }
+.lib-usage { font-size: 11.5px; color: var(--ink-3); white-space: nowrap; }
+.lib-actions { display: flex; gap: 6px; }
+.icon-btn { width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); display: flex; align-items: center; justify-content: center; color: var(--ink-2); cursor: pointer; }
+.icon-btn svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; }
+.lib-add {
+  display: flex; align-items: center; gap: 8px; padding: 14px 18px;
+  color: var(--accent-primary); font-weight: 600; font-size: 13px; cursor: pointer;
+}
+.lib-add svg { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 2; }
+
+/* ---- comparison cards ---- */
+.compare-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.compare-card { padding: 18px 18px 20px; display: flex; flex-direction: column; gap: 12px; }
+.compare-head { display: flex; align-items: center; justify-content: space-between; }
+.field-row { display: flex; flex-direction: column; gap: 2px; padding: 8px 0; border-top: 1px solid var(--border); }
+.field-row:first-of-type { border-top: none; }
+.field-label { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-3); }
+.field-value { font-size: 12.5px; color: var(--ink); }
+.field-value.mono { font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-2); }
+.field-value.muted { color: var(--ink-2); font-style: italic; }
+.common-tag { font-size: 10px; color: var(--ink-3); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+.warn-note { background: var(--warning-tint); border: 1px solid var(--warning-border); color: #7A4D07; border-radius: 6px; padding: 7px 10px; font-size: 11.5px; }
+
+/* ---- task channel config ---- */
+.task-node { padding: 0; overflow: hidden; }
+.task-node-head { display: flex; align-items: center; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--border); background: var(--surface-2); }
+.task-node-icon { width: 32px; height: 32px; border-radius: 7px; background: var(--accent-primary); color: #fff; display: flex; align-items: center; justify-content: center; }
+.task-node-icon svg { width: 17px; height: 17px; stroke: currentColor; fill: none; stroke-width: 2; }
+.task-node-title { font-weight: 700; font-size: 14px; }
+.task-node-sub { font-size: 11.5px; color: var(--ink-2); font-family: var(--font-mono); }
+.chan-row { display: flex; align-items: center; gap: 14px; padding: 13px 18px; border-bottom: 1px solid var(--border); }
+.chan-row:last-child { border-bottom: none; }
+.chan-id { font-family: var(--font-mono); font-size: 12px; color: var(--ink-3); width: 34px; flex-shrink: 0; }
+.chan-assign { flex: 1; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px;
+  border-radius: 999px; font-size: 12px; font-weight: 600; border: 1px solid var(--border-strong);
+  background: var(--surface);
+}
+.chip svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 2; }
+.chip-source { background: var(--accent-brand-tint); color: var(--accent-brand-ink); border-color: var(--accent-brand-tint); }
+.chip-link { background: var(--accent-primary-tint); color: var(--accent-primary); border-color: var(--accent-primary-tint); }
+.chip-delay { background: var(--surface-2); color: var(--ink-2); border-color: var(--border); font-family: var(--font-mono); font-weight: 500; }
+.chip-empty { color: var(--ink-3); font-style: italic; background: none; border-style: dashed; }
+
+/* ---- flow schematic ---- */
+.flow-wrap { padding: 28px 24px; overflow-x: auto; }
+.flow-caption { font-size: 11.5px; color: var(--ink-2); margin-top: 14px; }
+
+/* ---- open question footer ---- */
+.oq-panel { padding: 18px 20px; border-left: 3px solid var(--accent-brand); }
+.oq-panel h3 { font-size: 13px; margin: 0 0 8px; }
+.oq-panel p { margin: 0 0 8px; font-size: 12.5px; color: var(--ink-2); }
+.oq-panel p:last-child { margin-bottom: 0; }
+.oq-panel b { color: var(--ink); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <p class="eyebrow">Bartender Track &amp; Trace Simulator · Concept draft · 2026-08-30</p>
+  <h1>Item Feeds &amp; Flow Links</h1>
+  <p class="subtitle">A first draft of the reusable "batch of items" entity and the channel-to-channel connection that lets items flow from one Task to the next. Nothing here is built yet — this is meant to be reacted to, not final.</p>
+
+  <!-- 1. Naming -->
+  <section class="block">
+    <h2>1. Names — confirmed 2026-08-30</h2>
+    <p class="section-note">Both settled.</p>
+    <div class="naming-grid">
+      <div class="panel naming-card">
+        <div class="role">Reusable batch-of-items entity</div>
+        <div class="pick">Item Feed</div>
+      </div>
+      <div class="panel naming-card">
+        <div class="role">Channel-to-channel connection</div>
+        <div class="pick">Flow Link</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2. Item Feed library -->
+  <section class="block">
+    <h2>2. Item Feeds — a shared library</h2>
+    <p class="section-note">Created once, then attached to any Channel input across any Task/Workflow — same pattern as picking an existing Device rather than redefining it each time. Each row is one reusable Item Feed, tagged by kind.</p>
+    <div class="panel">
+      <div class="lib-row">
+        <div class="lib-icon"><svg viewBox="0 0 24 24"><path d="M12 3v10M12 13l6-3.5M12 13l-6-3.5M12 13v8M6 6.5v11M18 6.5v11"/></svg></div>
+        <div class="lib-main">
+          <div class="lib-name">New pallet — Widget X <span class="badge badge-new"><span class="badge-dot"></span>NEW</span></div>
+          <div class="lib-meta">GTIN 03663328010013 · qty 8–12 (randomized)</div>
+        </div>
+        <div class="lib-usage">used in 3 workflows</div>
+        <div class="lib-actions"><div class="icon-btn"><svg viewBox="0 0 24 24"><path d="M4 21v-3.5L16 6l3.5 3.5L8 21H4z"/></svg></div><div class="icon-btn"><svg viewBox="0 0 24 24"><path d="M4 6h16M9 6V4h6v2M6 6l1 14h10l1-14"/></svg></div></div>
+      </div>
+      <div class="lib-row">
+        <div class="lib-icon"><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><path d="M4 10h16M10 4v16"/></svg></div>
+        <div class="lib-main">
+          <div class="lib-name">Widget X stock — Zone A shelving <span class="badge badge-present"><span class="badge-dot"></span>PRESENT</span></div>
+          <div class="lib-meta">GTIN 03663328010013 · Zone A-SHELF-01 · qty 1–5</div>
+        </div>
+        <div class="lib-usage">used in 1 workflow</div>
+        <div class="lib-actions"><div class="icon-btn"><svg viewBox="0 0 24 24"><path d="M4 21v-3.5L16 6l3.5 3.5L8 21H4z"/></svg></div><div class="icon-btn"><svg viewBox="0 0 24 24"><path d="M4 6h16M9 6V4h6v2M6 6l1 14h10l1-14"/></svg></div></div>
+      </div>
+      <div class="lib-row">
+        <div class="lib-icon"><svg viewBox="0 0 24 24"><path d="M4 7h16v13H4zM4 7l3-4h10l3 4"/></svg></div>
+        <div class="lib-main">
+          <div class="lib-name">QA regression set #4 <span class="badge badge-fixed"><span class="badge-dot"></span>FIXED</span></div>
+          <div class="lib-meta">3 explicit EPCs</div>
+        </div>
+        <div class="lib-usage">used in 2 workflows</div>
+        <div class="lib-actions"><div class="icon-btn"><svg viewBox="0 0 24 24"><path d="M4 21v-3.5L16 6l3.5 3.5L8 21H4z"/></svg></div><div class="icon-btn"><svg viewBox="0 0 24 24"><path d="M4 6h16M9 6V4h6v2M6 6l1 14h10l1-14"/></svg></div></div>
+      </div>
+      <div class="lib-add"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Add item source</div>
+    </div>
+  </section>
+
+  <!-- 3. Kind comparison -->
+  <section class="block">
+    <h2>3. The three kinds, side by side</h2>
+    <p class="section-note">Name and quantity range are common to all three. The rest of the form changes shape depending on the kind picked at creation.</p>
+    <div class="compare-grid">
+      <div class="panel compare-card">
+        <div class="compare-head"><span class="badge badge-new"><span class="badge-dot"></span>NEW</span></div>
+        <div class="field-row"><div class="field-label">Product</div><div class="field-value">GTIN or category search (master data)</div></div>
+        <div class="field-row"><div class="field-label">Quantity</div><div class="field-value">min–max, optional randomize</div></div>
+        <div class="field-row"><div class="field-label">At runtime</div><div class="field-value">Mints fresh EPCs via the Serialization API (SGTIN-96), one call per run</div></div>
+        <div class="warn-note">Each run is a real, permanent write to the live platform — quantity is app-capped to stay safe.</div>
+      </div>
+      <div class="panel compare-card">
+        <div class="compare-head"><span class="badge badge-present"><span class="badge-dot"></span>PRESENT</span></div>
+        <div class="field-row"><div class="field-label">Product</div><div class="field-value">GTIN or category search (master data)</div></div>
+        <div class="field-row"><div class="field-label">Quantity</div><div class="field-value">min–max, optional randomize</div></div>
+        <div class="field-row"><div class="field-label">Zone</div><div class="field-value">Zone picker within the Task's Location</div></div>
+        <div class="field-row"><div class="field-label">At runtime</div><div class="field-value">Pulls matching items actually sitting in that Zone via the Stock API — none found means nothing is scanned that run</div></div>
+      </div>
+      <div class="panel compare-card">
+        <div class="compare-head"><span class="badge badge-fixed"><span class="badge-dot"></span>FIXED</span></div>
+        <div class="field-row"><div class="field-label">Items</div><div class="field-value mono">3034DF978000FA400000005C<br>3034DF978000FA400000005D<br>+ Add EPC or URN</div></div>
+        <div class="field-row"><div class="field-label">Quantity</div><div class="field-value muted">n/a — the list is the batch</div></div>
+        <div class="field-row"><div class="field-label">At runtime</div><div class="field-value">Same explicit items every run — deterministic, repeatable scenarios</div></div>
+        <div class="common-tag">confirmed 2026-08-30</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4. Task per-channel config -->
+  <section class="block">
+    <h2>4. Task — one input per Channel</h2>
+    <p class="section-note">A Task is attached to one Device. Each of that Device's Channels gets its own input: an Item Feed, an incoming Flow Link from an upstream Task, or nothing.</p>
+    <div class="panel task-node">
+      <div class="task-node-head">
+        <div class="task-node-icon"><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><path d="M4 10h16M10 4v16"/></svg></div>
+        <div>
+          <div class="task-node-title">Sorting</div>
+          <div class="task-node-sub">TABLETOP-01 · Zone A</div>
+        </div>
+      </div>
+      <div class="chan-row">
+        <div class="chan-id">CH1</div>
+        <div class="chan-assign">
+          <span class="chip chip-link"><svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>← Linked from Dock intake · CH1</span>
+          <span class="chip chip-delay">30–90s delay</span>
+        </div>
+      </div>
+      <div class="chan-row">
+        <div class="chan-id">CH2</div>
+        <div class="chan-assign">
+          <span class="chip chip-source"><svg viewBox="0 0 24 24"><path d="M12 3v10M12 13l6-3.5M12 13l-6-3.5M12 13v8"/></svg>New pallet — Widget X</span>
+        </div>
+      </div>
+      <div class="chan-row">
+        <div class="chan-id">CH3</div>
+        <div class="chan-assign">
+          <span class="chip chip-empty">Not used</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5. Flow schematic -->
+  <section class="block">
+    <h2>5. Reading it as a flow</h2>
+    <p class="section-note">Flow Links are the edges of a graph: a Channel's output feeds another Channel's input, with a delay and an optional filter. This is Luc's own dock → sort → storage example.</p>
+    <div class="panel flow-wrap">
+      <svg viewBox="0 0 1080 260" width="100%" style="max-width:1080px">
+        <defs>
+          <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+            <path d="M0,0 L6,3 L0,6 Z" fill="#5B6B78"/>
+          </marker>
+        </defs>
+        <!-- Dock intake -->
+        <g>
+          <rect x="20" y="95" width="180" height="70" rx="8" fill="#FFFFFF" stroke="#CBCBD1"/>
+          <rect x="20" y="95" width="180" height="24" rx="8" fill="#ECECEE"/>
+          <text x="34" y="111" font-family="Inter" font-size="11" font-weight="700" fill="#1B2228">Dock intake</text>
+          <text x="34" y="140" font-family="JetBrains Mono" font-size="10" fill="#5B6B78">PORTAL-01 · CH1</text>
+          <text x="34" y="154" font-family="Inter" font-size="10" fill="#B23A1F">● NEW — Widget X pallet</text>
+        </g>
+        <!-- arrow 1 -->
+        <line x1="200" y1="130" x2="290" y2="130" stroke="#5B6B78" stroke-width="1.5" marker-end="url(#arrow)"/>
+        <rect x="207" y="112" width="76" height="16" rx="8" fill="#ECECEE"/>
+        <text x="245" y="123" font-family="JetBrains Mono" font-size="9" fill="#5B6B78" text-anchor="middle">30–90s</text>
+
+        <!-- Sorting -->
+        <g>
+          <rect x="290" y="95" width="180" height="70" rx="8" fill="#FFFFFF" stroke="#CBCBD1"/>
+          <rect x="290" y="95" width="180" height="24" rx="8" fill="#ECECEE"/>
+          <text x="304" y="111" font-family="Inter" font-size="11" font-weight="700" fill="#1B2228">Sorting</text>
+          <text x="304" y="140" font-family="JetBrains Mono" font-size="10" fill="#5B6B78">TABLETOP-01 · CH1</text>
+          <text x="304" y="154" font-family="Inter" font-size="10" fill="#0D1E2C">↳ branches by GTIN below</text>
+        </g>
+
+        <!-- arrow 2a to storage A -->
+        <path d="M470,115 C 560,115 560,45 650,45" fill="none" stroke="#5B6B78" stroke-width="1.5" marker-end="url(#arrow)"/>
+        <rect x="520" y="60" width="90" height="16" rx="8" fill="#ECECEE"/>
+        <text x="565" y="71" font-family="JetBrains Mono" font-size="9" fill="#5B6B78" text-anchor="middle">GTIN A · 10–20s</text>
+
+        <!-- arrow 2b to storage B (else) -->
+        <path d="M470,145 C 560,145 560,215 650,215" fill="none" stroke="#5B6B78" stroke-width="1.5" marker-end="url(#arrow)"/>
+        <rect x="520" y="188" width="90" height="16" rx="8" fill="#ECECEE"/>
+        <text x="565" y="199" font-family="JetBrains Mono" font-size="9" fill="#5B6B78" text-anchor="middle">else · 10–20s</text>
+
+        <!-- Storage A -->
+        <g>
+          <rect x="650" y="15" width="200" height="60" rx="8" fill="#FFFFFF" stroke="#CBCBD1"/>
+          <rect x="650" y="15" width="200" height="22" rx="8" fill="#ECECEE"/>
+          <text x="664" y="30" font-family="Inter" font-size="11" font-weight="700" fill="#1B2228">Storage — Zone A</text>
+          <text x="664" y="60" font-family="JetBrains Mono" font-size="10" fill="#5B6B78">SHELF-01 · CH1</text>
+        </g>
+        <!-- Storage B -->
+        <g>
+          <rect x="650" y="185" width="200" height="60" rx="8" fill="#FFFFFF" stroke="#CBCBD1"/>
+          <rect x="650" y="185" width="200" height="22" rx="8" fill="#ECECEE"/>
+          <text x="664" y="200" font-family="Inter" font-size="11" font-weight="700" fill="#1B2228">Storage — Zone B</text>
+          <text x="664" y="230" font-family="JetBrains Mono" font-size="10" fill="#5B6B78">SHELF-02 · CH1</text>
+        </g>
+
+        <!-- legend -->
+        <text x="20" y="20" font-family="Inter" font-size="10" fill="#93A0A6">Each box = a Task attached to one Device. Each edge = a Flow Link (Channel → Channel, with delay + optional filter).</text>
+      </svg>
+      <p class="flow-caption">Every Flow Link out of "Sorting" carries a filter (here, GTIN) and its own delay range; exactly one edge per source can be the catch-all "else" so nothing gets dropped on the floor.</p>
+    </div>
+  </section>
+
+  <!-- next up -->
+  <section class="block">
+    <div class="panel oq-panel">
+      <h3>Confirmed 2026-08-30, next up</h3>
+      <p><b>FIXED</b> is a literal list of explicit EPCs or URNs, entered by the user — section 3 above updated accordingly. Naming (<b>Item Feed</b>, <b>Flow Link</b>) is settled.</p>
+      <p>Section 5's schematic is the direction for the actual build screen: a node-and-edge graph editor (Task nodes, Flow Link edges), not a form-based workflow builder. Next: sketch how that canvas actually behaves — dragging a Task in from a Device palette, drawing an edge between two Channels, and what opens when you click an edge to set its delay/filter.</p>
+    </div>
+  </section>
+
+</div>
+</body>
+</html>
