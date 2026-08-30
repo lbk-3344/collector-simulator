@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Workflow canvas editor — interaction draft</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+:root {
+  --bg: #F4F4F5;
+  --surface: #FFFFFF;
+  --surface-2: #ECECEE;
+  --border: #E1E1E4;
+  --border-strong: #CBCBD1;
+  --ink: #1B2228;
+  --ink-2: #5B6B78;
+  --ink-3: #93A0A6;
+
+  --accent-brand: #E8472A;
+  --accent-brand-tint: #FDEDE7;
+  --accent-brand-ink: #B23A1F;
+
+  --accent-primary: #0D1E2C;
+  --accent-primary-hover: #16324A;
+  --accent-primary-tint: #E7ECEF;
+
+  --success: #1E8E5A; --success-tint: #E7F6EE; --success-border: #BFE6D2;
+  --warning: #B4740E; --warning-tint: #FFF6E5; --warning-border: #F3DDA6;
+  --danger:  #C41E3A; --danger-tint:  #FBE9EC; --danger-border:  #F5C2CB;
+  --info:    #5B6B78; --info-tint:    #F0F3F5; --info-border:    #DCE2E6;
+
+  --radius: 8px;
+  --shell-shadow: 0 10px 30px rgba(13,30,44,0.14);
+  --font-ui: "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--font-ui); font-size: 14px; line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+button { font-family: inherit; }
+.wrap { max-width: 1240px; margin: 0 auto; padding: 40px 28px 90px; }
+
+.eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent-brand); margin: 0 0 8px; }
+h1 { font-size: 24px; font-weight: 700; letter-spacing: -0.01em; margin: 0 0 6px; }
+.subtitle { color: var(--ink-2); font-size: 14px; margin: 0 0 32px; max-width: 780px; }
+h2 { font-size: 16px; font-weight: 700; margin: 0 0 4px; }
+.section-note { color: var(--ink-2); font-size: 12.5px; margin: 0 0 16px; max-width: 800px; }
+section.block { margin-bottom: 40px; }
+.panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+
+/* ---- editor shell ---- */
+.editor {
+  border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden;
+  box-shadow: var(--shell-shadow);
+}
+.editor-toolbar {
+  display: flex; align-items: center; gap: 14px; padding: 10px 16px;
+  background: var(--surface); border-bottom: 1px solid var(--border);
+}
+.wf-name { font-weight: 700; font-size: 14px; }
+.wf-name .cursor { display: inline-block; width: 1px; height: 14px; background: var(--ink-2); vertical-align: middle; margin-left: 1px; animation: blink 1s step-start infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+.toolbar-spacer { flex: 1; }
+.btn { display: inline-flex; align-items: center; gap: 7px; padding: 7px 14px; border-radius: 7px; font-size: 12.5px; font-weight: 600; border: 1px solid var(--border-strong); background: var(--surface); color: var(--ink); cursor: pointer; }
+.btn svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; }
+.btn-primary { background: var(--accent-primary); border-color: var(--accent-primary); color: #fff; }
+.btn-run { background: var(--success); border-color: var(--success); color: #fff; }
+
+.editor-body { display: flex; height: 560px; }
+
+/* ---- palette ---- */
+.palette { width: 208px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border); padding: 14px; overflow-y: auto; }
+.palette-label { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-3); margin-bottom: 10px; }
+.palette-card {
+  display: flex; align-items: center; gap: 9px; padding: 9px 10px; border-radius: 7px;
+  border: 1px dashed var(--border-strong); margin-bottom: 8px; cursor: grab; background: var(--surface);
+}
+.palette-card:hover { border-color: var(--accent-primary); background: var(--accent-primary-tint); }
+.palette-card svg { width: 16px; height: 16px; stroke: var(--ink-2); fill: none; stroke-width: 2; flex-shrink: 0; }
+.palette-card-text { min-width: 0; }
+.palette-card-name { font-size: 12px; font-weight: 600; }
+.palette-card-sub { font-size: 10.5px; color: var(--ink-3); font-family: var(--font-mono); }
+.palette-hint { font-size: 11px; color: var(--ink-3); margin-top: 14px; line-height: 1.5; }
+
+/* ---- canvas ---- */
+.canvas { flex: 1; position: relative; background: var(--bg); background-image: radial-gradient(var(--border-strong) 1px, transparent 1px); background-size: 18px 18px; overflow: auto; }
+
+.tnode { position: absolute; width: 208px; background: var(--surface); border: 1.5px solid var(--border-strong); border-radius: 8px; box-shadow: 0 4px 14px rgba(13,30,44,0.08); }
+.tnode.selected { border-color: var(--accent-primary); box-shadow: 0 0 0 3px var(--accent-primary-tint); }
+.tnode-head { display: flex; align-items: center; gap: 9px; padding: 9px 11px; border-bottom: 1px solid var(--border); background: var(--surface-2); border-radius: 7px 7px 0 0; }
+.tnode-head svg { width: 15px; height: 15px; stroke: var(--accent-primary); fill: none; stroke-width: 2; flex-shrink: 0; }
+.tnode-title { font-size: 12.5px; font-weight: 700; }
+.tnode-sub { font-size: 10px; color: var(--ink-3); font-family: var(--font-mono); }
+.tnode-ports { padding: 6px 0; }
+.port-row { display: flex; align-items: center; gap: 6px; padding: 5px 11px; font-size: 11px; position: relative; }
+.port-dot { width: 9px; height: 9px; border-radius: 50%; border: 2px solid var(--ink-3); background: var(--surface); flex-shrink: 0; }
+.port-dot.fed { border-color: var(--accent-brand); background: var(--accent-brand); }
+.port-dot.linked { border-color: var(--accent-primary); background: var(--accent-primary); }
+.port-row.out { justify-content: flex-end; text-align: right; }
+.port-row.out .port-dot { order: 2; }
+.port-label { color: var(--ink-2); flex: 1; }
+.port-row.out .port-label { flex: none; }
+
+/* connector nub */
+.nub { position: absolute; width: 9px; height: 9px; border-radius: 50%; border: 2px solid var(--accent-primary); background: #fff; }
+
+/* ---- edge popover ---- */
+.edge-pop {
+  position: absolute; width: 230px; background: var(--surface); border: 1px solid var(--border-strong);
+  border-radius: 8px; box-shadow: var(--shell-shadow); padding: 12px 14px; font-size: 12px; z-index: 20;
+}
+.edge-pop h4 { margin: 0 0 10px; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-3); }
+.edge-pop label { display: block; font-size: 10.5px; font-weight: 600; color: var(--ink-2); margin: 8px 0 3px; }
+.edge-pop .row2 { display: flex; gap: 8px; }
+.edge-pop input[type=number], .edge-pop input[type=text] {
+  width: 100%; padding: 5px 7px; border: 1px solid var(--border-strong); border-radius: 5px; font-size: 12px; font-family: var(--font-mono);
+}
+.edge-pop .chiprow { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
+.edge-pop .chip-mini { background: var(--accent-brand-tint); color: var(--accent-brand-ink); border-radius: 999px; padding: 2px 8px; font-size: 10.5px; font-weight: 600; }
+.edge-pop .else-row { display: flex; align-items: center; gap: 7px; margin-top: 10px; font-size: 11px; color: var(--ink-2); }
+.edge-pop .pop-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 12px; }
+.edge-pop .pop-btn { padding: 5px 11px; border-radius: 6px; font-size: 11.5px; font-weight: 600; border: 1px solid var(--border-strong); background: var(--surface); cursor: pointer; }
+.edge-pop .pop-btn.primary { background: var(--accent-primary); border-color: var(--accent-primary); color: #fff; }
+.close-x { position: absolute; top: 8px; right: 10px; cursor: pointer; color: var(--ink-3); font-size: 13px; }
+
+.edge-label-chip {
+  position: absolute; background: var(--surface-2); border: 1px solid var(--border); border-radius: 999px;
+  padding: 2px 9px; font-size: 10px; font-family: var(--font-mono); color: var(--ink-2); cursor: pointer;
+  transform: translate(-50%, -50%);
+}
+.edge-label-chip:hover, .edge-label-chip.active { background: var(--accent-primary); color: #fff; border-color: var(--accent-primary); }
+.edge-label-chip.else-chip { background: var(--info-tint); }
+
+/* ---- numbered steps ---- */
+.steps { display: flex; flex-direction: column; gap: 14px; }
+.step { display: flex; gap: 14px; }
+.step-num { width: 26px; height: 26px; border-radius: 50%; background: var(--accent-primary); color: #fff; font-weight: 700; font-size: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.step-text { padding-top: 3px; font-size: 13px; }
+.step-text b { color: var(--ink); }
+
+.tech-note { padding: 14px 18px; border-left: 3px solid var(--accent-primary); font-size: 12.5px; color: var(--ink-2); }
+.tech-note code { font-family: var(--font-mono); background: var(--surface-2); padding: 1px 5px; border-radius: 4px; color: var(--ink); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <p class="eyebrow">Bartender Track &amp; Trace Simulator · Concept draft · 2026-08-30</p>
+  <h1>Workflow canvas editor</h1>
+  <p class="subtitle">How building a Workflow actually feels: drag a Task in from your Devices, wire Flow Links between Channels, click an edge to set its delay and filter. The canvas below is live — click any edge's label chip to see its config panel open.</p>
+
+  <section class="block">
+    <h2>The editor</h2>
+    <p class="section-note">Left: a palette of your configured Devices — drag one onto the canvas to create a Task. Center: the canvas itself, showing the same dock → sort → storage flow as before, now as editable nodes with one port per Channel.</p>
+
+    <div class="editor">
+      <div class="editor-toolbar">
+        <span class="wf-name">Pallet intake &amp; putaway<span class="cursor"></span></span>
+        <span class="toolbar-spacer"></span>
+        <button class="btn"><svg viewBox="0 0 24 24"><path d="M4 6h16M9 6V4h6v2M6 6l1 14h10l1-14"/></svg>Auto-layout</button>
+        <button class="btn"><svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><path d="M7 3v6h8V3M7 21v-8h10v8"/></svg>Save</button>
+        <button class="btn btn-run"><svg viewBox="0 0 24 24"><path d="M6 4l14 8-14 8V4z"/></svg>Run</button>
+      </div>
+      <div class="editor-body">
+        <div class="palette">
+          <div class="palette-label">Your devices</div>
+          <div class="palette-card"><svg viewBox="0 0 24 24"><path d="M4 7h16v13H4zM4 7l3-4h10l3 4"/></svg><div class="palette-card-text"><div class="palette-card-name">PORTAL-01</div><div class="palette-card-sub">Dock A · Zone Dock</div></div></div>
+          <div class="palette-card"><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><path d="M4 10h16M10 4v16"/></svg><div class="palette-card-text"><div class="palette-card-name">TABLETOP-01</div><div class="palette-card-sub">Zone A</div></div></div>
+          <div class="palette-card"><svg viewBox="0 0 24 24"><path d="M3 21V9l9-6 9 6v12M8 21v-6h8v6"/></svg><div class="palette-card-text"><div class="palette-card-name">SHELF-01</div><div class="palette-card-sub">Zone A · Storage</div></div></div>
+          <div class="palette-card"><svg viewBox="0 0 24 24"><path d="M3 21V9l9-6 9 6v12M8 21v-6h8v6"/></svg><div class="palette-card-text"><div class="palette-card-name">SHELF-02</div><div class="palette-card-sub">Zone B · Storage</div></div></div>
+          <div class="palette-hint">Drag a device onto the canvas to add it as a Task. Each Channel becomes a port.</div>
+        </div>
+
+        <div class="canvas" id="canvas">
+          <svg id="edgesvg" style="position:absolute; top:0; left:0; width:1400px; height:900px; pointer-events:none;">
+            <defs>
+              <marker id="ah" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#5B6B78"/></marker>
+            </defs>
+            <path d="M 258 90 C 320 90 320 90 380 90" fill="none" stroke="#5B6B78" stroke-width="1.5" marker-end="url(#ah)"/>
+            <path d="M 638 80 C 700 80 700 30 760 30" fill="none" stroke="#5B6B78" stroke-width="1.5" marker-end="url(#ah)"/>
+            <path d="M 638 130 C 700 130 700 210 760 210" fill="none" stroke="#5B6B78" stroke-width="1.5" marker-end="url(#ah)"/>
+          </svg>
+
+          <div class="edge-label-chip" style="top:90px; left:319px;" onclick="showPop(this,'e1')">30–90s</div>
+          <div class="edge-label-chip" id="chipE2" style="top:52px; left:700px;" onclick="showPop(this,'e2')">GTIN A · 10–20s</div>
+          <div class="edge-label-chip else-chip" style="top:170px; left:700px;" onclick="showPop(this,'e3')">else · 10–20s</div>
+
+          <div class="tnode" style="top:40px; left:40px;">
+            <div class="tnode-head"><svg viewBox="0 0 24 24"><path d="M4 7h16v13H4zM4 7l3-4h10l3 4"/></svg><div><div class="tnode-title">Dock intake</div><div class="tnode-sub">PORTAL-01</div></div></div>
+            <div class="tnode-ports">
+              <div class="port-row out"><span class="port-label">CH1 — New pallet · Widget X</span><span class="port-dot fed"></span></div>
+            </div>
+          </div>
+
+          <div class="tnode" style="top:40px; left:380px;">
+            <div class="tnode-head"><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><path d="M4 10h16M10 4v16"/></svg><div><div class="tnode-title">Sorting</div><div class="tnode-sub">TABLETOP-01</div></div></div>
+            <div class="tnode-ports">
+              <div class="port-row"><span class="port-dot linked"></span><span class="port-label">CH1 ← linked</span></div>
+              <div class="port-row out"><span class="port-label">CH1 out → GTIN A</span><span class="port-dot fed"></span></div>
+              <div class="port-row out"><span class="port-label">CH1 out → else</span><span class="port-dot fed"></span></div>
+            </div>
+          </div>
+
+          <div class="tnode" style="top:0px; left:760px;">
+            <div class="tnode-head"><svg viewBox="0 0 24 24"><path d="M3 21V9l9-6 9 6v12M8 21v-6h8v6"/></svg><div><div class="tnode-title">Storage — Zone A</div><div class="tnode-sub">SHELF-01</div></div></div>
+            <div class="tnode-ports">
+              <div class="port-row"><span class="port-dot linked"></span><span class="port-label">CH1 ← linked</span></div>
+            </div>
+          </div>
+
+          <div class="tnode selected" style="top:180px; left:760px;">
+            <div class="tnode-head"><svg viewBox="0 0 24 24"><path d="M3 21V9l9-6 9 6v12M8 21v-6h8v6"/></svg><div><div class="tnode-title">Storage — Zone B</div><div class="tnode-sub">SHELF-02</div></div></div>
+            <div class="tnode-ports">
+              <div class="port-row"><span class="port-dot linked"></span><span class="port-label">CH1 ← linked</span></div>
+            </div>
+          </div>
+
+          <div class="edge-pop" id="pop" style="top:210px; left:530px; display:none;">
+            <span class="close-x" onclick="hidePop()">✕</span>
+            <h4 id="popTitle">Flow Link — Sorting → Storage B</h4>
+            <label>Delay range (seconds)</label>
+            <div class="row2"><input type="number" value="10" id="dmin"><input type="number" value="20" id="dmax"></div>
+            <label>Filter</label>
+            <div class="chiprow"><span class="chip-mini" id="filterChip">else (catch-all)</span></div>
+            <div class="else-row"><input type="checkbox" id="elseBox" checked disabled><span>Catch-all — receives anything no other edge from this Task claims</span></div>
+            <div class="pop-actions"><button class="pop-btn" onclick="hidePop()">Cancel</button><button class="pop-btn primary" onclick="hidePop()">Save</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block">
+    <h2>The interaction, step by step</h2>
+    <div class="panel" style="padding:20px 24px;">
+      <div class="steps">
+        <div class="step"><div class="step-num">1</div><div class="step-text"><b>Drag a Device</b> from the left palette onto the canvas. It drops in as a Task node with one port per Channel — outbound-capable Channels on the right edge, inbound on the left.</div></div>
+        <div class="step"><div class="step-num">2</div><div class="step-text"><b>Assign each unlinked port</b> by clicking it — opens the Item Feed picker (existing library, or create new) for that Channel's input.</div></div>
+        <div class="step"><div class="step-num">3</div><div class="step-text"><b>Draw a Flow Link</b> by dragging from an output port to another Task's input port. The edge appears immediately with default delay 0–0s and no filter (implicit else) — refine it in step 4.</div></div>
+        <div class="step"><div class="step-num">4</div><div class="step-text"><b>Click any edge's label chip</b> to open its config panel (try one above): set the delay range and, when a Task has more than one outgoing edge, a GTIN/category filter per edge — exactly one edge per Task is allowed to stay the catch-all "else".</div></div>
+        <div class="step"><div class="step-num">5</div><div class="step-text"><b>Run</b> starts the simulation: items appear at each Task's fed inputs, cross to linked Tasks after their edge's delay, and generate a read event at each Channel along the way (local simulation for now — no live <code style="font-family:var(--font-mono)">POST /reads</code> yet).</div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="panel tech-note">
+      Recommended library for the real build: <code>@xyflow/react</code> (React Flow, MIT-licensed) — it natively supports custom node components (for the port layout above), custom edge components (for the clickable delay/filter chip), and drag-to-connect between named handles, which maps directly onto Channels-as-ports rather than a generic single-handle node.
+    </div>
+  </section>
+
+</div>
+<script>
+function showPop(el, id){
+  document.querySelectorAll('.edge-label-chip').forEach(c=>c.classList.remove('active'));
+  el.classList.add('active');
+  var pop = document.getElementById('pop');
+  var rect = el.getBoundingClientRect();
+  var canvasRect = document.getElementById('canvas').getBoundingClientRect();
+  pop.style.left = (el.offsetLeft - 100) + 'px';
+  pop.style.top = (el.offsetTop + 16) + 'px';
+  var titles = {e1:'Flow Link — Dock intake → Sorting', e2:'Flow Link — Sorting → Storage A', e3:'Flow Link — Sorting → Storage B'};
+  var filters = {e1:'no filter', e2:'GTIN 03663328010013', e3:'else (catch-all)'};
+  var mins = {e1:30, e2:10, e3:10}, maxs = {e1:90, e2:20, e3:20};
+  document.getElementById('popTitle').textContent = titles[id];
+  document.getElementById('filterChip').textContent = filters[id];
+  document.getElementById('dmin').value = mins[id];
+  document.getElementById('dmax').value = maxs[id];
+  document.getElementById('elseBox').checked = (id === 'e3');
+  pop.style.display = 'block';
+}
+function hidePop(){
+  document.getElementById('pop').style.display = 'none';
+  document.querySelectorAll('.edge-label-chip').forEach(c=>c.classList.remove('active'));
+}
+</script>
+</body>
+</html>
