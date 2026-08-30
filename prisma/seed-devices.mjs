@@ -1,20 +1,21 @@
-// Fixture seed for the Overview location map (BL-036/038) and the Devices
-// list (BL-047) — scatters simulated Devices across 3 real location codes
-// from Luc's sandbox tenant (fetched live via the confirmed-working BL-033
-// endpoint, see CLAUDE-CONCEPT.md section 7.2), plus two Workflow fixtures.
-// Redesigned 2026-08-28 (BL-042, section 15.1/15.2) for the Collector-shaped
-// Device model and the derived 4-state visualization (section 15.3) — seeds
-// a mix of all 4 states (Off/Active/Automated/Problem) so BL-043's color
-// coding and BL-047's list page both have something real to show.
-// Revised again 2026-08-28 (BL-049/050/051, section 15.1/15.3): real
-// repeatable Channels lists (some multi-Channel, mixing Presence and
-// Directional), and publishedAt — including at least one Device that's
-// configured but not yet published, to prove the new Off-state gate.
+// Fixture seed for the Overview location map (BL-036/038), the Devices list
+// (BL-047), and the Item Feed library (BL-058). Scatters simulated Devices
+// across 3 real location codes from Luc's sandbox tenant, two Workflow
+// fixtures, a Task per Device that used to be workflow-attached (BL-059 —
+// Device relates to a Workflow *through* a Task now), and one Item Feed of
+// each kind.
+// Re-seeded, NOT migrated row-for-row, on each schema redesign — see
+// CLAUDE-CONCEPT.md 16.6 (BL-059), same approach as BL-042/BL-049.
 // Run with: node prisma/seed-devices.mjs
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
+// Order matters — FKs. Tasks/FlowLinks cascade from Workflow/Device, but be explicit.
+await prisma.flowLink.deleteMany({});
+await prisma.taskChannelInput.deleteMany({});
+await prisma.task.deleteMany({});
+await prisma.itemFeed.deleteMany({});
 await prisma.device.deleteMany({});
 await prisma.workflow.deleteMany({});
 
@@ -23,10 +24,9 @@ const inboundQc = await prisma.workflow.create({ data: { name: "Inbound QC", sta
 
 const NOW = new Date();
 
-// TTMEMBASE (dc), TANDTWAREHOUSE (store), GRANITEFALLSSHOP (dc) — real codes
-// from the sandbox tenant's GET .../locations?level=premise response.
+// `workflow` here is a local marker only — turned into a Task row after the
+// Device is created, not a column on Device anymore.
 const devices = [
-  // TTMEMBASE — one of each state, plus a configured-but-unpublished example
   {
     name: "Portal — Membase Dock 1",
     type: "PORTAL",
@@ -43,7 +43,7 @@ const devices = [
       { id: "CH1", type: "PRESENCE", presenceEvent: "PRESENT" },
       { id: "CH2", type: "DIRECTIONAL", direction: "INBOUND" },
     ],
-    workflowId: packLine.id,
+    workflow: packLine,
   },
   {
     name: "Conveyor Reader — Membase Line A",
@@ -58,7 +58,7 @@ const devices = [
     vendor: "Zebra",
     configVersion: "2.1.0",
     channels: [{ id: "CH1", type: "DIRECTIONAL", direction: "OUTBOUND" }],
-    workflowId: inboundQc.id,
+    workflow: inboundQc,
   },
   {
     name: "Shelf Reader — Membase Rack 3",
@@ -73,7 +73,7 @@ const devices = [
     vendor: "Impinj",
     configVersion: "1.0.2",
     channels: [{ id: "CH1", type: "PRESENCE", presenceEvent: "PRESENT" }],
-    workflowId: null,
+    workflow: null,
   },
   {
     name: "Doorframe Reader — Membase Exit",
@@ -84,9 +84,7 @@ const devices = [
     configured: false,
   },
   {
-    // Fully configured, never published — should render Off/"Not
-    // configured" (grey) same as an unconfigured shell, proving the new
-    // configured && publishedAt gate (BL-051).
+    // Fully configured, never published — renders Off/"Not configured" (grey).
     name: "Overhead Reader — Membase Staging",
     type: "OVERHEAD",
     locationCode: "TTMEMBASE",
@@ -99,10 +97,9 @@ const devices = [
     vendor: "Impinj",
     configVersion: "3.0.1",
     channels: [{ id: "CH1", type: "PRESENCE", presenceEvent: "FIRST_SEEN" }],
-    workflowId: null,
+    workflow: null,
   },
 
-  // TANDTWAREHOUSE
   {
     name: "Portal — Warehouse Receiving",
     type: "PORTAL",
@@ -119,7 +116,7 @@ const devices = [
       { id: "CH1", type: "DIRECTIONAL", direction: "INBOUND" },
       { id: "CH2", type: "DIRECTIONAL", direction: "OUTBOUND" },
     ],
-    workflowId: packLine.id,
+    workflow: packLine,
   },
   {
     name: "Overhead Reader — Warehouse Zone B",
@@ -134,7 +131,7 @@ const devices = [
     vendor: "Impinj",
     configVersion: "3.0.1",
     channels: [{ id: "CH1", type: "PRESENCE", presenceEvent: "PRESENT" }],
-    workflowId: null,
+    workflow: null,
   },
   {
     name: "Tabletop Encoder — Warehouse Pack Station",
@@ -157,10 +154,9 @@ const devices = [
     vendor: "Alien",
     configVersion: "0.9.5",
     channels: [{ id: "CH1", type: "PRESENCE", presenceEvent: "LAST_SEEN" }],
-    workflowId: inboundQc.id,
+    workflow: inboundQc,
   },
 
-  // GRANITEFALLSSHOP
   {
     name: "Portal — Granite Falls Entry",
     type: "PORTAL",
@@ -174,7 +170,7 @@ const devices = [
     vendor: "Zebra",
     configVersion: "1.4.0",
     channels: [{ id: "CH1", type: "PRESENCE", presenceEvent: "PRESENT" }],
-    workflowId: null,
+    workflow: null,
   },
   {
     name: "Doorframe Reader — Granite Falls Room 2",
@@ -186,9 +182,43 @@ const devices = [
   },
 ];
 
-for (const device of devices) {
-  await prisma.device.create({ data: device });
+let taskCount = 0;
+for (const { workflow, ...data } of devices) {
+  const device = await prisma.device.create({ data });
+  if (workflow) {
+    await prisma.task.create({ data: { workflowId: workflow.id, deviceId: device.id, name: device.name } });
+    taskCount++;
+  }
 }
 
-console.log(`Seeded 2 workflows and ${devices.length} devices across TTMEMBASE, TANDTWAREHOUSE, GRANITEFALLSSHOP.`);
+// One Item Feed of each kind (BL-058) so the library page has content.
+await prisma.itemFeed.createMany({
+  data: [
+    {
+      name: "Fresh cartons (NEW)",
+      kind: "NEW",
+      gtin: "03663328010013",
+      quantityMin: 3,
+      quantityMax: 8,
+    },
+    {
+      name: "Warehouse Receiving stock (PRESENT)",
+      kind: "PRESENT",
+      gtin: "00400020000941",
+      locationCode: "TANDTWAREHOUSE",
+      zoneCode: "DEMOTT.00003.1000000000002",
+      quantityMin: 1,
+      quantityMax: 5,
+    },
+    {
+      name: "Golden sample pallet (FIXED)",
+      kind: "FIXED",
+      fixedItems: ["3034DF978000FA400000005D", "urn:epc:id:sgtin:0366332.801001.1000"],
+    },
+  ],
+});
+
+console.log(
+  `Seeded 2 workflows, ${devices.length} devices (${taskCount} as Tasks), 3 item feeds across TTMEMBASE, TANDTWAREHOUSE, GRANITEFALLSSHOP.`
+);
 await prisma.$disconnect();

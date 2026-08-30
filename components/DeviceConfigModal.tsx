@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import ReadPointIcon, { READ_POINT_TYPES, READ_POINT_LABELS, type ReadPointType } from "@/components/ui/ReadPointIcon";
 import { getDeviceState } from "@/lib/deviceState";
-import type { DeviceChannel, DeviceRecord, ReconciliationMapping, WorkflowRecord } from "@/lib/deviceConfig";
+import type { DeviceChannel, DeviceRecord, ReconciliationMapping } from "@/lib/deviceConfig";
 
 interface SiteOption {
   code: string;
@@ -175,8 +175,6 @@ export function DeviceConfigModal({
   const [heartbeatTimeoutSeconds, setHeartbeatTimeoutSeconds] = useState(120);
   const [attrs, setAttrs] = useState<AttrRow[]>([]);
   const [channels, setChannels] = useState<DeviceChannel[]>(DEFAULT_CHANNELS);
-  const [workflowId, setWorkflowId] = useState("");
-  const [workflows, setWorkflows] = useState<WorkflowRecord[]>([]);
 
   // "draft" | "publish" | "save" while a save request for that action is in
   // flight — tracks which footer button to show a busy label on.
@@ -201,18 +199,9 @@ export function DeviceConfigModal({
     setHeartbeatTimeoutSeconds(device?.heartbeatTimeoutSeconds ?? 120);
     setAttrs(attributesToRows(device?.attributes ?? null));
     setChannels(device?.channels && device.channels.length ? device.channels : DEFAULT_CHANNELS);
-    setWorkflowId(device?.workflowId ?? "");
     setError(null);
     setPostSave(null);
   }, [open, device, presetType, presetLocationCode]);
-
-  useEffect(() => {
-    if (!open) return;
-    fetch("/api/workflows")
-      .then((res) => (res.ok ? res.json() : { workflows: [] }))
-      .then((data) => setWorkflows(data.workflows ?? []))
-      .catch(() => setWorkflows([]));
-  }, [open]);
 
   // Collector ID auto-suggestion (BL-050) — pulls a fresh {site}-{TYPE}-{NN}
   // suggestion, used both by the effect below (automatic, only when the
@@ -283,7 +272,6 @@ export function DeviceConfigModal({
       heartbeatTimeoutSeconds,
       attributes: Object.keys(attributes).length ? attributes : null,
       channels,
-      workflowId: workflowId || null,
       publish: action === "publish",
     };
 
@@ -660,18 +648,9 @@ export function DeviceConfigModal({
               + Add channel
             </button>
           </div>
-
-          <div className="field-block">
-            <label htmlFor="deviceWorkflow">Workflow</label>
-            <select id="deviceWorkflow" value={workflowId} onChange={(e) => setWorkflowId(e.target.value)}>
-              <option value="">None</option>
-              {workflows.map((w) => (
-                <option key={w.id} value={w.id}>
-                  {w.name} ({w.status === "RUNNING" ? "Running" : "Stopped"})
-                </option>
-              ))}
-            </select>
-          </div>
+          {/* Workflow assignment lives on the Workflow canvas now (BL-059) —
+              a Device joins a Workflow by being dragged onto its graph as a
+              Task, not picked here. */}
         </div>
         <div className="modal-foot">
           {postSave ? (

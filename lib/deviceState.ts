@@ -3,7 +3,8 @@ export type DeviceState = "OFF" | "ACTIVE" | "AUTOMATED" | "PROBLEM";
 interface DeviceStateInput {
   configured: boolean;
   publishedAt?: string | Date | null;
-  workflow?: { status: "RUNNING" | "STOPPED" } | null;
+  // A Device reaches its Workflow through a Task now (BL-059, section 16.6).
+  task?: { workflow?: { status: "RUNNING" | "STOPPED" } | null } | null;
 }
 
 // Pure, not a stored column — see CLAUDE-CONCEPT.md section 15.3. Four
@@ -14,6 +15,7 @@ interface DeviceStateInput {
 // until it's been explicitly published.
 export function getDeviceState(device: DeviceStateInput): DeviceState {
   if (!device.configured || !device.publishedAt) return "OFF";
-  if (!device.workflow) return "ACTIVE";
-  return device.workflow.status === "RUNNING" ? "AUTOMATED" : "PROBLEM";
+  const workflow = device.task?.workflow ?? null;
+  if (!workflow) return "ACTIVE";
+  return workflow.status === "RUNNING" ? "AUTOMATED" : "PROBLEM";
 }

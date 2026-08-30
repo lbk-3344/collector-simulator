@@ -172,7 +172,7 @@ export default function DevicesPage() {
                         {STATE_LABELS[state]}
                       </span>
                     </td>
-                    <td className="u-meta">{device.workflow ? device.workflow.name : "—"}</td>
+                    <td className="u-meta">{device.task?.workflow?.name ?? "—"}</td>
                     <td>
                       <div className="row-actions">
                         <button

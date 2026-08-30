@@ -582,7 +582,9 @@ export function LocationMapCard({ locationCode, devices, onDevicesChange }: Loca
               <div className="info-row">
                 <span className="k">Workflow</span>
                 <span className="v">
-                  {infoPanelDevice.workflow ? `${infoPanelDevice.workflow.name} (${infoPanelDevice.workflow.status})` : "—"}
+                  {infoPanelDevice.task?.workflow
+                    ? `${infoPanelDevice.task.workflow.name} (${infoPanelDevice.task.workflow.status})`
+                    : "—"}
                 </span>
               </div>
             </div>

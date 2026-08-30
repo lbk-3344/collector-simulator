@@ -28,6 +28,20 @@ enum WorkflowStatus {
   STOPPED
 }
 
+// Item Feed kind — see CLAUDE-CONCEPT.md section 16.1.
+enum ItemFeedKind {
+  NEW // mints fresh EPCs via the legacy Serialization API (7.6), hard-capped at 10/firing
+  PRESENT // pulls existing items from a site+zone via the Inventory API (7.8)
+  FIXED // a literal, explicit EPC/URN list — fires the exact same items every time
+}
+
+// What feeds one Channel of a Task (CLAUDE-CONCEPT.md section 16.2).
+enum TaskInputType {
+  ITEM_FEED // entry point — fires its Item Feed on its own interval while the Workflow runs
+  FLOW_LINK // receives batches from upstream Task Channels
+  NONE // not fed by this Workflow
+}
+
 // ─── NextAuth required tables (via @auth/prisma-adapter) ────────────────────
 
 model Account {
@@ -151,8 +165,9 @@ model Device {
   lastSyncError          String? // message from the most recent failed register/deregister call; cleared on the next success
   platformReconciliation Json? // the register response's `reconciliation` block, if any — { affectedMappings: [{ channelId, mappingStatus, issue, detail, ... }] }
 
-  workflowId String?
-  workflow   Workflow? @relation(fields: [workflowId], references: [id], onDelete: SetNull)
+  // A Device relates to a Workflow *through* a Task now (BL-059,
+  // CLAUDE-CONCEPT.md 16.6) — the old direct `workflowId` FK is gone.
+  task Task?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -160,18 +175,127 @@ model Device {
   @@index([locationCode])
 }
 
-// Minimal Workflow model pulled forward from BACKLOG.md section 6 — just
-// enough to drive Device's Automated/Problem states (15.3). Not the real
-// workflow engine (step chains, execution) — see CLAUDE-CONCEPT.md section
-// 15.2. No creation/editing UI; exists as seed/fixture data for now.
+// A Workflow is a graph of Tasks connected by Flow Links (BL-059,
+// CLAUDE-CONCEPT.md section 16). RUNNING/STOPPED drives Device state (15.3);
+// the run engine that makes RUNNING actually execute is BL-061 (Part 2).
 model Workflow {
   id        String         @id @default(cuid())
   name      String
   status    WorkflowStatus @default(RUNNING)
-  createdAt DateTime       @default(now())
-  updatedAt DateTime       @updatedAt
 
-  devices Device[]
+  // Safety auto-stop for the run engine (BL-061, Part 2). 240 min is a
+  // conservative PLACEHOLDER — Luc to confirm/adjust once it's in the UI.
+  maxRunDurationMinutes Int?      @default(240)
+  runningStartedAt      DateTime? // set when flipped to RUNNING, cleared on STOPPED
+  autoStoppedAt         DateTime? // set by the cron job when IT stopped the run (vs a manual stop)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tasks     Task[]
+  flowLinks FlowLink[]
+}
+
+// One Device doing work in one Workflow (CLAUDE-CONCEPT.md 16.2). A Device
+// belongs to at most one Task at a time (@unique deviceId).
+model Task {
+  id         String   @id @default(cuid())
+  workflowId String
+  workflow   Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  deviceId   String   @unique
+  device     Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  name       String? // defaults to the Device's own name if unset
+  positionX  Int? // canvas position (Part 2's editor)
+  positionY  Int?
+
+  channelInputs TaskChannelInput[]
+  outgoingLinks FlowLink[]         @relation("FlowLinkSource")
+  incomingLinks FlowLink[]         @relation("FlowLinkTarget")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([workflowId])
+}
+
+// One input assignment per Channel of a Task's Device — "as many input as
+// channels" (16.2). Exactly one of Item Feed / incoming Flow Link / unused.
+model TaskChannelInput {
+  id        String        @id @default(cuid())
+  taskId    String
+  task      Task          @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  channelId String // matches an id in the Device's own `channels` Json array, e.g. "CH1"
+  inputType TaskInputType @default(NONE)
+
+  itemFeedId          String?
+  itemFeed            ItemFeed? @relation(fields: [itemFeedId], references: [id], onDelete: SetNull)
+  fireIntervalSeconds Int? // only meaningful when inputType = ITEM_FEED (set by Part 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([taskId, channelId])
+}
+
+// A Channel-to-Channel edge in a Workflow graph (CLAUDE-CONCEPT.md 16.3).
+model FlowLink {
+  id         String   @id @default(cuid())
+  workflowId String
+  workflow   Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  sourceTaskId    String
+  sourceTask      Task   @relation("FlowLinkSource", fields: [sourceTaskId], references: [id], onDelete: Cascade)
+  sourceChannelId String
+
+  targetTaskId    String
+  targetTask      Task   @relation("FlowLinkTarget", fields: [targetTaskId], references: [id], onDelete: Cascade)
+  targetChannelId String
+
+  delayMinSeconds Int @default(0)
+  delayMaxSeconds Int @default(0)
+
+  filterGtins         Json? // string[] — null/empty = no GTIN filter
+  filterCategoryCodes Json? // string[]
+  isElse              Boolean @default(false) // at most one true per (sourceTaskId, sourceChannelId) — app-enforced
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([workflowId])
+  @@index([sourceTaskId])
+  @@index([targetTaskId])
+}
+
+// Item Feed — a named, reusable batch-of-items definition, attachable to any
+// Task's Channel input across any Workflow (BL-058, CLAUDE-CONCEPT.md 16.1).
+// Kind-specific fields are validated at the API layer (lib/itemFeed.ts), not
+// by DB constraints. `taskChannelInputs` back-relation is added in the
+// Task/FlowLink migration (BL-059).
+model ItemFeed {
+  id   String       @id @default(cuid())
+  name String
+  kind ItemFeedKind
+
+  // Product selector — NEW/PRESENT only, resolved to one concrete GTIN at
+  // creation time (category is a finder, not a live per-firing pick — 16.1).
+  gtin         String?
+  categoryCode String?
+
+  // NEW/PRESENT only. Equal min/max = a fixed count each firing.
+  quantityMin Int?
+  quantityMax Int?
+
+  // PRESENT only — a specific site+zone (zones aren't globally unique).
+  locationCode String?
+  zoneCode     String?
+
+  // FIXED only — explicit EPC hex or URN strings, user-entered (string[]).
+  fixedItems Json?
+
+  taskChannelInputs TaskChannelInput[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // See CLAUDE-CONCEPT.md section 3 and CLAUDE.md "Bug handling" for the full

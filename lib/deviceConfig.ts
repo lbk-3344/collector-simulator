@@ -42,8 +42,9 @@ export interface DeviceRecord {
   lastSyncedAt: string | null;
   lastSyncError: string | null;
   platformReconciliation: PlatformReconciliation | null;
-  workflowId: string | null;
-  workflow: WorkflowRecord | null;
+  // The Device's Task (BL-059) — its link to a Workflow, one per Device.
+  // null when the Device isn't on any Workflow's canvas.
+  task: { id: string; name: string | null; workflow: WorkflowRecord | null } | null;
 }
 
 // Shape of the `reconciliation` block on a POST /collectors/register response,
@@ -130,7 +131,6 @@ export function buildDeviceConfigData(body: any) {
     heartbeatTimeoutSeconds: typeof body.heartbeatTimeoutSeconds === "number" ? body.heartbeatTimeoutSeconds : 120,
     attributes: body.attributes ?? null,
     channels,
-    workflowId: typeof body.workflowId === "string" && body.workflowId ? body.workflowId : null,
     configured: true,
     ...(typeof body.positionX === "number" ? { positionX: body.positionX } : {}),
     ...(typeof body.positionY === "number" ? { positionY: body.positionY } : {}),

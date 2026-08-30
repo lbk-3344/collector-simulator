@@ -9,7 +9,9 @@ import { buildPlatformSyncData, toRegistrableDevice } from "@/lib/deviceSync";
 import { getUserBartenderCredentials } from "@/lib/bartenderLocations";
 import { deregisterCollector } from "@/lib/bartenderDataCollector";
 
-const WORKFLOW_SELECT = { id: true, name: true, status: true } as const;
+const DEVICE_INCLUDE = {
+  task: { select: { id: true, name: true, workflow: { select: { id: true, name: true, status: true } } } },
+} as const;
 
 export async function GET(req: Request, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
@@ -19,7 +21,7 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
 
   const device = await prisma.device.findUnique({
     where: { id: params.id },
-    include: { workflow: { select: WORKFLOW_SELECT } },
+    include: DEVICE_INCLUDE,
   });
   if (!device) {
     return NextResponse.json({ error: "Device not found" }, { status: 404 });
@@ -54,7 +56,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       const device = await prisma.device.update({
         where: { id: params.id },
         data,
-        include: { workflow: { select: WORKFLOW_SELECT } },
+        include: DEVICE_INCLUDE,
       });
       return NextResponse.json({ device });
     } catch {
@@ -96,7 +98,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     const device = await prisma.device.update({
       where: { id: params.id },
       data,
-      include: { workflow: { select: WORKFLOW_SELECT } },
+      include: DEVICE_INCLUDE,
     });
     return NextResponse.json({ device });
   } catch {

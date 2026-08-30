@@ -521,6 +521,23 @@ select.role-select:disabled { opacity: .5; cursor: not-allowed; }
 .channel-recon-flag { font-size: 14px; line-height: 1; flex-shrink: 0; cursor: help; }
 .channel-recon-flag[data-status="CONFLICT"] { color: var(--warning); }
 .channel-recon-flag[data-status="BROKEN"] { color: var(--danger); }
+
+/* ---- Product picker (Item Feed form, BL-055) ---- */
+.product-picker { display: flex; flex-direction: column; gap: 10px; }
+.product-picker-list {
+  max-height: 200px; overflow-y: auto; border: 1px solid var(--border);
+  border-radius: 7px; background: var(--surface-2);
+}
+.product-picker-item {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  width: 100%; text-align: left; padding: 7px 11px; background: none; border: none;
+  border-bottom: 1px solid var(--border); cursor: pointer; font-family: var(--font-ui);
+}
+.product-picker-item:last-child { border-bottom: none; }
+.product-picker-item:hover { background: var(--surface); }
+.product-picker-item.selected { background: var(--accent-primary-tint); }
+.product-picker-item-label { font-size: 12.5px; color: var(--ink); }
+.product-picker-item-gtin { font-family: var(--font-mono); font-size: 11px; color: var(--ink-3); flex-shrink: 0; }
 .channel-name-input {
   flex: 1; font-family: var(--font-ui); font-size: 13px; padding: 7px 10px; color: var(--ink);
   border: 1px solid var(--border-strong); border-radius: 7px; background: var(--surface);

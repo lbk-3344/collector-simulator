@@ -7,7 +7,9 @@ import { prisma } from "@/lib/prisma";
 import { buildDeviceConfigData, validateChannels } from "@/lib/deviceConfig";
 import { buildPlatformSyncData, toRegistrableDevice } from "@/lib/deviceSync";
 
-const WORKFLOW_SELECT = { id: true, name: true, status: true } as const;
+const DEVICE_INCLUDE = {
+  task: { select: { id: true, name: true, workflow: { select: { id: true, name: true, status: true } } } },
+} as const;
 
 // This app's own simulated Devices/Collectors (not Bartender's real
 // DataCollector concept — see CLAUDE-CONCEPT.md section 14.2/15). Powers the
@@ -27,7 +29,7 @@ export async function GET(req: NextRequest) {
 
   const devices = await prisma.device.findMany({
     where: locationCode ? { locationCode } : undefined,
-    include: { workflow: { select: WORKFLOW_SELECT } },
+    include: DEVICE_INCLUDE,
     orderBy: { name: "asc" },
   });
 
@@ -94,7 +96,7 @@ export async function POST(req: NextRequest) {
 
   const device = await prisma.device.create({
     data,
-    include: { workflow: { select: WORKFLOW_SELECT } },
+    include: DEVICE_INCLUDE,
   });
 
   return NextResponse.json({ device });
