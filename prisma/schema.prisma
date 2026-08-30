@@ -192,8 +192,46 @@ model Workflow {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tasks     Task[]
-  flowLinks FlowLink[]
+  tasks          Task[]
+  flowLinks      FlowLink[]
+  inFlightBatches InFlightBatch[]
+  simulatedReads SimulatedRead[]
+}
+
+// Run engine (BL-061, CLAUDE-CONCEPT.md 16.5). A batch of items travelling a
+// Flow Link, scheduled to be "read" at (taskId, channelId) at arrivesAt.
+model InFlightBatch {
+  id          String    @id @default(cuid())
+  workflowId  String
+  workflow    Workflow  @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  taskId      String
+  channelId   String
+  items       Json // string[] — EPC hex or URN
+  gtin        String?
+  arrivesAt   DateTime
+  processedAt DateTime? // set once a tick has generated the read + scheduled next hops
+
+  createdAt DateTime @default(now())
+
+  @@index([workflowId])
+  @@index([processedAt, arrivesAt])
+}
+
+// Run engine (BL-061). One simulated read event — the plain activity log
+// (no live token animation, per Luc 2026-08-30). Local only, never a real
+// POST /reads.
+model SimulatedRead {
+  id         String   @id @default(cuid())
+  workflowId String
+  workflow   Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  taskId     String
+  deviceId   String
+  channelId  String
+  items      Json // string[]
+  gtin       String?
+  occurredAt DateTime @default(now())
+
+  @@index([workflowId, occurredAt])
 }
 
 // One Device doing work in one Workflow (CLAUDE-CONCEPT.md 16.2). A Device
@@ -229,7 +267,8 @@ model TaskChannelInput {
 
   itemFeedId          String?
   itemFeed            ItemFeed? @relation(fields: [itemFeedId], references: [id], onDelete: SetNull)
-  fireIntervalSeconds Int? // only meaningful when inputType = ITEM_FEED (set by Part 2)
+  fireIntervalSeconds Int? // only meaningful when inputType = ITEM_FEED
+  lastFiredAt         DateTime? // run engine (BL-061) — last time this entry Channel fired
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

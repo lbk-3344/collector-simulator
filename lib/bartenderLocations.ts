@@ -103,6 +103,42 @@ export async function getUserBartenderCredentials(
   return { tenantUrl: user.bartenderTenantUrl, apiKey };
 }
 
+// Credentials for the unattended run engine (BL-061) — no session to read a
+// user from, so use the first user that has a full Bartender connection
+// configured (tenant URL + API key + Basic username/password). Single-tenant
+// in practice; revisit if the app ever needs per-Workflow ownership.
+export async function getServiceCredentials(): Promise<{
+  tenantUrl: string;
+  apiKey: string;
+  username: string;
+  password: string;
+} | null> {
+  const user = await prisma.user.findFirst({
+    where: {
+      bartenderTenantUrl: { not: null },
+      bartenderApiKeyCiphertext: { not: null },
+      bartenderUsername: { not: null },
+      bartenderPasswordCiphertext: { not: null },
+    },
+    select: {
+      bartenderTenantUrl: true,
+      bartenderApiKeyCiphertext: true,
+      bartenderUsername: true,
+      bartenderPasswordCiphertext: true,
+    },
+    orderBy: { createdAt: "asc" },
+  });
+  if (!user?.bartenderTenantUrl || !user.bartenderApiKeyCiphertext || !user.bartenderUsername || !user.bartenderPasswordCiphertext) {
+    return null;
+  }
+  return {
+    tenantUrl: user.bartenderTenantUrl,
+    apiKey: decrypt(user.bartenderApiKeyCiphertext),
+    username: user.bartenderUsername,
+    password: decrypt(user.bartenderPasswordCiphertext),
+  };
+}
+
 // Basic Auth credentials for the legacy map workaround (section 7.4,
 // BL-040/041) — a separate, optional credential pair from the API key above.
 export async function getUserBartenderBasicAuthCredentials(

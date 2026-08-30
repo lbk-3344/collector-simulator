@@ -40,7 +40,8 @@ export async function middleware(req: NextRequest) {
 
 export const config = {
   matcher: [
-    // Everything except: NextAuth's own routes, Next internals, and static/image files.
-    "/((?!api/auth|_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico)$).*)",
+    // Everything except: NextAuth's own routes, the CRON_SECRET-guarded run
+    // engine tick (BL-061), Next internals, and static/image files.
+    "/((?!api/auth|api/cron|_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico)$).*)",
   ],
 };

@@ -1,6 +1,6 @@
 {
   "name": "collector-simulator",
-  "version": "0.14.0",
+  "version": "0.15.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -19,6 +19,7 @@
     "@fontsource/inter": "^5.3.0",
     "@fontsource/jetbrains-mono": "^5.3.0",
     "@prisma/client": "^5.22.0",
+    "@xyflow/react": "^12.11.5",
     "next": "14.2.18",
     "next-auth": "^4.24.11",
     "prisma": "^5.22.0",

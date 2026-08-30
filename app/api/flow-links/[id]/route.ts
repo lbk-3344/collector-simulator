@@ -38,10 +38,27 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  try {
-    await prisma.flowLink.delete({ where: { id: params.id } });
-  } catch {
-    return NextResponse.json({ error: "Flow link not found" }, { status: 404 });
+
+  const link = await prisma.flowLink.findUnique({
+    where: { id: params.id },
+    select: { targetTaskId: true, targetChannelId: true },
+  });
+  if (!link) return NextResponse.json({ error: "Flow link not found" }, { status: 404 });
+
+  await prisma.flowLink.delete({ where: { id: params.id } });
+
+  // If nothing else feeds the target Channel now, reset its input to NONE.
+  const stillFed = await prisma.flowLink.count({
+    where: { targetTaskId: link.targetTaskId, targetChannelId: link.targetChannelId },
+  });
+  if (stillFed === 0) {
+    await prisma.taskChannelInput
+      .updateMany({
+        where: { taskId: link.targetTaskId, channelId: link.targetChannelId, inputType: "FLOW_LINK" },
+        data: { inputType: "NONE" },
+      })
+      .catch(() => {});
   }
+
   return NextResponse.json({ ok: true });
 }
