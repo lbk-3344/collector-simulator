@@ -325,6 +325,30 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
     [workflowId, load, readOnly]
   );
 
+  // Remove a Feed Node from this workflow (BL-071 follow-up). Deletes only the
+  // FeedNode placement + its feed links (FeedLink.feedNode cascades) — the
+  // shared ItemFeed definition stays in the Item Feeds library.
+  const deleteFeedNode = useCallback(
+    async (feedNodeId: string, feedName: string) => {
+      if (readOnly) return;
+      const ok = await confirm({
+        variant: "warning",
+        title: "Remove feed from workflow",
+        message: `Remove "${feedName}" and its feed links from this workflow? The feed definition itself stays in your Item Feeds library.`,
+        confirmLabel: "Remove",
+        danger: true,
+      });
+      if (!ok) return;
+      const res = await fetch(`/api/feed-nodes/${feedNodeId}`, { method: "DELETE" });
+      if (!res.ok) {
+        const d = await res.json().catch(() => null);
+        setError(d?.error ?? "Couldn't remove that feed from the workflow.");
+      }
+      await load();
+    },
+    [confirm, load, readOnly]
+  );
+
   const patchWorkflow = useCallback(
     async (body: Record<string, unknown>) => {
       if (readOnly) return;
@@ -619,6 +643,13 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
             // Offset from the source node's own position — already flow space.
             duplicateFeedNode(itemFeedId, feedContextMenu.node.position.x + 24, feedContextMenu.node.position.y + 24);
           }}
+          onDelete={() =>
+            deleteFeedNode(
+              feedContextMenu.node.id,
+              ((feedContextMenu.node.data as Any).feedName as string) ?? "this feed"
+            )
+          }
+          deleteLabel="Remove from workflow"
           onClose={() => setFeedContextMenu(null)}
         />
       )}

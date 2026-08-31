@@ -9,7 +9,8 @@ import { useEffect, useRef } from "react";
 // UserMenu.tsx.
 
 const MENU_W = 172;
-const MENU_H = 132;
+const MENU_H_BASE = 132; // Copy / Paste / Duplicate
+const MENU_H_WITH_DELETE = 186; // + separator + Delete
 
 function CopyGlyph() {
   return (
@@ -29,6 +30,13 @@ function PasteGlyph() {
     </svg>
   );
 }
+function TrashGlyph() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 6h12M8 6V4.5a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1V6M5.5 6 6.2 16a1 1 0 0 0 1 .9h5.6a1 1 0 0 0 1-.9L14.5 6M8.3 9v5M11.7 9v5" />
+    </svg>
+  );
+}
 
 export function ContextMenu({
   x,
@@ -37,6 +45,8 @@ export function ContextMenu({
   onCopy,
   onPaste,
   onDuplicate,
+  onDelete,
+  deleteLabel = "Delete",
   onClose,
 }: {
   x: number;
@@ -45,6 +55,11 @@ export function ContextMenu({
   onCopy: () => void;
   onPaste: () => void;
   onDuplicate: () => void;
+  // Optional 4th, destructive row — rendered only when provided (e.g. the
+  // Workflow canvas' "Remove from workflow" on a Feed Node). The map's marker
+  // menu omits it.
+  onDelete?: () => void;
+  deleteLabel?: string;
   onClose: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -68,8 +83,9 @@ export function ContextMenu({
   }, [onClose]);
 
   // Clamp so the panel never renders past the viewport's right/bottom edge.
+  const menuH = onDelete ? MENU_H_WITH_DELETE : MENU_H_BASE;
   const left = Math.max(8, Math.min(x, window.innerWidth - MENU_W - 8));
-  const top = Math.max(8, Math.min(y, window.innerHeight - MENU_H - 8));
+  const top = Math.max(8, Math.min(y, window.innerHeight - menuH - 8));
 
   const run = (fn: () => void) => () => {
     fn();
@@ -96,6 +112,15 @@ export function ContextMenu({
         <CopyGlyph />
         Duplicate
       </button>
+      {onDelete && (
+        <>
+          <div className="ctx-menu-sep" role="separator" />
+          <button type="button" className="ctx-menu-item danger" role="menuitem" onClick={run(onDelete)}>
+            <TrashGlyph />
+            {deleteLabel}
+          </button>
+        </>
+      )}
     </div>
   );
 }

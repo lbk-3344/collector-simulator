@@ -494,6 +494,10 @@ select.role-select:disabled { opacity: .5; cursor: not-allowed; }
 .ctx-menu-item:hover { background: var(--surface-2); }
 .ctx-menu-item:disabled { opacity: .4; cursor: not-allowed; }
 .ctx-menu-item:disabled:hover { background: none; }
+.ctx-menu-item.danger { color: var(--danger); }
+.ctx-menu-item.danger svg { stroke: var(--danger); }
+.ctx-menu-item.danger:hover { background: var(--danger-tint); }
+.ctx-menu-sep { height: 1px; margin: 4px 6px; background: var(--border-strong); }
 
 .note { margin-top: 18px; font-size: 12px; color: var(--ink-3); }
 .error-banner { margin-bottom: 14px; padding: 10px 14px; border-radius: var(--radius); background: var(--danger-tint); color: var(--danger); border: 1px solid var(--danger-border); font-size: 12.5px; }
