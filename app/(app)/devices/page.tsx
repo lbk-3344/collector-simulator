@@ -26,6 +26,14 @@ function TrashIcon() {
     </svg>
   );
 }
+function DuplicateIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="7" y="7" width="10" height="10" rx="2" />
+      <path d="M13 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2" />
+    </svg>
+  );
+}
 
 const STATE_LABELS: Record<string, string> = {
   OFF: "Off",
@@ -133,6 +141,21 @@ export default function DevicesPage() {
     setBusyId(null);
   }
 
+  // Clone via the shared POST /api/devices/[id]/duplicate (BL-065). No
+  // position, no config modal — the clone is already as configured as its
+  // source and always starts unpublished (see the route / §15.9).
+  async function handleDuplicate(device: DeviceRecord) {
+    setBusyId(device.id);
+    setError(null);
+    const res = await fetch(`/api/devices/${device.id}/duplicate`, { method: "POST" });
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      setError(data?.error ?? "Couldn't duplicate this device.");
+    }
+    await load();
+    setBusyId(null);
+  }
+
   return (
     <section className="fade-in">
       <PageHeader
@@ -198,6 +221,15 @@ export default function DevicesPage() {
                           onClick={() => setConfigModal({ device })}
                         >
                           <EditIcon />
+                        </button>
+                        <button
+                          className="row-icon-btn row-icon-btn-ghost"
+                          aria-label="Duplicate"
+                          title="Duplicate"
+                          disabled={isBusy}
+                          onClick={() => handleDuplicate(device)}
+                        >
+                          <DuplicateIcon />
                         </button>
                         <button
                           className="row-icon-btn row-icon-btn-delete"

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import ReadPointIcon, { READ_POINT_TYPES, READ_POINT_LABELS } from "@/components/ui/ReadPointIcon";
 import { DeviceConfigModal } from "@/components/DeviceConfigModal";
+import { DeviceContextMenu } from "@/components/DeviceContextMenu";
 import { getDeviceState } from "@/lib/deviceState";
 import type { DeviceRecord } from "@/lib/deviceConfig";
 import type { LocationMap, LocationZone } from "@/lib/bartenderLocations";
@@ -76,6 +77,11 @@ export function LocationMapCard({ locationCode, devices, onDevicesChange }: Loca
   const [configModal, setConfigModal] = useState<ConfigModalState | null>(null);
   const [manualSendDevice, setManualSendDevice] = useState<DeviceRecord | null>(null);
   const [infoPanelDevice, setInfoPanelDevice] = useState<DeviceRecord | null>(null);
+
+  // Edit-mode right-click menu (BL-066). `deviceClipboard` is plain state,
+  // same lifetime as `editMode` — gone on reload, survives repeated pastes.
+  const [deviceClipboard, setDeviceClipboard] = useState<DeviceRecord | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; device: DeviceRecord } | null>(null);
 
   // Fits the whole floor plan inside the card's viewport — floor plans can be
   // thousands of pixels wide (see CLAUDE-CONCEPT.md section 7.4), so showing
@@ -329,6 +335,28 @@ export function LocationMapCard({ locationCode, devices, onDevicesChange }: Loca
     };
   }, [editMode, scale, devices]);
 
+  // --- Edit mode: right-click Copy / Paste / Duplicate (BL-066) -----------
+
+  function handleDeviceContextMenu(e: React.MouseEvent, device: DeviceRecord) {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({ x: e.clientX, y: e.clientY, device });
+  }
+
+  // Shared by the menu's Paste (clipboard device, cursor position) and
+  // Duplicate (right-clicked device, +24/+24 offset). Adds the returned clone
+  // to the caller-owned devices list; no config modal opens.
+  async function duplicateDevice(sourceId: string, positionX: number | null, positionY: number | null) {
+    const res = await fetch(`/api/devices/${sourceId}/duplicate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ positionX, positionY }),
+    }).catch(() => null);
+    if (!res || !res.ok) return;
+    const data = await res.json();
+    onDevicesChange((list) => [...list, data.device as DeviceRecord]);
+  }
+
   // --- Non-Edit-mode click behavior (BL-046) -------------------------------
 
   function handleDeviceClick(device: DeviceRecord) {
@@ -421,6 +449,7 @@ export function LocationMapCard({ locationCode, devices, onDevicesChange }: Loca
                     style={{ background: `var(--device-${getDeviceState(device).toLowerCase()})`, pointerEvents: "auto" }}
                     onMouseDown={editMode ? (e) => handleDeviceMouseDown(e, device) : undefined}
                     onClick={!editMode ? () => handleDeviceClick(device) : undefined}
+                    onContextMenu={editMode ? (e) => handleDeviceContextMenu(e, device) : undefined}
                   >
                     <ReadPointIcon type={device.type} size={30} title={device.name} />
                   </span>
@@ -525,6 +554,27 @@ export function LocationMapCard({ locationCode, devices, onDevicesChange }: Loca
           setConfigModal(null);
         }}
       />
+
+      {contextMenu && (
+        <DeviceContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          canPaste={deviceClipboard !== null}
+          onCopy={() => setDeviceClipboard(contextMenu.device)}
+          onPaste={() => {
+            const c = clientToFloorPlanCoords(contextMenu.x, contextMenu.y);
+            if (deviceClipboard && c) duplicateDevice(deviceClipboard.id, c.x, c.y);
+          }}
+          onDuplicate={() =>
+            duplicateDevice(
+              contextMenu.device.id,
+              (contextMenu.device.positionX ?? 0) + 24,
+              (contextMenu.device.positionY ?? 0) + 24
+            )
+          }
+          onClose={() => setContextMenu(null)}
+        />
+      )}
 
       {manualSendDevice && (
         <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && setManualSendDevice(null)}>
