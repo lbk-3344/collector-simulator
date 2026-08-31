@@ -184,6 +184,8 @@ First context menu in the app (`CLAUDE-CONCEPT.md` section 15.9, BL-066) — rig
 
 Each row: icon + label, `12.5px` text, `~8px 12px` padding, full-width hover state (`--surface-2` background) — same interaction weight as `.user-menu-item` (`UserMenu.tsx`), which this component's hover/spacing/typography is copied from wholesale rather than invented fresh. Dismisses on an outside click, `Escape`, or immediately after any row is clicked — same lifecycle as `UserMenu.tsx`'s own open/close `useEffect` pattern.
 
+**Second call site, added 2026-08-31 (`CLAUDE-CONCEPT.md` 16.9, BL-071)**: right-clicking a Feed Node on the Workflow canvas opens the same panel — Copy/Paste/Duplicate an Item Feed instead of a Device. Nothing about the panel itself is Device-specific, so `components/DeviceContextMenu.tsx` is renamed to generic `components/ContextMenu.tsx` (component `ContextMenu`) rather than forked — one component, two call sites (`LocationMapCard.tsx`'s marker menu, `WorkflowEditor.tsx`'s Feed Node menu).
+
 ### "Shared" badge (read-only indicator) — added 2026-08-31
 
 `CLAUDE-CONCEPT.md` section 17, `BACKLOG.md` BL-068. Marks a Device/Workflow/Item Feed row or canvas node that's visible only because it's shared — not owned by the viewer, and therefore read-only. Reuses the existing tint-based `.chip` family (not the solid `.snack` component — this is a status tag, not feedback) — new `.chip-shared` modifier: `--info-tint` background, `--info` text, a small closed-padlock glyph (12px) before the label "Shared". Placed:
@@ -197,6 +199,11 @@ Rows/nodes carrying this badge also get their Edit/Delete/Duplicate-as-edit/drag
 - **Workflow canvas**: the `.chip-shared` badge sits in the editor **toolbar next to the Workflow name**, not pinned to each node — the whole canvas is read-only at once, and the toolbar is where the name/Run controls (also disabled) already are, so one badge there reads cleaner than a repeated corner tag. The device/feed **palette is hidden** entirely in read-only mode (nothing to drag), rather than shown-but-dimmed.
 - **Overview map**: a shared Device's marker carries a compact corner **padlock dot** (`.map-marker-shared`, `--info` fill), not the full "Shared" pill — the pill doesn't fit a ~40px map marker. The pill is still used on the list rows exactly as described.
 - List-row buttons use the native `disabled` attribute (the app's button CSS already renders that as the dimmed / `not-allowed` state) plus a "Shared with you — read-only" `title`.
+
+**Refined 2026-08-31 (v0.22.1)** — "read-only" keeps the full detail window, it just can't be saved (so a shared item can be inspected as a model):
+- On shared Devices / Item Feeds list rows the pencil becomes an **eye icon** ("View", still enabled); it opens the normal config modal in a read-only state. Delete / Duplicate stay disabled as before.
+- Read-only modal state = body wrapped in `<fieldset class="modal-fields" disabled>` (greys every control at 65% and inerts the `role="button"` ProductPicker chips via `.modal fieldset.modal-fields:disabled [role="button"]{pointer-events:none}`), header reads "View …", a `.snack-info` line "Shared with you — read-only.", footer is a single **Close**. Same treatment on the workflow-canvas Flow Link / Feed Link popovers.
+- New `.snack-info` (info-tint fill, info text/border) for that read-only banner.
 
 ### Admin "Shared resources" screen — added 2026-08-31
 
