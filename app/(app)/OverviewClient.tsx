@@ -20,6 +20,11 @@ export function OverviewClient({ initialSelectedLocationCode }: { initialSelecte
   // card too, via the same onDevicesChange setter passed down.
   const [devices, setDevices] = useState<DeviceRecord[] | null>(null);
   const [showConnectModal, setShowConnectModal] = useState(false);
+  // Tenant-global KPIs (not site-scoped) — CLAUDE-CONCEPT.md §14.4.
+  const [stats, setStats] = useState<{
+    workflows: { running: number; total: number };
+    itemsGenerated24h: number;
+  } | null>(null);
 
   // Nudges the user to Settings if any of the four Bartender credential
   // fields aren't set yet — see BACKLOG.md BL-048.
@@ -61,6 +66,25 @@ export function OverviewClient({ initialSelectedLocationCode }: { initialSelecte
     // Only ever runs once on mount — initialSelectedLocationCode is the
     // server-rendered starting value, not meant to re-trigger this fetch.
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // KPI stats: load on mount, then refresh every 30s so "Workflows running"
+  // and "Items generated" track the run engine without a page reload.
+  useEffect(() => {
+    let cancelled = false;
+    const load = () =>
+      fetch("/api/overview/stats")
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (!cancelled && data) setStats(data);
+        })
+        .catch(() => {});
+    load();
+    const id = setInterval(load, 30_000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
   }, []);
 
   useEffect(() => {
@@ -121,13 +145,19 @@ export function OverviewClient({ initialSelectedLocationCode }: { initialSelecte
         </div>
         <div className="stat-card">
           <div className="l">Workflows running</div>
-          <div className="n">0</div>
-          <div className="d">not built yet</div>
+          <div className="n">{stats ? `${stats.workflows.running} / ${stats.workflows.total}` : "— / —"}</div>
+          <div className="d">
+            {!stats
+              ? "loading…"
+              : stats.workflows.total === 0
+                ? "no workflows yet"
+                : "running / total"}
+          </div>
         </div>
         <div className="stat-card">
           <div className="l">Items generated</div>
-          <div className="n">0</div>
-          <div className="d">last 24h</div>
+          <div className="n">{stats ? stats.itemsGenerated24h.toLocaleString() : "—"}</div>
+          <div className="d">{!stats ? "loading…" : "last 24h"}</div>
         </div>
       </div>
 
