@@ -436,10 +436,15 @@ select.role-select:disabled { opacity: .5; cursor: not-allowed; }
   padding: 20px;
 }
 .modal {
-  width: 440px; max-width: calc(100vw - 40px); background: var(--surface);
+  width: 480px; max-width: calc(100vw - 40px);
+  /* Never taller than the viewport: head + foot stay pinned and visible,
+     the body scrolls when the form is long (small screens). */
+  max-height: calc(100vh - 40px);
+  display: flex; flex-direction: column;
+  background: var(--surface);
   border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shell-shadow);
 }
-.modal-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 18px; border-bottom: 1px solid var(--border); }
+.modal-head { flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; padding: 16px 18px; border-bottom: 1px solid var(--border); }
 .modal-head h2 { margin: 0; font-size: 15px; }
 .modal-head-icon {
   display: flex; align-items: center; justify-content: center; flex-shrink: 0;
@@ -449,7 +454,7 @@ select.role-select:disabled { opacity: .5; cursor: not-allowed; }
 .modal-close { background: none; border: none; cursor: pointer; color: var(--ink-2); padding: 4px; border-radius: 6px; }
 .modal-close:hover { background: var(--surface-2); color: var(--ink); }
 .modal-close svg { width: 16px; height: 16px; }
-.modal-body { padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+.modal-body { flex: 1 1 auto; overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 14px; }
 .field-block { display: flex; flex-direction: column; gap: 6px; }
 .field-block label { font-family: var(--font-ui); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-2); }
 .field-block input, .field-block textarea {
@@ -465,14 +470,14 @@ select.role-select:disabled { opacity: .5; cursor: not-allowed; }
   padding: 7px 12px; font-size: 12.5px; color: var(--ink-2); cursor: not-allowed;
 }
 .attach-btn svg { width: 15px; height: 15px; }
-.modal-foot { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 18px; border-top: 1px solid var(--border); }
+.modal-foot { flex-shrink: 0; display: flex; justify-content: flex-end; gap: 10px; padding: 14px 18px; border-top: 1px solid var(--border); }
 
 /* ---- In-app dialog (confirmations & alerts) — replaces native confirm()/alert().
    Reuses .modal-overlay/.modal/.modal-head/.modal-foot; adds a big variant-
    colored icon beside the message. See CHARTE-GRAPHIQUE.md "In-app dialogs".
    Sits above other modals so a confirm triggered from within one stays on top. */
 .dialog-overlay { z-index: 200; }
-.dialog-body { display: flex; gap: 14px; align-items: flex-start; padding: 18px; }
+.dialog-body { flex: 1 1 auto; overflow-y: auto; display: flex; gap: 14px; align-items: flex-start; padding: 18px; }
 .dialog-icon {
   flex-shrink: 0; width: 44px; height: 44px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
@@ -492,8 +497,8 @@ select.role-select:disabled { opacity: .5; cursor: not-allowed; }
 }
 .field-block select:focus { outline: none; border-color: var(--accent-primary); box-shadow: 0 0 0 3px var(--accent-primary-tint); }
 .field-block select:disabled, .field-block input:disabled { opacity: .6; cursor: not-allowed; }
-.field-row { display: flex; gap: 12px; }
-.field-row > .field-block { flex: 1; }
+.field-row { display: flex; gap: 12px; flex-wrap: wrap; }
+.field-row > .field-block { flex: 1; min-width: 180px; }
 .checkbox-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink); }
 .attr-row { display: flex; gap: 8px; align-items: center; }
 .attr-row input { flex: 1; }
