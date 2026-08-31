@@ -59,7 +59,11 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
 
   const [editFlowId, setEditFlowId] = useState<string | null>(null);
   const [editFeedLinkId, setEditFeedLinkId] = useState<string | null>(null);
-  const [newFeedModal, setNewFeedModal] = useState(false);
+  // Feed create/edit modal. `dropPos` set → on save also place a FeedNode
+  // there. `feed` set → editing that shared ItemFeed definition.
+  const [feedModal, setFeedModal] = useState<{ feed: ItemFeedRecord | null; dropPos: { x: number; y: number } | null } | null>(
+    null
+  );
   const [showActivity, setShowActivity] = useState(false);
 
   const feedNodeIds = useMemo(() => new Set(feedNodes.map((f) => f.id)), [feedNodes]);
@@ -118,6 +122,7 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
       position: { x: fn.positionX ?? 40, y: fn.positionY ?? 60 + i * 130 },
       data: {
         feedNodeId: fn.id,
+        itemFeedId: fn.itemFeedId,
         feedName: fn.itemFeed?.name ?? "Feed",
         feedKind: fn.itemFeed?.kind ?? "NEW",
         detail: feedDetail(fn.itemFeed),
@@ -161,8 +166,16 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
       e.preventDefault();
       const deviceId = e.dataTransfer.getData("application/device-id");
       const feedId = e.dataTransfer.getData("application/feed-id");
+      const newFeed = e.dataTransfer.getData("application/new-feed");
       const pos = screenToFlowPosition({ x: e.clientX, y: e.clientY });
       const p = { positionX: Math.round(pos.x), positionY: Math.round(pos.y) };
+
+      // "+ New feed" dropped — define the ItemFeed inline, then place it here.
+      if (newFeed) {
+        setFeedModal({ feed: null, dropPos: pos });
+        return;
+      }
+
       let res: Response | null = null;
       if (deviceId) {
         res = await fetch("/api/tasks", {
@@ -389,9 +402,18 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
               <span className="wf-palette-item-type">{f.kind}</span>
             </div>
           ))}
-          <button type="button" className="attr-add-link" style={{ marginTop: 6 }} onClick={() => setNewFeedModal(true)}>
+          <div
+            className="wf-palette-item wf-palette-item-feed wf-palette-item-new"
+            draggable
+            onDragStart={(e) => {
+              e.dataTransfer.setData("application/new-feed", "1");
+              e.dataTransfer.effectAllowed = "move";
+            }}
+            title="Drag onto the canvas to define a new feed here"
+          >
             + New feed
-          </button>
+            <span className="wf-palette-item-type">drag</span>
+          </div>
         </aside>
 
         <div className="wf-canvas" onDrop={onDrop} onDragOver={(e) => e.preventDefault()}>
@@ -402,6 +424,15 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
             onNodeDragStop={onNodeDragStop}
+            onNodeClick={async (_, node) => {
+              if (node.type !== "feed") return;
+              const id = (node.data as Any).itemFeedId as string | undefined;
+              if (!id) return;
+              const r = await fetch(`/api/item-feeds/${id}`);
+              if (!r.ok) return;
+              const { itemFeed } = await r.json();
+              setFeedModal({ feed: itemFeed, dropPos: null });
+            }}
             onNodesDelete={onNodesDelete}
             onEdgesDelete={onEdgesDelete}
             nodeTypes={nodeTypes}
@@ -467,11 +498,24 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
       )}
 
       <ItemFeedModal
-        open={newFeedModal}
-        feed={null}
-        onClose={() => setNewFeedModal(false)}
-        onSaved={async () => {
-          setNewFeedModal(false);
+        open={!!feedModal}
+        feed={feedModal?.feed ?? null}
+        onClose={() => setFeedModal(null)}
+        onSaved={async (saved) => {
+          const dropPos = feedModal?.dropPos ?? null;
+          setFeedModal(null);
+          if (dropPos) {
+            await fetch("/api/feed-nodes", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                workflowId,
+                itemFeedId: saved.id,
+                positionX: Math.round(dropPos.x),
+                positionY: Math.round(dropPos.y),
+              }),
+            });
+          }
           await load();
         }}
       />

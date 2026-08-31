@@ -145,6 +145,12 @@ export function ItemFeedForm({
     <>
       <div className="modal-body">
         {error && <div className="snack snack-danger">{error}</div>}
+        {feed && (feed.usageCount ?? 0) > 0 && (
+          <div className="snack snack-warning">
+            This is a shared definition — editing it changes {feed.usageCount} placement
+            {feed.usageCount === 1 ? "" : "s"} on workflow canvases, not just this one.
+          </div>
+        )}
 
         <div className="field-block">
           <label htmlFor="feedName">Name</label>

@@ -571,6 +571,8 @@ select.role-select:disabled { opacity: .5; cursor: not-allowed; }
 .wf-palette-item-type { font-family: var(--font-mono); font-size: 9.5px; font-weight: 400; color: var(--ink-3); }
 .wf-palette-item-feed { background: var(--accent-primary); color: var(--accent-primary-contrast); border-color: var(--accent-primary); }
 .wf-palette-item-feed .wf-palette-item-type { color: rgba(255,255,255,0.7); }
+.wf-palette-item-new { background: transparent; color: var(--accent-primary); border: 1px dashed var(--accent-primary); margin-top: 6px; }
+.wf-palette-item-new .wf-palette-item-type { color: var(--accent-primary); opacity: .7; }
 .wf-canvas { flex: 1; min-width: 0; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; background: var(--surface-2); }
 
 .wf-node {

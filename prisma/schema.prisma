@@ -208,7 +208,8 @@ model InFlightBatch {
   taskId      String
   channelId   String
   items       Json // string[] — EPC hex or URN
-  gtin        String?
+  itemGtins   Json? // string|null[] parallel to `items` — per-item GTIN for filter splitting
+  gtin        String? // the batch's sole GTIN, or null when mixed (convenience)
   arrivesAt   DateTime
   processedAt DateTime? // set once a tick has generated the read + scheduled next hops
 
@@ -229,7 +230,8 @@ model SimulatedRead {
   deviceId   String
   channelId  String
   items      Json // string[]
-  gtin       String?
+  itemGtins  Json? // string|null[] parallel to `items`
+  gtin       String? // sole GTIN or null when mixed
   occurredAt DateTime @default(now())
 
   @@index([workflowId, occurredAt])

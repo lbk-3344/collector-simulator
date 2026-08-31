@@ -32,11 +32,16 @@ function filterMatches(link: any, gtin: string | null): boolean {
 
 interface ResolvedBatch {
   items: string[];
-  // The batch's GTIN for Flow Link filtering — the sole GTIN when the batch
-  // is single-GTIN, else null (a mixed-GTIN NEW batch can't be filtered by a
-  // single value; revisit with per-item GTINs if needed).
-  gtin: string | null;
+  // Per-item GTIN, parallel to `items` — so a mixed-GTIN batch can be split
+  // across outgoing Flow Links whose GTIN filters differ. `null` when the
+  // item's GTIN isn't known (FIXED, or PRESENT placeholders).
+  itemGtins: (string | null)[];
   note?: string;
+}
+
+function soleGtin(gtins: (string | null)[]): string | null {
+  const distinct = new Set(gtins.filter((g): g is string => !!g));
+  return distinct.size === 1 && gtins.every((g) => g) ? [...distinct][0] : null;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -48,31 +53,31 @@ function feedGtins(feed: any): string[] {
 async function resolveBatch(feed: any, creds: ServiceCreds): Promise<ResolvedBatch> {
   if (feed.kind === "FIXED") {
     const items = Array.isArray(feed.fixedItems) ? (feed.fixedItems as string[]) : [];
-    return { items, gtin: null };
+    return { items, itemGtins: items.map(() => null) };
   }
 
   const quantity = randInt(feed.quantityMin ?? 1, feed.quantityMax ?? feed.quantityMin ?? 1);
   const gtins = feedGtins(feed);
 
   if (feed.kind === "NEW") {
-    if (!creds) return { items: [], gtin: null, note: "no Bartender connection configured for the run engine" };
-    if (gtins.length === 0) return { items: [], gtin: null, note: "NEW feed has no GTIN" };
+    if (!creds) return { items: [], itemGtins: [], note: "no Bartender connection configured for the run engine" };
+    if (gtins.length === 0) return { items: [], itemGtins: [], note: "NEW feed has no GTIN" };
     try {
       // mintSerializedItems clamps the TOTAL to MAX_NEW_ITEMS_PER_FIRING and
       // splits it randomly across the feed's GTINs.
       const minted = await mintSerializedItems(creds.tenantUrl, creds.username, creds.password, gtins, quantity);
-      const distinct = new Set(minted.map((m) => m.gtin));
-      return { items: minted.map((m) => m.epc), gtin: distinct.size === 1 ? [...distinct][0] : null };
+      return { items: minted.map((m) => m.epc), itemGtins: minted.map((m) => m.gtin) };
     } catch (e) {
       const msg = e instanceof SerializationError ? e.message : "serialization call failed";
-      return { items: [], gtin: null, note: msg };
+      return { items: [], itemGtins: [], note: msg };
     }
   }
 
   // PRESENT — query real stock in the zone. The Inventory API returns
   // aggregate counts (no individual EPCs — 7.8), so pulled items are
-  // placeholder ids (can't be pushed to the platform; local sim only).
-  if (!creds) return { items: [], gtin: null, note: "no Bartender connection configured for the run engine" };
+  // placeholder ids (can't be pushed to the platform; local sim only). Their
+  // GTIN is only known when a single-GTIN list narrowed the query.
+  if (!creds) return { items: [], itemGtins: [], note: "no Bartender connection configured for the run engine" };
   const useAll = feed.presentMatchMode === "ALL";
   const stock = await getStock(creds.tenantUrl, creds.apiKey, {
     groupBy: "zone",
@@ -80,11 +85,12 @@ async function resolveBatch(feed: any, creds: ServiceCreds): Promise<ResolvedBat
     zoneCode: feed.zoneCode ?? undefined,
     pids: useAll ? undefined : gtins,
   });
-  if (!stock.ok) return { items: [], gtin: null, note: stock.errorMessage };
+  if (!stock.ok) return { items: [], itemGtins: [], note: stock.errorMessage };
   const available = stock.results.reduce((sum, r) => sum + (r.qty ?? 0), 0);
   const pull = Math.min(available, quantity);
   const items = Array.from({ length: pull }, (_, i) => `present:${feed.zoneCode ?? "zone"}:${Date.now()}:${i}`);
-  return { items, gtin: !useAll && gtins.length === 1 ? gtins[0] : null };
+  const g = !useAll && gtins.length === 1 ? gtins[0] : null;
+  return { items, itemGtins: items.map(() => g) };
 }
 
 interface ReadPushStats {
@@ -105,16 +111,17 @@ async function emitReadAndScheduleHops(args: {
   collectorId: string | null;
   channelId: string;
   items: string[];
-  gtin: string | null;
+  itemGtins: (string | null)[];
   at: Date;
   creds: ServiceCreds;
   push: ReadPushStats;
   notes: string[];
 }) {
-  const { workflowId, taskId, deviceId, collectorId, channelId, items, gtin, at, creds, push, notes } = args;
+  const { workflowId, taskId, deviceId, collectorId, channelId, items, itemGtins, at, creds, push, notes } = args;
+  const gtin = soleGtin(itemGtins);
 
   await prisma.simulatedRead.create({
-    data: { workflowId, taskId, deviceId, channelId, items, gtin, occurredAt: at },
+    data: { workflowId, taskId, deviceId, channelId, items, itemGtins, gtin, occurredAt: at },
   });
 
   // Real platform read. Skipped silently when there's nothing submittable
@@ -135,22 +142,38 @@ async function emitReadAndScheduleHops(args: {
   }
 
   const links = await prisma.flowLink.findMany({ where: { sourceTaskId: taskId, sourceChannelId: channelId } });
-  if (links.length === 0) return; // terminal point
+  if (links.length === 0 || items.length === 0) return; // terminal / nothing to route
 
   const nonElse = links.filter((l) => !l.isElse);
-  const matched = nonElse.filter((l) => filterMatches(l, gtin));
   const elseLink = links.find((l) => l.isElse);
-  const targets = matched.length > 0 ? matched : elseLink ? [elseLink] : [];
 
-  for (const link of targets) {
+  // Route each item by its own GTIN — so a mixed-GTIN batch can split across
+  // outgoing Flow Links whose filters differ (revised BL-061 Phase 4). An
+  // item matched by no non-else link goes to the `else` link if there is one.
+  const perLink = new Map<string, { items: string[]; gtins: (string | null)[] }>();
+  for (let i = 0; i < items.length; i++) {
+    const g = itemGtins[i] ?? null;
+    const matches = nonElse.filter((l) => filterMatches(l, g));
+    const targets = matches.length > 0 ? matches : elseLink ? [elseLink] : [];
+    for (const t of targets) {
+      const e = perLink.get(t.id) ?? { items: [], gtins: [] };
+      e.items.push(items[i]);
+      e.gtins.push(g);
+      perLink.set(t.id, e);
+    }
+  }
+
+  for (const [linkId, subset] of perLink) {
+    const link = links.find((l) => l.id === linkId)!;
     const delay = randInt(link.delayMinSeconds, link.delayMaxSeconds);
     await prisma.inFlightBatch.create({
       data: {
         workflowId: link.workflowId,
         taskId: link.targetTaskId,
         channelId: link.targetChannelId,
-        items,
-        gtin,
+        items: subset.items,
+        itemGtins: subset.gtins,
+        gtin: soleGtin(subset.gtins),
         arrivesAt: new Date(at.getTime() + delay * 1000),
       },
     });
@@ -220,7 +243,7 @@ export async function runTick(): Promise<TickSummary> {
       collectorId: link.targetTask.device?.collectorId ?? null,
       channelId: link.targetChannelId,
       items: batch.items,
-      gtin: batch.gtin,
+      itemGtins: batch.itemGtins,
       at: now,
       creds,
       push,
@@ -262,7 +285,7 @@ export async function runTick(): Promise<TickSummary> {
       collectorId: task.device?.collectorId ?? null,
       channelId: b.channelId,
       items: (b.items as string[]) ?? [],
-      gtin: b.gtin,
+      itemGtins: (b.itemGtins as (string | null)[] | null) ?? [],
       at: now,
       creds,
       push,

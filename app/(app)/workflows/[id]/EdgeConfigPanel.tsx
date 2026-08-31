@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ProductPicker } from "@/components/ProductPicker";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Link = any;
@@ -30,7 +31,8 @@ export function EdgeConfigPanel({
 }) {
   const [delayMin, setDelayMin] = useState<number>(link?.delayMinSeconds ?? 0);
   const [delayMax, setDelayMax] = useState<number>(link?.delayMaxSeconds ?? 0);
-  const [gtins, setGtins] = useState<string>((link?.filterGtins ?? []).join(", "));
+  const [gtins, setGtins] = useState<string[]>(Array.isArray(link?.filterGtins) ? link.filterGtins : []);
+  const [filterCategory, setFilterCategory] = useState<string | null>(null);
   const [isElse, setIsElse] = useState<boolean>(Boolean(link?.isElse));
   const [error, setError] = useState<string | null>(null);
 
@@ -41,14 +43,10 @@ export function EdgeConfigPanel({
       setError("This source channel already has an 'else' edge — only one is allowed.");
       return;
     }
-    const list = gtins
-      .split(/[\s,]+/)
-      .map((s) => s.trim())
-      .filter(Boolean);
     onSave({
       delayMinSeconds: Math.max(0, Math.round(delayMin)),
       delayMaxSeconds: Math.max(0, Math.round(delayMax)),
-      filterGtins: isElse || list.length === 0 ? null : list,
+      filterGtins: isElse || gtins.length === 0 ? null : gtins,
       isElse,
     });
   }
@@ -83,17 +81,18 @@ export function EdgeConfigPanel({
           </label>
           {!isElse && (
             <div className="field-block">
-              <label htmlFor="fGtins">GTIN filter</label>
-              <input
-                id="fGtins"
-                type="text"
-                value={gtins}
-                onChange={(e) => setGtins(e.target.value)}
-                placeholder="comma-separated GTINs — empty = all items"
-              />
-              <span className="note" style={{ marginTop: 4 }}>
-                Only batches whose GTIN is in this list take this edge. Empty = every batch.
+              <label>GTIN filter</label>
+              <span className="note" style={{ marginBottom: 6 }}>
+                Only items whose GTIN is in this list take this edge. Empty = every item.
               </span>
+              <ProductPicker
+                gtins={gtins}
+                categoryCode={filterCategory}
+                onChange={({ gtins: g, categoryCode: c }) => {
+                  setGtins(g);
+                  setFilterCategory(c);
+                }}
+              />
             </div>
           )}
         </div>

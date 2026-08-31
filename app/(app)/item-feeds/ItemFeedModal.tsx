@@ -14,7 +14,7 @@ export function ItemFeedModal({
   open: boolean;
   feed: ItemFeedRecord | null;
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: (saved: ItemFeedRecord) => void;
 }) {
   useEffect(() => {
     if (!open) return;
@@ -39,7 +39,7 @@ export function ItemFeedModal({
             </svg>
           </button>
         </div>
-        <ItemFeedForm feed={feed} onCancel={onClose} onSaved={() => onSaved()} />
+        <ItemFeedForm feed={feed} onCancel={onClose} onSaved={onSaved} />
       </div>
     </div>
   );
