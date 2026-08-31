@@ -172,6 +172,18 @@ A "+ Add channel" link below the rows, same styling as "+ Add attribute" (`.attr
 
 Same table pattern as `UsersTable.tsx`/`BugReportsTable.tsx` — a `.panel`-wrapped `<table>`, header row in `--ink-3` uppercase-small per existing convention. Columns: icon+type, Name (+ Collector ID beneath in `--ink-3` small text, mirroring the site-card's name+meta pattern), Site, State (colored dot + label per the token table above), Workflow (name, or "—"), row actions (Edit, Delete). "+ Add device" button top-right of the page, same placement/style as other list-page primary actions.
 
+**Revised 2026-08-31 (BL-065)** — row actions gain a third icon, **Duplicate**, sitting between Edit and Delete: two-overlapping-squares glyph, same `.row-icon-btn` treatment as Delete (ghost — `--ink-2` icon, no fill at rest, `--surface-2` hover background), not the solid-orange treatment reserved for Edit. `aria-label`/`title` "Duplicate".
+
+### Context menu (right-click) — added 2026-08-31
+
+First context menu in the app (`CLAUDE-CONCEPT.md` section 15.9, BL-066) — right-clicking a Device marker on the Overview map while Edit mode is on. A small floating panel, same elevation language as the map's own zoom/pan and Edit-mode-palette widgets (`--surface` background, 1px `--border-strong`, `--radius`, `--shell-shadow`), positioned `position: fixed` at the cursor's client coordinates (clamped so it never renders off-screen past the viewport edge). Three rows, stacked, no header:
+
+- **Copy** — a copy/clipboard glyph (two overlapping rounded rectangles, same family as the Devices-list Duplicate icon above), 16px, `--ink-2`.
+- **Paste** — a clipboard-with-plus glyph, 16px. Greyed at 40% opacity (matching the app's existing disabled-button convention) and non-interactive whenever nothing has been copied yet.
+- **Duplicate** — the same two-overlapping-squares glyph as the Devices-list row action, 16px.
+
+Each row: icon + label, `12.5px` text, `~8px 12px` padding, full-width hover state (`--surface-2` background) — same interaction weight as `.user-menu-item` (`UserMenu.tsx`), which this component's hover/spacing/typography is copied from wholesale rather than invented fresh. Dismisses on an outside click, `Escape`, or immediately after any row is clicked — same lifecycle as `UserMenu.tsx`'s own open/close `useEffect` pattern.
+
 ## Iconography
 
 **Read-point type icons — integrated 2026-08-26.** A 13-icon set for the read-point/device types exposed by Bartender's `GET /reference/read-point-types` (see `CLAUDE-CONCEPT.md` section 7) — produced in a separate Claude Design session, delivered as `package/` at the repo root, and wired into the app as `components/ui/ReadPointIcon.tsx` + `public/icons/read-point/*.svg`.
