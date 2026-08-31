@@ -268,6 +268,11 @@ export function LocationMapCard({ locationCode, devices, onDevicesChange }: Loca
 
   function handleDeviceMouseDown(e: React.MouseEvent, device: DeviceRecord) {
     e.stopPropagation();
+    // Left button only — a right-click (button 2) must not arm the
+    // drag/click-to-configure ref, otherwise its mouseup opens the config
+    // modal on top of the context menu (BL-066 follow-up). The context menu
+    // is handled entirely by onContextMenu.
+    if (e.button !== 0) return;
     deviceDragRef.current = {
       id: device.id,
       startClientX: e.clientX,
