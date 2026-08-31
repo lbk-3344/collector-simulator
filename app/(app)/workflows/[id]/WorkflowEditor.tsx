@@ -17,6 +17,7 @@ import {
 import "@xyflow/react/dist/style.css";
 import { useDialog } from "@/components/AppDialog";
 import { SharedBadge } from "@/components/SharedBadge";
+import { ContextMenu } from "@/components/ContextMenu";
 import { ItemFeedModal } from "../../item-feeds/ItemFeedModal";
 import type { ItemFeedRecord } from "@/lib/itemFeed";
 import { TaskNode, type TaskChannel } from "./TaskNode";
@@ -71,6 +72,12 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
     null
   );
   const [showActivity, setShowActivity] = useState(false);
+
+  // Feed Node right-click Copy/Paste/Duplicate (BL-071). Same lifetime as the
+  // map's deviceClipboard — plain state, gone on reload, survives repeated
+  // pastes. Gated by the page-wide `readOnly` flag, not per-node (§16.9).
+  const [feedClipboard, setFeedClipboard] = useState<{ itemFeedId: string } | null>(null);
+  const [feedContextMenu, setFeedContextMenu] = useState<{ x: number; y: number; node: Node } | null>(null);
 
   const feedNodeIds = useMemo(() => new Set(feedNodes.map((f) => f.id)), [feedNodes]);
 
@@ -290,6 +297,34 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
     [load, readOnly]
   );
 
+  // BL-071 — clone the ItemFeed a Feed Node points at into an independent new
+  // feed, then place a FeedNode for it. Two calls + reload, mirroring the
+  // map's duplicateDevice.
+  const duplicateFeedNode = useCallback(
+    async (sourceItemFeedId: string, positionX: number, positionY: number) => {
+      if (readOnly) return;
+      const dupRes = await fetch(`/api/item-feeds/${sourceItemFeedId}/duplicate`, { method: "POST" });
+      if (!dupRes.ok) {
+        const d = await dupRes.json().catch(() => null);
+        setError(d?.error ?? "Couldn't duplicate that feed.");
+        return;
+      }
+      const { itemFeed } = await dupRes.json();
+      await fetch("/api/feed-nodes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workflowId,
+          itemFeedId: itemFeed.id,
+          positionX: Math.round(positionX),
+          positionY: Math.round(positionY),
+        }),
+      });
+      await load();
+    },
+    [workflowId, load, readOnly]
+  );
+
   const patchWorkflow = useCallback(
     async (body: Record<string, unknown>) => {
       if (readOnly) return;
@@ -462,6 +497,13 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
               const { itemFeed } = await r.json();
               setFeedModal({ feed: itemFeed, dropPos: null });
             }}
+            onNodeContextMenu={(e, node) => {
+              // Feed Nodes only — right-click opens Copy/Paste/Duplicate
+              // (BL-071). Task cloning has its own entry points elsewhere.
+              if (readOnly || node.type !== "feed") return;
+              e.preventDefault();
+              setFeedContextMenu({ x: e.clientX, y: e.clientY, node });
+            }}
             onNodesDelete={onNodesDelete}
             onEdgesDelete={onEdgesDelete}
             nodeTypes={nodeTypes}
@@ -555,6 +597,31 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
           await load();
         }}
       />
+
+      {feedContextMenu && (
+        <ContextMenu
+          x={feedContextMenu.x}
+          y={feedContextMenu.y}
+          canPaste={feedClipboard !== null}
+          onCopy={() =>
+            setFeedClipboard({ itemFeedId: (feedContextMenu.node.data as Any).itemFeedId as string })
+          }
+          onPaste={() => {
+            if (!feedClipboard) return;
+            // Paste lands where the menu was opened (client coords) — convert
+            // to flow space. Use the clipboard's feed, not the right-clicked
+            // node (they may differ).
+            const pos = screenToFlowPosition({ x: feedContextMenu.x, y: feedContextMenu.y });
+            duplicateFeedNode(feedClipboard.itemFeedId, pos.x, pos.y);
+          }}
+          onDuplicate={() => {
+            const itemFeedId = (feedContextMenu.node.data as Any).itemFeedId as string;
+            // Offset from the source node's own position — already flow space.
+            duplicateFeedNode(itemFeedId, feedContextMenu.node.position.x + 24, feedContextMenu.node.position.y + 24);
+          }}
+          onClose={() => setFeedContextMenu(null)}
+        />
+      )}
     </section>
   );
 }

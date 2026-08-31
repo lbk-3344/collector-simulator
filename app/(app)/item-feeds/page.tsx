@@ -12,6 +12,15 @@ import { ItemFeedModal } from "./ItemFeedModal";
 
 // "In stock" is the user-facing label for the PRESENT kind (BUG #cmth5k10o).
 // The enum value stays PRESENT everywhere in code/DB/docs.
+function DuplicateIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="7" y="7" width="10" height="10" rx="2" />
+      <path d="M13 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2" />
+    </svg>
+  );
+}
+
 const KIND_LABEL: Record<string, string> = { NEW: "New", PRESENT: "In stock", FIXED: "Fixed" };
 const KIND_CHIP: Record<string, string> = { NEW: "chip-success", PRESENT: "chip-info", FIXED: "chip-warning" };
 
@@ -92,6 +101,20 @@ export default function ItemFeedsPage() {
     setBusyId(null);
   }
 
+  // Clone via POST /api/item-feeds/[id]/duplicate (BL-071) — a fresh,
+  // independent ItemFeed row; no modal, the clone appears on the next reload.
+  async function handleDuplicate(feed: ItemFeedRecord) {
+    setBusyId(feed.id);
+    setError(null);
+    const res = await fetch(`/api/item-feeds/${feed.id}/duplicate`, { method: "POST" });
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      setError(data?.error ?? "Couldn't duplicate this item feed.");
+    }
+    await load();
+    setBusyId(null);
+  }
+
   return (
     <section className="fade-in">
       <PageHeader
@@ -159,6 +182,15 @@ export default function ItemFeedsPage() {
                             <path d="M13.3 3.5a1.9 1.9 0 0 1 2.7 2.7L7 15.2l-3.7 1 1-3.7 9-9Z" />
                           </svg>
                         )}
+                      </button>
+                      <button
+                        className="row-icon-btn row-icon-btn-ghost"
+                        aria-label="Duplicate"
+                        title={readOnly ? "Shared with you — read-only" : "Duplicate"}
+                        disabled={busyId === feed.id || readOnly}
+                        onClick={() => handleDuplicate(feed)}
+                      >
+                        <DuplicateIcon />
                       </button>
                       <button
                         className="row-icon-btn row-icon-btn-delete"

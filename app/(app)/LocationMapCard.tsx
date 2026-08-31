@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import ReadPointIcon, { READ_POINT_TYPES, READ_POINT_LABELS } from "@/components/ui/ReadPointIcon";
 import { DeviceConfigModal } from "@/components/DeviceConfigModal";
-import { DeviceContextMenu } from "@/components/DeviceContextMenu";
+import { ContextMenu } from "@/components/ContextMenu";
 import { PadlockIcon } from "@/components/SharedBadge";
 import { getDeviceState } from "@/lib/deviceState";
 import type { DeviceRecord } from "@/lib/deviceConfig";
@@ -593,7 +593,7 @@ export function LocationMapCard({ locationCode, devices, currentUserId, onDevice
       />
 
       {contextMenu && (
-        <DeviceContextMenu
+        <ContextMenu
           x={contextMenu.x}
           y={contextMenu.y}
           canPaste={deviceClipboard !== null}

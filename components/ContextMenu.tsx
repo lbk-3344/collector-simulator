@@ -2,9 +2,10 @@
 
 import { useEffect, useRef } from "react";
 
-// First context menu in the app (CLAUDE-CONCEPT.md 15.9 / CHARTE "Context
-// menu") — right-click on an Overview-map Device marker while Edit mode is
-// on. Plain fixed-position panel, dismiss/hover behaviour copied from
+// Generic right-click context menu (CLAUDE-CONCEPT.md 15.9 / 16.9, CHARTE
+// "Context menu") — Copy / Paste / Duplicate. Content-agnostic: used for
+// Overview-map Device markers (BL-066) and Workflow-canvas Feed Nodes
+// (BL-071). Plain fixed-position panel, dismiss behaviour copied from
 // UserMenu.tsx.
 
 const MENU_W = 172;
@@ -29,7 +30,7 @@ function PasteGlyph() {
   );
 }
 
-export function DeviceContextMenu({
+export function ContextMenu({
   x,
   y,
   canPaste,
