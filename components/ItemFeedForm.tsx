@@ -38,10 +38,14 @@ export function ItemFeedForm({
   feed,
   onSaved,
   onCancel,
+  readOnly = false,
 }: {
   feed: ItemFeedRecord | null;
   onSaved: (saved: ItemFeedRecord) => void;
   onCancel: () => void;
+  // True when this feed is visible only because it's shared (BL-068) — every
+  // field is shown but inert, the footer is a single Close.
+  readOnly?: boolean;
 }) {
   const [name, setName] = useState("");
   const [kind, setKind] = useState<ItemFeedKind>("NEW");
@@ -144,8 +148,12 @@ export function ItemFeedForm({
   return (
     <>
       <div className="modal-body">
+        {readOnly && (
+          <div className="snack snack-info">Shared with you — read-only. You can inspect every field but not change it.</div>
+        )}
+        <fieldset className="modal-fields" disabled={readOnly}>
         {error && <div className="snack snack-danger">{error}</div>}
-        {feed && (feed.usageCount ?? 0) > 0 && (
+        {!readOnly && feed && (feed.usageCount ?? 0) > 0 && (
           <div className="snack snack-warning">
             This is a shared definition — editing it changes {feed.usageCount} placement
             {feed.usageCount === 1 ? "" : "s"} on workflow canvases, not just this one.
@@ -305,15 +313,24 @@ export function ItemFeedForm({
             </button>
           </div>
         )}
+        </fieldset>
       </div>
 
       <div className="modal-foot">
-        <button className="btn btn-secondary" onClick={onCancel}>
-          Cancel
-        </button>
-        <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
-          {saving ? "Saving…" : "Save"}
-        </button>
+        {readOnly ? (
+          <button className="btn btn-secondary" onClick={onCancel}>
+            Close
+          </button>
+        ) : (
+          <>
+            <button className="btn btn-secondary" onClick={onCancel}>
+              Cancel
+            </button>
+            <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
+              {saving ? "Saving…" : "Save"}
+            </button>
+          </>
+        )}
       </div>
     </>
   );

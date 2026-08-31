@@ -50,7 +50,7 @@ export default function ItemFeedsPage() {
   const [feeds, setFeeds] = useState<ItemFeedRecord[] | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [modal, setModal] = useState<{ feed: ItemFeedRecord | null } | null>(null);
+  const [modal, setModal] = useState<{ feed: ItemFeedRecord | null; readOnly?: boolean } | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const { confirm } = useDialog();
 
@@ -145,14 +145,20 @@ export default function ItemFeedsPage() {
                     <div className="row-actions">
                       <button
                         className="row-icon-btn row-icon-btn-edit"
-                        aria-label="Edit"
-                        title={readOnly ? "Shared with you — read-only" : "Edit"}
-                        disabled={readOnly}
-                        onClick={() => setModal({ feed })}
+                        aria-label={readOnly ? "View" : "Edit"}
+                        title={readOnly ? "View (shared — read-only)" : "Edit"}
+                        onClick={() => setModal({ feed, readOnly })}
                       >
-                        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M13.3 3.5a1.9 1.9 0 0 1 2.7 2.7L7 15.2l-3.7 1 1-3.7 9-9Z" />
-                        </svg>
+                        {readOnly ? (
+                          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M1.5 10S4.5 4.5 10 4.5 18.5 10 18.5 10 15.5 15.5 10 15.5 1.5 10 1.5 10Z" />
+                            <circle cx="10" cy="10" r="2.5" />
+                          </svg>
+                        ) : (
+                          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M13.3 3.5a1.9 1.9 0 0 1 2.7 2.7L7 15.2l-3.7 1 1-3.7 9-9Z" />
+                          </svg>
+                        )}
                       </button>
                       <button
                         className="row-icon-btn row-icon-btn-delete"
@@ -178,6 +184,7 @@ export default function ItemFeedsPage() {
       <ItemFeedModal
         open={Boolean(modal)}
         feed={modal?.feed ?? null}
+        readOnly={modal?.readOnly ?? false}
         onClose={() => setModal(null)}
         onSaved={() => {
           setModal(null);

@@ -22,12 +22,16 @@ export function EdgeConfigPanel({
   onClose,
   onSave,
   onDelete,
+  readOnly = false,
 }: {
   link: Link;
   siblingElseCount: number;
   onClose: () => void;
   onSave: (body: EdgePatch) => void;
   onDelete: () => void;
+  // True when the workflow is shared with the current user (BL-068) — every
+  // field shown, all inert, footer is a single Close.
+  readOnly?: boolean;
 }) {
   const [delayMin, setDelayMin] = useState<number>(link?.delayMinSeconds ?? 0);
   const [delayMax, setDelayMax] = useState<number>(link?.delayMaxSeconds ?? 0);
@@ -64,6 +68,8 @@ export function EdgeConfigPanel({
           </button>
         </div>
         <div className="modal-body">
+          {readOnly && <div className="snack snack-info">Shared with you — read-only.</div>}
+          <fieldset className="modal-fields" disabled={readOnly}>
           {error && <div className="snack snack-danger">{error}</div>}
           <div className="field-row">
             <div className="field-block">
@@ -95,18 +101,27 @@ export function EdgeConfigPanel({
               />
             </div>
           )}
+          </fieldset>
         </div>
         <div className="modal-foot">
-          <button className="btn btn-ghost-danger" onClick={onDelete}>
-            Delete link
-          </button>
-          <div style={{ flex: 1 }} />
-          <button className="btn btn-secondary" onClick={onClose}>
-            Cancel
-          </button>
-          <button className="btn btn-primary" onClick={save}>
-            Save
-          </button>
+          {readOnly ? (
+            <button className="btn btn-secondary" onClick={onClose}>
+              Close
+            </button>
+          ) : (
+            <>
+              <button className="btn btn-ghost-danger" onClick={onDelete}>
+                Delete link
+              </button>
+              <div style={{ flex: 1 }} />
+              <button className="btn btn-secondary" onClick={onClose}>
+                Cancel
+              </button>
+              <button className="btn btn-primary" onClick={save}>
+                Save
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>

@@ -152,7 +152,7 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
       targetHandle: fl.targetChannelId,
       data: {
         fireIntervalSeconds: fl.fireIntervalSeconds,
-        onEdit: readOnly ? undefined : (id: string) => setEditFeedLinkId(id),
+        onEdit: (id: string) => setEditFeedLinkId(id),
       },
     })) as Edge[];
 
@@ -168,12 +168,12 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
         delayMaxSeconds: fl.delayMaxSeconds,
         filterGtins: fl.filterGtins ?? null,
         isElse: fl.isElse,
-        onEdit: readOnly ? undefined : (id: string) => setEditFlowId(id),
+        onEdit: (id: string) => setEditFlowId(id),
       },
     })) as Edge[];
 
     setEdges([...feedEdges, ...flowEdges]);
-  }, [tasks, feedNodes, feedLinks, flowLinks, setNodes, setEdges, readOnly]);
+  }, [tasks, feedNodes, feedLinks, flowLinks, setNodes, setEdges]);
 
   // ── interactions ────────────────────────────────────────────────────
   const onDrop = useCallback(
@@ -452,7 +452,8 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
             onConnect={onConnect}
             onNodeDragStop={onNodeDragStop}
             onNodeClick={async (_, node) => {
-              if (readOnly) return;
+              // Feed nodes open the item-feed definition — editable when you
+              // own the workflow, read-only when it's shared with you.
               if (node.type !== "feed") return;
               const id = (node.data as Any).itemFeedId as string | undefined;
               if (!id) return;
@@ -482,6 +483,7 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
 
       {editFlowId && (
         <EdgeConfigPanel
+          readOnly={readOnly}
           link={flowLinks.find((l) => l.id === editFlowId)}
           siblingElseCount={(() => {
             const link = flowLinks.find((l) => l.id === editFlowId);
@@ -510,6 +512,7 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
 
       {editFeedLinkId && (
         <FeedLinkPanel
+          readOnly={readOnly}
           link={feedLinks.find((l) => l.id === editFeedLinkId)}
           onClose={() => setEditFeedLinkId(null)}
           onSave={async (fireIntervalSeconds) => {
@@ -532,6 +535,7 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
       <ItemFeedModal
         open={!!feedModal}
         feed={feedModal?.feed ?? null}
+        readOnly={readOnly}
         onClose={() => setFeedModal(null)}
         onSaved={async (saved) => {
           const dropPos = feedModal?.dropPos ?? null;
@@ -560,11 +564,13 @@ function FeedLinkPanel({
   onClose,
   onSave,
   onDelete,
+  readOnly = false,
 }: {
   link: Any;
   onClose: () => void;
   onSave: (interval: number) => void;
   onDelete: () => void;
+  readOnly?: boolean;
 }) {
   const [interval, setInterval] = useState<number>(link?.fireIntervalSeconds ?? 60);
   if (!link) return null;
@@ -581,31 +587,42 @@ function FeedLinkPanel({
           </button>
         </div>
         <div className="modal-body">
-          <div className="field-block">
-            <label htmlFor="flInterval">Fire every (seconds)</label>
-            <input
-              id="flInterval"
-              type="number"
-              min={5}
-              value={interval}
-              onChange={(e) => setInterval(Math.max(5, Number(e.target.value) || 5))}
-            />
-            <span className="note" style={{ marginTop: 4 }}>
-              While the workflow is running, this feed fires a fresh batch into the channel this often.
-            </span>
-          </div>
+          {readOnly && <div className="snack snack-info">Shared with you — read-only.</div>}
+          <fieldset className="modal-fields" disabled={readOnly}>
+            <div className="field-block">
+              <label htmlFor="flInterval">Fire every (seconds)</label>
+              <input
+                id="flInterval"
+                type="number"
+                min={5}
+                value={interval}
+                onChange={(e) => setInterval(Math.max(5, Number(e.target.value) || 5))}
+              />
+              <span className="note" style={{ marginTop: 4 }}>
+                While the workflow is running, this feed fires a fresh batch into the channel this often.
+              </span>
+            </div>
+          </fieldset>
         </div>
         <div className="modal-foot">
-          <button className="btn btn-ghost-danger" onClick={onDelete}>
-            Delete link
-          </button>
-          <div style={{ flex: 1 }} />
-          <button className="btn btn-secondary" onClick={onClose}>
-            Cancel
-          </button>
-          <button className="btn btn-primary" onClick={() => onSave(interval)}>
-            Save
-          </button>
+          {readOnly ? (
+            <button className="btn btn-secondary" onClick={onClose}>
+              Close
+            </button>
+          ) : (
+            <>
+              <button className="btn btn-ghost-danger" onClick={onDelete}>
+                Delete link
+              </button>
+              <div style={{ flex: 1 }} />
+              <button className="btn btn-secondary" onClick={onClose}>
+                Cancel
+              </button>
+              <button className="btn btn-primary" onClick={() => onSave(interval)}>
+                Save
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>

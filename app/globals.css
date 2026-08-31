@@ -389,6 +389,18 @@ svg { display: block; }
 }
 .map-marker-shared svg { width: 9px; height: 9px; }
 
+/* Read-only ("view", shared-not-owned) modal state — BL-068 follow-up.
+   A <fieldset disabled> inerts every native control in the modal body in
+   one move; the extra rule covers the non-native role="button" elements
+   (ProductPicker chips / list items). */
+.modal fieldset.modal-fields { border: 0; margin: 0; padding: 0; min-width: 0; display: block; }
+.modal fieldset.modal-fields:disabled { opacity: 1; }
+.modal fieldset.modal-fields:disabled input,
+.modal fieldset.modal-fields:disabled select,
+.modal fieldset.modal-fields:disabled textarea,
+.modal fieldset.modal-fields:disabled button { opacity: .65; cursor: default; }
+.modal fieldset.modal-fields:disabled [role="button"] { pointer-events: none; opacity: .55; }
+
 /* placeholder view */
 .placeholder { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 60px 4px; max-width: 46ch; }
 .placeholder .tag { font-family: var(--font-ui); font-size: 10.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--accent-brand-ink); }
@@ -506,6 +518,7 @@ select.role-select:disabled { opacity: .5; cursor: not-allowed; }
 .snack-success { background: #1E8E5A; color: #FFFFFF; }
 .snack-warning { background: #B4740E; color: #0D1E2C; }
 .snack-danger  { background: #C41E3A; color: #FFFFFF; }
+.snack-info    { background: var(--info-tint); color: var(--info); border: 1px solid var(--info-border); }
 
 /* ---- Bug report modal ---- */
 .modal-overlay {

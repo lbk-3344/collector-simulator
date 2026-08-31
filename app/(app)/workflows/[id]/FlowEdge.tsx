@@ -41,7 +41,6 @@ export function FlowEdge({ id, sourceX, sourceY, targetX, targetY, sourcePositio
           className={`wf-edge-label${d.isElse ? " is-else" : ""}`}
           style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` }}
           onClick={() => d.onEdit?.(id)}
-          disabled={!d.onEdit}
         >
           {label(d)}
         </button>

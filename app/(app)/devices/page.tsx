@@ -17,6 +17,14 @@ function EditIcon() {
     </svg>
   );
 }
+function EyeIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M1.5 10S4.5 4.5 10 4.5 18.5 10 18.5 10 15.5 15.5 10 15.5 1.5 10 1.5 10Z" />
+      <circle cx="10" cy="10" r="2.5" />
+    </svg>
+  );
+}
 function TrashIcon() {
   return (
     <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
@@ -69,7 +77,7 @@ export default function DevicesPage() {
   const [locations, setLocations] = useState<BartenderLocation[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
-  const [configModal, setConfigModal] = useState<{ device: DeviceRecord | null } | null>(null);
+  const [configModal, setConfigModal] = useState<{ device: DeviceRecord | null; readOnly?: boolean } | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const { confirm } = useDialog();
 
@@ -224,12 +232,11 @@ export default function DevicesPage() {
                       <div className="row-actions">
                         <button
                           className="row-icon-btn row-icon-btn-edit"
-                          aria-label="Edit"
-                          title={readOnly ? "Shared with you — read-only" : "Edit"}
-                          disabled={readOnly}
-                          onClick={() => setConfigModal({ device })}
+                          aria-label={readOnly ? "View" : "Edit"}
+                          title={readOnly ? "View (shared — read-only)" : "Edit"}
+                          onClick={() => setConfigModal({ device, readOnly })}
                         >
-                          <EditIcon />
+                          {readOnly ? <EyeIcon /> : <EditIcon />}
                         </button>
                         <button
                           className="row-icon-btn row-icon-btn-ghost"
@@ -264,6 +271,7 @@ export default function DevicesPage() {
         device={configModal?.device ?? null}
         lockTypeAndSite={false}
         deleteOnCancelIfUnsaved={false}
+        readOnly={configModal?.readOnly ?? false}
         siteOptions={siteOptions}
         onClose={() => setConfigModal(null)}
         onSaved={() => {

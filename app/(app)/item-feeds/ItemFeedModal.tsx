@@ -10,11 +10,13 @@ export function ItemFeedModal({
   feed,
   onClose,
   onSaved,
+  readOnly = false,
 }: {
   open: boolean;
   feed: ItemFeedRecord | null;
   onClose: () => void;
   onSaved: (saved: ItemFeedRecord) => void;
+  readOnly?: boolean;
 }) {
   useEffect(() => {
     if (!open) return;
@@ -31,7 +33,7 @@ export function ItemFeedModal({
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal fade-in" role="dialog" aria-modal="true" aria-labelledby="itemFeedTitle" style={{ width: 540 }}>
         <div className="modal-head">
-          <h2 id="itemFeedTitle">{feed ? "Edit item feed" : "New item feed"}</h2>
+          <h2 id="itemFeedTitle">{feed ? (readOnly ? "View item feed" : "Edit item feed") : "New item feed"}</h2>
           <button className="modal-close" aria-label="Close" onClick={onClose}>
             <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7">
               <line x1="5" y1="5" x2="15" y2="15" />
@@ -39,7 +41,7 @@ export function ItemFeedModal({
             </svg>
           </button>
         </div>
-        <ItemFeedForm feed={feed} onCancel={onClose} onSaved={onSaved} />
+        <ItemFeedForm feed={feed} onCancel={onClose} onSaved={onSaved} readOnly={readOnly} />
       </div>
     </div>
   );

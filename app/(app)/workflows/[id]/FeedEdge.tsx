@@ -22,7 +22,6 @@ export function FeedEdge({ id, sourceX, sourceY, targetX, targetY, sourcePositio
           className="wf-edge-label wf-edge-label-feed"
           style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` }}
           onClick={() => d.onEdit?.(id)}
-          disabled={!d.onEdit}
         >
           every {d.fireIntervalSeconds}s
         </button>

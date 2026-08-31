@@ -18,6 +18,9 @@ type ConfigModalState = {
   lockTypeAndSite: boolean;
   deleteOnCancelIfUnsaved: boolean;
   presetType?: string;
+  // Opened just to inspect a shared-not-owned device (BL-068) — every field
+  // shown, all inert, footer is a single Close.
+  readOnly?: boolean;
 };
 
 export interface LocationMapCardProps {
@@ -281,9 +284,13 @@ export function LocationMapCard({ locationCode, devices, currentUserId, onDevice
     // modal on top of the context menu (BL-066 follow-up). The context menu
     // is handled entirely by onContextMenu.
     if (e.button !== 0) return;
-    // Shared-not-owned devices are read-only — no reposition, no config
-    // modal on mouseup (BL-068).
-    if (isReadOnly(device)) return;
+    // Shared-not-owned devices are read-only — no reposition drag. A plain
+    // click still opens the config window read-only so it can be inspected
+    // as a model (BL-068 follow-up).
+    if (isReadOnly(device)) {
+      setConfigModal({ device, lockTypeAndSite: true, deleteOnCancelIfUnsaved: false, readOnly: true });
+      return;
+    }
     deviceDragRef.current = {
       id: device.id,
       startClientX: e.clientX,
@@ -376,12 +383,16 @@ export function LocationMapCard({ locationCode, devices, currentUserId, onDevice
   // --- Non-Edit-mode click behavior (BL-046) -------------------------------
 
   function handleDeviceClick(device: DeviceRecord) {
+    // A shared-not-owned device opens the full config window read-only, so
+    // it can be inspected as a model (BL-068 follow-up) — every field
+    // visible, nothing editable, whatever its state.
+    if (isReadOnly(device)) {
+      setConfigModal({ device, lockTypeAndSite: true, deleteOnCancelIfUnsaved: false, readOnly: true });
+      return;
+    }
     const state = getDeviceState(device);
-    // A shared-not-owned OFF device would normally open the editable config
-    // modal — route it to the read-only info panel instead (BL-068).
     if (state === "OFF") {
-      if (isReadOnly(device)) setInfoPanelDevice(device);
-      else setConfigModal({ device, lockTypeAndSite: true, deleteOnCancelIfUnsaved: false });
+      setConfigModal({ device, lockTypeAndSite: true, deleteOnCancelIfUnsaved: false });
     } else if (state === "ACTIVE") {
       setManualSendDevice(device);
     } else {
@@ -568,6 +579,7 @@ export function LocationMapCard({ locationCode, devices, currentUserId, onDevice
         presetLocationCode={locationCode ?? undefined}
         lockTypeAndSite={configModal?.lockTypeAndSite ?? true}
         deleteOnCancelIfUnsaved={configModal?.deleteOnCancelIfUnsaved ?? false}
+        readOnly={configModal?.readOnly ?? false}
         siteOptions={[]}
         onClose={() => setConfigModal(null)}
         onSaved={(device) => {

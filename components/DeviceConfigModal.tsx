@@ -143,6 +143,10 @@ export interface DeviceConfigModalProps {
   // True only for a just-dropped, never-configured shell — Cancel deletes
   // it rather than leaving an orphaned unconfigured Device (section 15.4).
   deleteOnCancelIfUnsaved: boolean;
+  // True when the device is visible only because it's shared with the
+  // current user (BL-068): every field is shown but inert, the footer is a
+  // single Close, so it can still be inspected as a model.
+  readOnly?: boolean;
   siteOptions: SiteOption[];
   onClose: () => void;
   onSaved: (device: DeviceRecord) => void;
@@ -159,6 +163,7 @@ export function DeviceConfigModal({
   presetLocationCode,
   lockTypeAndSite,
   deleteOnCancelIfUnsaved,
+  readOnly = false,
   siteOptions,
   onClose,
   onSaved,
@@ -375,7 +380,7 @@ export function DeviceConfigModal({
             <div className="modal-head-icon" aria-hidden="true">
               <ReadPointIcon type={type} size={32} />
             </div>
-            <h2 id="deviceConfigTitle">{device ? "Edit device" : "Add device"}</h2>
+            <h2 id="deviceConfigTitle">{device ? (readOnly ? "View device" : "Edit device") : "Add device"}</h2>
             {stateForPill && (
               <span className={`device-state device-state-${stateForPill.toLowerCase()}`}>
                 <span className="device-state-dot" />
@@ -391,6 +396,10 @@ export function DeviceConfigModal({
           </button>
         </div>
         <div className="modal-body">
+          {readOnly && (
+            <div className="snack snack-info">Shared with you — read-only. You can inspect every field but not change it.</div>
+          )}
+          <fieldset className="modal-fields" disabled={readOnly}>
           {syncBanner && <div className="error-banner">{syncBanner}</div>}
           {postSave?.lastSyncError && (
             <div className="snack snack-danger">Saved here — publishing to Bartender failed.</div>
@@ -651,9 +660,14 @@ export function DeviceConfigModal({
           {/* Workflow assignment lives on the Workflow canvas now (BL-059) —
               a Device joins a Workflow by being dragged onto its graph as a
               Task, not picked here. */}
+          </fieldset>
         </div>
         <div className="modal-foot">
-          {postSave ? (
+          {readOnly ? (
+            <button className="btn btn-secondary" onClick={onClose}>
+              Close
+            </button>
+          ) : postSave ? (
             // Held open on a sync problem — the save already persisted; this
             // just hands the saved Device up and closes.
             <button className="btn btn-primary" onClick={() => onSaved(postSave)}>
