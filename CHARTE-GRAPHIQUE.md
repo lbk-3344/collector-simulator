@@ -184,6 +184,19 @@ First context menu in the app (`CLAUDE-CONCEPT.md` section 15.9, BL-066) — rig
 
 Each row: icon + label, `12.5px` text, `~8px 12px` padding, full-width hover state (`--surface-2` background) — same interaction weight as `.user-menu-item` (`UserMenu.tsx`), which this component's hover/spacing/typography is copied from wholesale rather than invented fresh. Dismisses on an outside click, `Escape`, or immediately after any row is clicked — same lifecycle as `UserMenu.tsx`'s own open/close `useEffect` pattern.
 
+### "Shared" badge (read-only indicator) — added 2026-08-31
+
+`CLAUDE-CONCEPT.md` section 17, `BACKLOG.md` BL-068. Marks a Device/Workflow/Item Feed row or canvas node that's visible only because it's shared — not owned by the viewer, and therefore read-only. Reuses the existing tint-based `.chip` family (not the solid `.snack` component — this is a status tag, not feedback) — new `.chip-shared` modifier: `--info-tint` background, `--info` text, a small closed-padlock glyph (12px) before the label "Shared". Placed:
+
+- **List rows** (Devices/Workflows/Item Feeds): immediately after the Name cell's primary text, same slot the existing State dot+label sits in on the Devices list — small enough not to disrupt the row's existing rhythm.
+- **Canvas** (`workflow-canvas-editor.html`'s node styling): a small `.chip-shared` pinned to a Task/Feed Node's top-right corner when the whole Workflow is shared-not-owned, rather than repeating it per node — the read-only state applies to the whole canvas at once in that case.
+
+Rows/nodes carrying this badge also get their Edit/Delete/Duplicate-as-edit/drag affordances disabled (40% opacity, `cursor: not-allowed`, matching the app's existing disabled-control convention) rather than hidden — a viewer should be able to see that an action exists and is simply not theirs to take, not wonder why a button is missing.
+
+### Admin "Shared resources" screen — added 2026-08-31
+
+`CLAUDE-CONCEPT.md` section 17.4, `BACKLOG.md` BL-069. A new tab in Settings, alongside the existing admin-only Users tab (same gating, same tab-strip placement) — table pattern copied from `UsersTable.tsx`/`BugReportsTable.tsx` like every other list in this app. Columns: Type (Device/Workflow/Item Feed, small `.chip` tag), Name, Owner (name + email, small text under it, mirroring the Devices list's Name+Collector-ID stacked pattern), Shared (a toggle switch, not a button — this is a persistent on/off state, not an action to click through a confirmation for). No row click-through to the underlying record — this table's only interactive element is the toggle itself.
+
 ## Iconography
 
 **Read-point type icons — integrated 2026-08-26.** A 13-icon set for the read-point/device types exposed by Bartender's `GET /reference/read-point-types` (see `CLAUDE-CONCEPT.md` section 7) — produced in a separate Claude Design session, delivered as `package/` at the repo root, and wired into the app as `components/ui/ReadPointIcon.tsx` + `public/icons/read-point/*.svg`.
