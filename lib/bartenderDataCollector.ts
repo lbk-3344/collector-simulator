@@ -148,3 +148,72 @@ export async function deregisterCollector(
   }
   return { ok: false, errorMessage: errorMessageFrom(body, raw, res.status) };
 }
+
+// One tag in a POST /reads batch. Exactly one identifier field. Live-probed
+// 2026-08-31: a bare 24-char SGTIN-96 hex from the Serialization API works in
+// the `hexa` field as-is; a GS1 `urn:epc:id:sgtin:…` works in `epc`. Bare hex
+// in `epc`, or `urn:epc:tag:sgtin-96:…`, are rejected (400).
+export function tagForItem(item: string): { epc: string } | { hexa: string } | null {
+  const s = item.trim();
+  if (!s) return null;
+  if (s.startsWith("urn:")) return { epc: s };
+  if (/^[0-9a-fA-F]{16,}$/.test(s) && s.length % 2 === 0) return { hexa: s.toUpperCase() };
+  return { epc: s }; // best effort — some other identifier scheme
+}
+
+export interface SendReadsResult {
+  ok: boolean;
+  status: number;
+  readStatus?: "COMMITTED" | "NOTPROCESSED" | string;
+  epcisEventId?: string | null;
+  submitted: number;
+  errorMessage?: string;
+}
+
+// POST {gateway}/datacollector/reads — submits one batch of tag observations
+// for one Channel in one read cycle (datacollector-api-v3, CLAUDE-CONCEPT.md
+// 7.5). 200 = COMMITTED (EPCIS event written) or NOTPROCESSED (channel has no
+// active Zone mapping — observations discarded, not an error); 207 = partial.
+// Items that don't resolve to a valid tag identifier (e.g. PRESENT-feed
+// placeholders) are dropped; an all-dropped batch returns ok:false without a
+// network call.
+export async function sendReads(
+  tenantUrl: string,
+  apiKey: string,
+  collectorId: string,
+  channelId: string,
+  items: string[],
+  readTime: Date
+): Promise<SendReadsResult> {
+  const tags = items.map(tagForItem).filter((t): t is { epc: string } | { hexa: string } => t !== null);
+  if (tags.length === 0) {
+    return { ok: false, status: 0, submitted: 0, errorMessage: "no submittable tag identifiers in this batch" };
+  }
+
+  const url = `${resolveDataCollectorGatewayUrl(tenantUrl)}/reads`;
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: { apikey: apiKey, "content-type": "application/json" },
+      body: JSON.stringify({ collectorId, channelId, readTime: readTime.toISOString(), tags }),
+      cache: "no-store",
+    });
+  } catch {
+    return { ok: false, status: 0, submitted: tags.length, errorMessage: "Could not reach the Bartender platform." };
+  }
+
+  const raw = await res.text().catch(() => "");
+  let body: unknown = null;
+  try {
+    body = raw ? JSON.parse(raw) : null;
+  } catch {
+    /* keep raw */
+  }
+
+  if (res.ok || res.status === 207) {
+    const b = body as { status?: string; epcisEventId?: string | null } | null;
+    return { ok: true, status: res.status, submitted: tags.length, readStatus: b?.status, epcisEventId: b?.epcisEventId ?? null };
+  }
+  return { ok: false, status: res.status, submitted: tags.length, errorMessage: errorMessageFrom(body, raw, res.status) };
+}

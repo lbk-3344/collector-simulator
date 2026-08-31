@@ -2,6 +2,9 @@ import { prisma } from "@/lib/prisma";
 import { getServiceCredentials } from "@/lib/bartenderLocations";
 import { mintSerializedItems, SerializationError, MAX_NEW_ITEMS_PER_FIRING } from "@/lib/bartenderSerialization";
 import { getStock } from "@/lib/bartenderInventory";
+import { sendReads } from "@/lib/bartenderDataCollector";
+
+type ServiceCreds = Awaited<ReturnType<typeof getServiceCredentials>>;
 
 // Workflow run engine (BL-061, CLAUDE-CONCEPT.md 16.5). One `runTick()` does
 // firing + arrivals + auto-stop; it's called by the CRON_SECRET-guarded
@@ -73,23 +76,52 @@ async function resolveBatch(feed: any, creds: Awaited<ReturnType<typeof getServi
   return { items, gtin: feed.gtin ?? null };
 }
 
-// Write the read event for (taskId, channelId), then fan the batch out along
-// this Task/Channel's outgoing Flow Links — a copy per matching edge, or the
-// `else` edge for anything unmatched — scheduling each as an InFlightBatch.
+interface ReadPushStats {
+  pushed: number;
+  notProcessed: number;
+  failed: number;
+}
+
+// Write the read event for (taskId, channelId), push it to the real Track &
+// Trace platform (POST /reads — every read, entry firing and every hop, per
+// Luc 2026-08-31), then fan the batch out along this Task/Channel's outgoing
+// Flow Links — a copy per matching edge, or the `else` edge for anything
+// unmatched — scheduling each as an InFlightBatch.
 async function emitReadAndScheduleHops(args: {
   workflowId: string;
   taskId: string;
   deviceId: string;
+  collectorId: string | null;
   channelId: string;
   items: string[];
   gtin: string | null;
   at: Date;
+  creds: ServiceCreds;
+  push: ReadPushStats;
+  notes: string[];
 }) {
-  const { workflowId, taskId, deviceId, channelId, items, gtin, at } = args;
+  const { workflowId, taskId, deviceId, collectorId, channelId, items, gtin, at, creds, push, notes } = args;
 
   await prisma.simulatedRead.create({
     data: { workflowId, taskId, deviceId, channelId, items, gtin, occurredAt: at },
   });
+
+  // Real platform read. Skipped silently when there's nothing submittable
+  // (e.g. PRESENT-feed placeholder ids — see 7.5/16.5) or no collectorId.
+  if (creds && collectorId && items.length > 0) {
+    const res = await sendReads(creds.tenantUrl, creds.apiKey, collectorId, channelId, items, at);
+    if (res.ok) {
+      if (res.readStatus === "NOTPROCESSED") {
+        push.notProcessed++;
+        notes.push(`reads ${collectorId}/${channelId}: NOTPROCESSED (channel has no active zone mapping)`);
+      } else {
+        push.pushed++;
+      }
+    } else if (res.status !== 0 || res.errorMessage?.includes("reach")) {
+      push.failed++;
+      notes.push(`reads ${collectorId}/${channelId}: ${res.errorMessage ?? "failed"}`);
+    }
+  }
 
   const links = await prisma.flowLink.findMany({ where: { sourceTaskId: taskId, sourceChannelId: channelId } });
   if (links.length === 0) return; // terminal point
@@ -119,12 +151,25 @@ export interface TickSummary {
   itemsMinted: number;
   arrivalsProcessed: number;
   autoStopped: number;
+  readsPushed: number;
+  readsNotProcessed: number;
+  readsFailed: number;
   notes: string[];
 }
 
 export async function runTick(): Promise<TickSummary> {
   const now = new Date();
-  const summary: TickSummary = { firedInputs: 0, itemsMinted: 0, arrivalsProcessed: 0, autoStopped: 0, notes: [] };
+  const push: ReadPushStats = { pushed: 0, notProcessed: 0, failed: 0 };
+  const summary: TickSummary = {
+    firedInputs: 0,
+    itemsMinted: 0,
+    arrivalsProcessed: 0,
+    autoStopped: 0,
+    readsPushed: 0,
+    readsNotProcessed: 0,
+    readsFailed: 0,
+    notes: [],
+  };
   const creds = await getServiceCredentials();
 
   // ── 1. Firing ────────────────────────────────────────────────────────
@@ -135,7 +180,10 @@ export async function runTick(): Promise<TickSummary> {
       fireIntervalSeconds: { gt: 0 },
       task: { workflow: { status: "RUNNING" } },
     },
-    include: { itemFeed: true, task: { select: { id: true, deviceId: true, workflowId: true } } },
+    include: {
+      itemFeed: true,
+      task: { select: { id: true, deviceId: true, workflowId: true, device: { select: { collectorId: true } } } },
+    },
   });
 
   for (const input of dueInputs) {
@@ -159,10 +207,14 @@ export async function runTick(): Promise<TickSummary> {
       workflowId: input.task.workflowId,
       taskId: input.task.id,
       deviceId: input.task.deviceId,
+      collectorId: input.task.device?.collectorId ?? null,
       channelId: input.channelId,
       items: batch.items,
       gtin: batch.gtin,
       at: now,
+      creds,
+      push,
+      notes: summary.notes,
     });
   }
 
@@ -183,7 +235,12 @@ export async function runTick(): Promise<TickSummary> {
 
     const task = await prisma.task.findUnique({
       where: { id: b.taskId },
-      select: { deviceId: true, workflowId: true, workflow: { select: { status: true } } },
+      select: {
+        deviceId: true,
+        workflowId: true,
+        device: { select: { collectorId: true } },
+        workflow: { select: { status: true } },
+      },
     });
     if (!task || task.workflow.status !== "RUNNING") continue; // stopped mid-flight → batch just fizzles
 
@@ -192,10 +249,14 @@ export async function runTick(): Promise<TickSummary> {
       workflowId: task.workflowId,
       taskId: b.taskId,
       deviceId: task.deviceId,
+      collectorId: task.device?.collectorId ?? null,
       channelId: b.channelId,
       items: (b.items as string[]) ?? [],
       gtin: b.gtin,
       at: now,
+      creds,
+      push,
+      notes: summary.notes,
     });
   }
 
@@ -216,6 +277,10 @@ export async function runTick(): Promise<TickSummary> {
       summary.autoStopped++;
     }
   }
+
+  summary.readsPushed = push.pushed;
+  summary.readsNotProcessed = push.notProcessed;
+  summary.readsFailed = push.failed;
 
   if (summary.itemsMinted > 0 && summary.itemsMinted % MAX_NEW_ITEMS_PER_FIRING === 0) {
     // cheap sanity breadcrumb in the response
