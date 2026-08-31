@@ -111,6 +111,11 @@ model User {
   accounts   Account[]
   sessions   Session[]
   bugReports BugReport[]
+
+  // Per-user workspace ownership (BL-067, CLAUDE-CONCEPT.md section 17).
+  ownedDevices   Device[]   @relation("OwnedDevices")
+  ownedWorkflows Workflow[] @relation("OwnedWorkflows")
+  ownedItemFeeds ItemFeed[] @relation("OwnedItemFeeds")
 }
 
 // This app's own simulated read-point fixture — deliberately NOT the same
@@ -168,10 +173,20 @@ model Device {
   // CLAUDE-CONCEPT.md 16.6) — the old direct `workflowId` FK is gone.
   task Task?
 
+  // Per-user workspace ownership (BL-067, CLAUDE-CONCEPT.md section 17).
+  // `ownerId` is server-derived from the session on every create, never
+  // client-supplied. `shared` (admin-toggled only) makes the row read-only-
+  // visible to every other user. Nullable only during the 2-step migration;
+  // NOT NULL after `require_workspace_owner`.
+  ownerId String
+  owner   User    @relation("OwnedDevices", fields: [ownerId], references: [id], onDelete: Cascade)
+  shared  Boolean @default(false)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([locationCode])
+  @@index([ownerId])
 }
 
 // A Workflow is a graph of Tasks connected by Flow Links (BL-059,
@@ -188,6 +203,13 @@ model Workflow {
   runningStartedAt      DateTime? // set when flipped to RUNNING, cleared on STOPPED
   autoStoppedAt         DateTime? // set by the cron job when IT stopped the run (vs a manual stop)
 
+  // Per-user workspace ownership (BL-067, CLAUDE-CONCEPT.md section 17).
+  // Task / FeedNode / FeedLink / FlowLink inherit ownership from here via
+  // `workflowId` — they get no `ownerId` of their own.
+  ownerId String
+  owner   User    @relation("OwnedWorkflows", fields: [ownerId], references: [id], onDelete: Cascade)
+  shared  Boolean @default(false)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -197,6 +219,8 @@ model Workflow {
   flowLinks      FlowLink[]
   inFlightBatches InFlightBatch[]
   simulatedReads SimulatedRead[]
+
+  @@index([ownerId])
 }
 
 // Run engine (BL-061, CLAUDE-CONCEPT.md 16.5). A batch of items travelling a
@@ -368,8 +392,15 @@ model ItemFeed {
 
   feedNodes FeedNode[] // each is one canvas placement of this Feed
 
+  // Per-user workspace ownership (BL-067, CLAUDE-CONCEPT.md section 17).
+  ownerId String
+  owner   User    @relation("OwnedItemFeeds", fields: [ownerId], references: [id], onDelete: Cascade)
+  shared  Boolean @default(false)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([ownerId])
 }
 
 // See CLAUDE-CONCEPT.md section 3 and CLAUDE.md "Bug handling" for the full

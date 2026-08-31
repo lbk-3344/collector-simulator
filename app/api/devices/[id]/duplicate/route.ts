@@ -5,6 +5,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { suggestCollectorId } from "@/lib/deviceCollectorId";
+import { isOwner } from "@/lib/ownership";
 
 // One clone operation, two callers: the Devices-list "Duplicate" row action
 // (BL-065) and the Overview map's right-click Copy/Paste/Duplicate menu
@@ -33,7 +34,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   }
 
   const source = await prisma.device.findUnique({ where: { id: params.id } });
-  if (!source) {
+  // Visibility only, not ownership — cloning a *shared* device you don't own
+  // is the intended escape hatch for cross-owner composition (§17.3). The
+  // clone's ownerId is always the caller (below), never the source's.
+  if (!source || (!isOwner(source, session.user.id) && !source.shared)) {
     return NextResponse.json({ error: "Device not found" }, { status: 404 });
   }
 
@@ -45,6 +49,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   const device = await prisma.device.create({
     data: {
+      // The clone always lands in the caller's own workspace (§17.3), never
+      // marked shared, regardless of the source's owner or shared flag.
+      ownerId: session.user.id,
+      shared: false,
       name: `${source.name} (Copy)`,
       collectorId,
       type: source.type,

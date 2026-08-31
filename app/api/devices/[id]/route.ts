@@ -8,6 +8,7 @@ import { buildDeviceConfigData, resolveConfigVersion, validateChannels } from "@
 import { buildPlatformSyncData, toRegistrableDevice } from "@/lib/deviceSync";
 import { getUserBartenderCredentials } from "@/lib/bartenderLocations";
 import { deregisterCollector } from "@/lib/bartenderDataCollector";
+import { isOwner } from "@/lib/ownership";
 
 const DEVICE_INCLUDE = {
   task: { select: { id: true, name: true, workflow: { select: { id: true, name: true, status: true } } } },
@@ -23,7 +24,9 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
     where: { id: params.id },
     include: DEVICE_INCLUDE,
   });
-  if (!device) {
+  // 404 (not 403) for a device the caller neither owns nor has shared to
+  // them — don't confirm the id exists (BL-067, §17.2).
+  if (!device || (!isOwner(device, session.user.id) && !device.shared)) {
     return NextResponse.json({ error: "Device not found" }, { status: 404 });
   }
 
@@ -42,6 +45,14 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const session = await getServerSession(authOptions);
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Owner-only mutation (BL-067, §17.2) — shared is read-only to everyone
+  // else, ADMIN included. Publish (below) is just another mutating PATCH.
+  const owned = await prisma.device.findUnique({ where: { id: params.id }, select: { ownerId: true } });
+  if (!owned) return NextResponse.json({ error: "Device not found" }, { status: 404 });
+  if (!isOwner(owned, session.user.id)) {
+    return NextResponse.json({ error: "You can only edit your own devices." }, { status: 403 });
   }
 
   const body = await req.json().catch(() => ({}));
@@ -117,15 +128,20 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const device = await prisma.device.findUnique({
+    where: { id: params.id },
+    select: { ownerId: true, collectorId: true, publishedAt: true },
+  });
+  if (!device) return NextResponse.json({ error: "Device not found" }, { status: 404 });
+  if (!isOwner(device, session.user.id)) {
+    return NextResponse.json({ error: "You can only delete your own devices." }, { status: 403 });
+  }
+
   const wantDeregister = new URL(req.url).searchParams.get("deregister") === "true";
   let platformDeregisterError: string | undefined;
 
   if (wantDeregister) {
-    const device = await prisma.device.findUnique({
-      where: { id: params.id },
-      select: { collectorId: true, publishedAt: true },
-    });
-    if (device?.publishedAt && device.collectorId) {
+    if (device.publishedAt && device.collectorId) {
       try {
         const creds = await getUserBartenderCredentials(session.user.id);
         if (!creds) {

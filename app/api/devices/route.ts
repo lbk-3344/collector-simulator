@@ -6,6 +6,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { buildDeviceConfigData, validateChannels } from "@/lib/deviceConfig";
 import { buildPlatformSyncData, toRegistrableDevice } from "@/lib/deviceSync";
+import { visibilityWhere } from "@/lib/ownership";
 
 const DEVICE_INCLUDE = {
   task: { select: { id: true, name: true, workflow: { select: { id: true, name: true, status: true } } } },
@@ -27,8 +28,11 @@ export async function GET(req: NextRequest) {
 
   const locationCode = req.nextUrl.searchParams.get("locationCode");
 
+  // Owner-or-shared visibility (BL-067) AND-ed with the optional site filter.
   const devices = await prisma.device.findMany({
-    where: locationCode ? { locationCode } : undefined,
+    where: {
+      AND: [visibilityWhere(session.user.id), ...(locationCode ? [{ locationCode }] : [])],
+    },
     include: DEVICE_INCLUDE,
     orderBy: { name: "asc" },
   });
@@ -71,8 +75,9 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // ownerId is always the session user (BL-067) — never client-supplied.
   let data = isConfigCreate
-    ? buildDeviceConfigData(body)
+    ? { ...buildDeviceConfigData(body), ownerId: session.user.id }
     : {
         name: `New ${type}`,
         type,
@@ -80,6 +85,7 @@ export async function POST(req: NextRequest) {
         positionX: typeof body?.positionX === "number" ? body.positionX : null,
         positionY: typeof body?.positionY === "number" ? body.positionY : null,
         configured: false,
+        ownerId: session.user.id,
       };
 
   // Publish to the real platform (BL-053) — only on an explicit publish of a

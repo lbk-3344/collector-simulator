@@ -11,6 +11,16 @@ import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
+// Per-user workspace ownership (BL-067) — every seeded Device/Workflow/
+// ItemFeed is owned by the bootstrap admin, matching the migration backfill.
+const ADMIN_EMAIL = (process.env.INITIAL_ADMIN_EMAILS ?? "lbellissard@seagullsoftware.com").split(",")[0].trim();
+const owner = await prisma.user.findUnique({ where: { email: ADMIN_EMAIL } });
+if (!owner) {
+  console.error(`Seed aborted: no User row for ${ADMIN_EMAIL}. Sign in once to create it (or set INITIAL_ADMIN_EMAILS).`);
+  process.exit(1);
+}
+const ownerId = owner.id;
+
 // Order matters — most cascade from Workflow/Device, but be explicit.
 await prisma.simulatedRead.deleteMany({});
 await prisma.inFlightBatch.deleteMany({});
@@ -22,8 +32,8 @@ await prisma.itemFeed.deleteMany({});
 await prisma.device.deleteMany({});
 await prisma.workflow.deleteMany({});
 
-const packLine = await prisma.workflow.create({ data: { name: "Pack Line A", status: "STOPPED" } });
-const inboundQc = await prisma.workflow.create({ data: { name: "Inbound QC", status: "STOPPED" } });
+const packLine = await prisma.workflow.create({ data: { name: "Pack Line A", status: "STOPPED", ownerId } });
+const inboundQc = await prisma.workflow.create({ data: { name: "Inbound QC", status: "STOPPED", ownerId } });
 
 const NOW = new Date();
 
@@ -188,7 +198,7 @@ const devices = [
 const tasksByName = {};
 let taskCount = 0;
 for (const { workflow, ...data } of devices) {
-  const device = await prisma.device.create({ data });
+  const device = await prisma.device.create({ data: { ...data, ownerId } });
   if (workflow) {
     const task = await prisma.task.create({
       data: { workflowId: workflow.id, deviceId: device.id, name: device.name },
@@ -201,6 +211,7 @@ for (const { workflow, ...data } of devices) {
 // Item Feeds (BL-058 revised) — multi-GTIN, and one PRESENT/ALL example.
 const feedNew = await prisma.itemFeed.create({
   data: {
+    ownerId,
     name: "Fresh cartons (NEW)",
     kind: "NEW",
     gtins: ["03663328010013", "03663328010020"],
@@ -210,6 +221,7 @@ const feedNew = await prisma.itemFeed.create({
 });
 await prisma.itemFeed.create({
   data: {
+    ownerId,
     name: "Warehouse Receiving stock (PRESENT, GTIN list)",
     kind: "PRESENT",
     presentMatchMode: "GTIN_LIST",
@@ -222,6 +234,7 @@ await prisma.itemFeed.create({
 });
 await prisma.itemFeed.create({
   data: {
+    ownerId,
     name: "Anything in Storage Area 1 (PRESENT, ALL)",
     kind: "PRESENT",
     presentMatchMode: "ALL",
@@ -233,6 +246,7 @@ await prisma.itemFeed.create({
 });
 await prisma.itemFeed.create({
   data: {
+    ownerId,
     name: "Golden sample pallet (FIXED)",
     kind: "FIXED",
     fixedItems: ["3034DF978000FA400000005D", "urn:epc:id:sgtin:0366332.801001.1000"],

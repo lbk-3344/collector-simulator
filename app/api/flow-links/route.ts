@@ -4,9 +4,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { visibilityWhere } from "@/lib/ownership";
 
 // Flow Link CRUD (BL-059) — a Channel-to-Channel edge in a Workflow graph.
-// Driven by the Part 2 canvas; no dedicated UI in this batch.
+// Driven by the Part 2 canvas. Visibility/ownership via the parent Workflow (BL-067).
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function buildFlowLinkData(body: any) {
@@ -46,7 +47,10 @@ export async function GET(req: NextRequest) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const workflowId = req.nextUrl.searchParams.get("workflowId");
   const flowLinks = await prisma.flowLink.findMany({
-    where: workflowId ? { workflowId } : undefined,
+    where: {
+      workflow: visibilityWhere(session.user.id),
+      ...(workflowId ? { workflowId } : {}),
+    },
     orderBy: { createdAt: "asc" },
   });
   return NextResponse.json({ flowLinks });
@@ -59,6 +63,25 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   const result = buildFlowLinkData(body);
   if ("error" in result) return NextResponse.json({ error: result.error }, { status: 400 });
+
+  // Owner check on the parent Workflow; both endpoints must live under it
+  // (BL-067 — no cross-workflow / cross-owner wiring).
+  const { workflowId, sourceTaskId, targetTaskId } = result.data;
+  const [workflow, sourceTask, targetTask] = await Promise.all([
+    prisma.workflow.findUnique({ where: { id: workflowId }, select: { ownerId: true } }),
+    prisma.task.findUnique({ where: { id: sourceTaskId }, select: { workflowId: true } }),
+    prisma.task.findUnique({ where: { id: targetTaskId }, select: { workflowId: true } }),
+  ]);
+  if (!workflow) return NextResponse.json({ error: "Workflow not found" }, { status: 404 });
+  if (workflow.ownerId !== session.user.id) {
+    return NextResponse.json({ error: "You can only edit your own workflows." }, { status: 403 });
+  }
+  if (!sourceTask || !targetTask) {
+    return NextResponse.json({ error: "Source or target task not found" }, { status: 404 });
+  }
+  if (sourceTask.workflowId !== workflowId || targetTask.workflowId !== workflowId) {
+    return NextResponse.json({ error: "Both tasks must belong to this workflow." }, { status: 400 });
+  }
 
   try {
     // A Channel can have any number of FeedLinks/FlowLinks targeting it —

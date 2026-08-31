@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { isOwner } from "@/lib/ownership";
 
 const WORKFLOW_INCLUDE = {
   tasks: {
@@ -23,7 +24,9 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const workflow = await prisma.workflow.findUnique({ where: { id: params.id }, include: WORKFLOW_INCLUDE });
-  if (!workflow) return NextResponse.json({ error: "Workflow not found" }, { status: 404 });
+  if (!workflow || (!isOwner(workflow, session.user.id) && !workflow.shared)) {
+    return NextResponse.json({ error: "Workflow not found" }, { status: 404 });
+  }
   return NextResponse.json({ workflow });
 }
 
@@ -33,6 +36,14 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  // Owner-only — rename, maxRunDuration, and Run/Stop are all mutations
+  // (BL-067, §17.2). A shared workflow is read-only to non-owners.
+  const owned = await prisma.workflow.findUnique({ where: { id: params.id }, select: { ownerId: true } });
+  if (!owned) return NextResponse.json({ error: "Workflow not found" }, { status: 404 });
+  if (!isOwner(owned, session.user.id)) {
+    return NextResponse.json({ error: "You can only edit your own workflows." }, { status: 403 });
+  }
 
   const body = await req.json().catch(() => ({}));
   const data: Record<string, unknown> = {};
@@ -69,10 +80,13 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  try {
-    await prisma.workflow.delete({ where: { id: params.id } });
-  } catch {
-    return NextResponse.json({ error: "Workflow not found" }, { status: 404 });
+
+  const owned = await prisma.workflow.findUnique({ where: { id: params.id }, select: { ownerId: true } });
+  if (!owned) return NextResponse.json({ error: "Workflow not found" }, { status: 404 });
+  if (!isOwner(owned, session.user.id)) {
+    return NextResponse.json({ error: "You can only delete your own workflows." }, { status: 403 });
   }
+
+  await prisma.workflow.delete({ where: { id: params.id } });
   return NextResponse.json({ ok: true });
 }
