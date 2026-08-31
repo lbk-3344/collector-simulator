@@ -376,6 +376,10 @@ model ItemFeed {
 // reporting/export/notification process built around this model.
 model BugReport {
   id            String    @id @default(cuid())
+  // Short human-readable reference (BL-010), distinct from the technical cuid
+  // `id` — this is what `npm run bugs:*` scripts take as `<ref>`, what the
+  // reporter emails cite, and what BUGS.md / SOLVED-BUGS.md list.
+  number        Int       @unique @default(autoincrement())
   title         String
   description   String
   status        BugStatus @default(OPEN)
@@ -384,6 +388,12 @@ model BugReport {
   reporter      User      @relation(fields: [reporterId], references: [id], onDelete: Cascade)
   reportedAt    DateTime  @default(now())
   resolvedAt    DateTime?
+
+  // Purely operational timestamps so bugs:notify-start / bugs:notify-resolved
+  // (CLAUDE.md "Bug handling") are safe to re-run without emailing the reporter
+  // twice. Not shown in the UI.
+  notifiedStartAt    DateTime?
+  notifiedResolvedAt DateTime?
 
   @@index([status])
 }

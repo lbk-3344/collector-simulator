@@ -47,6 +47,7 @@ export async function GET() {
     orderBy: { reportedAt: "desc" },
     select: {
       id: true,
+      number: true,
       title: true,
       description: true,
       screenshotUrl: true,

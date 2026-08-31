@@ -42,10 +42,10 @@ To be set up on the same model as ChefMate/ChefCellar once the repo is scaffolde
   - `npm version major` **never** without an explicit instruction from Luc in the conversation.
   - The `package.json` change is part of the same commit as the delivered work, not a separate one.
   - A commit touching several items at once bumps only once, at the highest level involved (minor wins over patch).
-- **Bug handling** (built now — P0, mirroring ChefMate's mechanism 1:1, see `BACKLOG.md` section 1 and `CLAUDE-CONCEPT.md` section 2):
+- **Bug handling** (built now — P0, mirroring ChefMate's mechanism 1:1, see `BACKLOG.md` section 1 and `CLAUDE-CONCEPT.md` section 3). Scripts live in `scripts/` (`tsx`), take a `<ref>` that is either the bug's short `number` or its cuid `id`, and all run against `DATABASE_URL_PRODUCTION`:
   1. Before starting bug work in a session, regenerate `BUGS.md` (`npm run bugs:export`) — no continuous sync, the file can be stale.
-  2. As soon as you actually start working a specific bug, run `npm run bugs:notify-start -- <number>` ("being resolved" email to the reporter).
-  3. Once fixed: set the `BugReport` to `RESOLVED`, append it to `SOLVED-BUGS.md` (number, title, description, dates, and the screenshot URL if `screenshotUrl` is set — otherwise the image stays orphaned on Cloudinary once the row is deleted), regenerate `BUGS.md` — **don't delete the DB row at this step**.
-  4. After the fix has actually reached **production** (merge `staging` → `main` then push `main` — not just the initial push to `staging`), run `npm run bugs:notify-resolved -- <number>` ("resolved" email to the reporter, then the row is deleted).
-  - All of the above targets `DATABASE_URL_PRODUCTION` once environments exist, not the local dev database — same reasoning as ChefMate: bug reports only ever come in against the live app.
-  - Assumed for now, pending confirmation: Resend for email (like ChefMate/ChefCellar) and Cloudinary for optional screenshot storage — flag in `BACKLOG.md` section 0 if that's wrong for a work-context tool.
+  2. As soon as you actually start working a specific bug, `npm run bugs:notify-start -- <ref>` ("being worked on" email to the reporter; sets `notifiedStartAt`, safe to re-run).
+  3. Once fixed: `npm run bugs:resolve -- <ref>` — sets the `BugReport` to `RESOLVED`, appends it to `SOLVED-BUGS.md` (number, title, description, dates, screenshot URL if set — otherwise the image is orphaned on Cloudinary once the row is deleted), and regenerates `BUGS.md`. **The DB row is not deleted at this step.**
+  4. After the fix has actually reached **production** (merge `staging` → `main` then push `main` — not just the initial push to `staging`), `npm run bugs:notify-resolved -- <ref>` ("fixed" email to the reporter, then the row is deleted and `BUGS.md` regenerated).
+  - All four target `DATABASE_URL_PRODUCTION`, never the local dev DB — bug reports only ever come in against the live app. `RESEND_API_KEY` unset ⇒ the notify scripts still do their DB work, they just skip the email.
+  - Email is Resend (`lib/email.ts`, `RESEND_API_KEY` / `RESEND_FROM_EMAIL`); optional screenshot storage is Cloudinary (BL-008, not built yet).

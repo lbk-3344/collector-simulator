@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 
 type ApiBug = {
   id: string;
+  number: number;
   title: string;
   description: string;
   screenshotUrl: string | null;
@@ -78,7 +79,10 @@ export function BugReportsTable() {
               {bugs.map((bug) => (
                 <tr key={bug.id}>
                   <td>
-                    <div className="u-name">{bug.title}</div>
+                    <div className="u-name">
+                      <span className="u-meta" style={{ marginRight: 6 }}>#{bug.number}</span>
+                      {bug.title}
+                    </div>
                   </td>
                   <td>
                     <div className="u-name">{bug.reporter.name ?? "—"}</div>
@@ -108,7 +112,7 @@ export function BugReportsTable() {
         >
           <div className="modal fade-in" role="dialog" aria-modal="true" aria-labelledby="bugDetailTitle">
             <div className="modal-head">
-              <h2 id="bugDetailTitle">{selected.title}</h2>
+              <h2 id="bugDetailTitle">#{selected.number} — {selected.title}</h2>
               <button className="modal-close" aria-label="Close" onClick={() => setSelected(null)}>
                 <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7">
                   <line x1="5" y1="5" x2="15" y2="15" />
