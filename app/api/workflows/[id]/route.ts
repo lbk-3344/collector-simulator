@@ -27,7 +27,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   if (!workflow || (!isOwner(workflow, session.user.id) && !workflow.shared)) {
     return NextResponse.json({ error: "Workflow not found" }, { status: 404 });
   }
-  return NextResponse.json({ workflow });
+  return NextResponse.json({ workflow, currentUserId: session.user.id });
 }
 
 // PATCH: rename, edit maxRunDurationMinutes, and Run/Stop.

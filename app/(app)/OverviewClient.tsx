@@ -19,6 +19,7 @@ export function OverviewClient({ initialSelectedLocationCode }: { initialSelecte
   // map — create/reposition/reconfigure — immediately reflect in the KPI
   // card too, via the same onDevicesChange setter passed down.
   const [devices, setDevices] = useState<DeviceRecord[] | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [showConnectModal, setShowConnectModal] = useState(false);
   // Tenant-global KPIs (not site-scoped) — CLAUDE-CONCEPT.md §14.4.
   const [stats, setStats] = useState<{
@@ -96,7 +97,9 @@ export function OverviewClient({ initialSelectedLocationCode }: { initialSelecte
     fetch(`/api/devices?locationCode=${encodeURIComponent(selectedCode)}`)
       .then((res) => (res.ok ? res.json() : { devices: [] }))
       .then((data) => {
-        if (!cancelled) setDevices(data.devices ?? []);
+        if (cancelled) return;
+        setDevices(data.devices ?? []);
+        if (data.currentUserId) setCurrentUserId(data.currentUserId);
       })
       .catch(() => {
         if (!cancelled) setDevices([]);
@@ -164,6 +167,7 @@ export function OverviewClient({ initialSelectedLocationCode }: { initialSelecte
       <LocationMapCard
         locationCode={selectedCode}
         devices={devices ?? []}
+        currentUserId={currentUserId}
         onDevicesChange={(update) =>
           setDevices((prev) => (typeof update === "function" ? update(prev ?? []) : update))
         }

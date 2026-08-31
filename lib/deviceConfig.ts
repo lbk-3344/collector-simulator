@@ -23,6 +23,11 @@ export interface DeviceChannel {
 // the Overview map, the config modal, and the Devices list (BL-042 to BL-047).
 export interface DeviceRecord {
   id: string;
+  // Per-user workspace ownership (BL-067). `shared` = visible read-only to
+  // non-owners; client compares `ownerId` against the session user id that
+  // each list route returns alongside its rows.
+  ownerId: string;
+  shared: boolean;
   collectorId: string | null;
   name: string;
   type: string;

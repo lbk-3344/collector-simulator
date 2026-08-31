@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import ReadPointIcon, { READ_POINT_TYPES, READ_POINT_LABELS } from "@/components/ui/ReadPointIcon";
 import { DeviceConfigModal } from "@/components/DeviceConfigModal";
 import { DeviceContextMenu } from "@/components/DeviceContextMenu";
+import { PadlockIcon } from "@/components/SharedBadge";
 import { getDeviceState } from "@/lib/deviceState";
 import type { DeviceRecord } from "@/lib/deviceConfig";
 import type { LocationMap, LocationZone } from "@/lib/bartenderLocations";
@@ -25,6 +26,9 @@ export interface LocationMapCardProps {
   // changes made on the map immediately reflect in the "Devices online" KPI
   // card too — see BACKLOG.md BL-042 to BL-047.
   devices: DeviceRecord[];
+  // Session user id (BL-068) — a marker whose device.ownerId differs is
+  // visible only because it's shared, and is read-only on the map.
+  currentUserId: string | null;
   onDevicesChange: (update: DeviceRecord[] | ((prev: DeviceRecord[]) => DeviceRecord[])) => void;
 }
 
@@ -35,7 +39,11 @@ export interface LocationMapCardProps {
 // transform layer so they stay correctly placed at any zoom. Edit mode
 // (BL-044) and non-Edit-mode click behavior (BL-046) both live here since
 // both act on the same device markers.
-export function LocationMapCard({ locationCode, devices, onDevicesChange }: LocationMapCardProps) {
+export function LocationMapCard({ locationCode, devices, currentUserId, onDevicesChange }: LocationMapCardProps) {
+  // A device visible only because it's shared (not owned) — read-only:
+  // no reposition drag, no editable config modal. Copy/Duplicate stay
+  // available (they don't mutate the shared record — §17.3).
+  const isReadOnly = (d: DeviceRecord) => currentUserId != null && d.ownerId !== currentUserId;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [hasMap, setHasMap] = useState(false);
@@ -273,6 +281,9 @@ export function LocationMapCard({ locationCode, devices, onDevicesChange }: Loca
     // modal on top of the context menu (BL-066 follow-up). The context menu
     // is handled entirely by onContextMenu.
     if (e.button !== 0) return;
+    // Shared-not-owned devices are read-only — no reposition, no config
+    // modal on mouseup (BL-068).
+    if (isReadOnly(device)) return;
     deviceDragRef.current = {
       id: device.id,
       startClientX: e.clientX,
@@ -366,8 +377,11 @@ export function LocationMapCard({ locationCode, devices, onDevicesChange }: Loca
 
   function handleDeviceClick(device: DeviceRecord) {
     const state = getDeviceState(device);
+    // A shared-not-owned OFF device would normally open the editable config
+    // modal — route it to the read-only info panel instead (BL-068).
     if (state === "OFF") {
-      setConfigModal({ device, lockTypeAndSite: true, deleteOnCancelIfUnsaved: false });
+      if (isReadOnly(device)) setInfoPanelDevice(device);
+      else setConfigModal({ device, lockTypeAndSite: true, deleteOnCancelIfUnsaved: false });
     } else if (state === "ACTIVE") {
       setManualSendDevice(device);
     } else {
@@ -443,6 +457,7 @@ export function LocationMapCard({ locationCode, devices, onDevicesChange }: Loca
               const isDragging = draggingDeviceVisual?.id === device.id;
               const left = isDragging ? draggingDeviceVisual!.x : (device.positionX as number);
               const top = isDragging ? draggingDeviceVisual!.y : (device.positionY as number);
+              const readOnly = isReadOnly(device);
               return (
                 <div
                   key={device.id}
@@ -450,13 +465,18 @@ export function LocationMapCard({ locationCode, devices, onDevicesChange }: Loca
                   style={{ left, top, transform: `translate(-50%, -50%) scale(${markerCounterScale})` }}
                 >
                   <span
-                    className={`map-marker-device${editMode ? " draggable" : ""}`}
-                    style={{ background: `var(--device-${getDeviceState(device).toLowerCase()})`, pointerEvents: "auto" }}
+                    className={`map-marker-device${editMode && !readOnly ? " draggable" : ""}`}
+                    style={{ background: `var(--device-${getDeviceState(device).toLowerCase()})`, pointerEvents: "auto", position: "relative" }}
                     onMouseDown={editMode ? (e) => handleDeviceMouseDown(e, device) : undefined}
                     onClick={!editMode ? () => handleDeviceClick(device) : undefined}
                     onContextMenu={editMode ? (e) => handleDeviceContextMenu(e, device) : undefined}
                   >
                     <ReadPointIcon type={device.type} size={30} title={device.name} />
+                    {readOnly && (
+                      <span className="map-marker-shared" title="Shared with you — read-only">
+                        <PadlockIcon />
+                      </span>
+                    )}
                   </span>
                 </div>
               );

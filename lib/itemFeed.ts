@@ -9,6 +9,9 @@ export type PresentMatchMode = "GTIN_LIST" | "ALL";
 
 export interface ItemFeedRecord {
   id: string;
+  // Per-user workspace ownership (BL-067).
+  ownerId: string;
+  shared: boolean;
   name: string;
   kind: ItemFeedKind;
   gtins: string[] | null;

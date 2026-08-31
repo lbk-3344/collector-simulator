@@ -7,7 +7,7 @@ export interface FlowEdgeData {
   delayMaxSeconds: number;
   filterGtins: string[] | null;
   isElse: boolean;
-  onEdit: (id: string) => void;
+  onEdit?: (id: string) => void;
   [key: string]: unknown;
 }
 
@@ -40,7 +40,8 @@ export function FlowEdge({ id, sourceX, sourceY, targetX, targetY, sourcePositio
           type="button"
           className={`wf-edge-label${d.isElse ? " is-else" : ""}`}
           style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` }}
-          onClick={() => d.onEdit(id)}
+          onClick={() => d.onEdit?.(id)}
+          disabled={!d.onEdit}
         >
           {label(d)}
         </button>

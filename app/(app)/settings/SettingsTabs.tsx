@@ -4,8 +4,9 @@ import { useState } from "react";
 import { UsersTable } from "./UsersTable";
 import { BartenderConnectionTab } from "./BartenderConnectionTab";
 import { BugReportsTable } from "./BugReportsTable";
+import { SharedResourcesTable } from "@/components/SharedResourcesTable";
 
-type Tab = "bartender" | "users" | "bugs";
+type Tab = "bartender" | "users" | "bugs" | "sharing";
 
 // Bartender Connection is open to every role; Users and Bug Reports only
 // render for ADMIN (hidden entirely, not just disabled — see
@@ -41,11 +42,17 @@ export function SettingsTabs({
             {openBugCount > 0 && <span className="badge">{openBugCount}</span>}
           </button>
         )}
+        {isAdmin && (
+          <button className={`tab${tab === "sharing" ? " active" : ""}`} onClick={() => setTab("sharing")}>
+            Shared resources
+          </button>
+        )}
       </div>
 
       {tab === "bartender" && <BartenderConnectionTab />}
       {tab === "users" && isAdmin && <UsersTable currentUserId={currentUserId} />}
       {tab === "bugs" && isAdmin && <BugReportsTable />}
+      {tab === "sharing" && isAdmin && <SharedResourcesTable />}
     </>
   );
 }

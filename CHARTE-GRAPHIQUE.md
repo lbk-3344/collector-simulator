@@ -193,9 +193,16 @@ Each row: icon + label, `12.5px` text, `~8px 12px` padding, full-width hover sta
 
 Rows/nodes carrying this badge also get their Edit/Delete/Duplicate-as-edit/drag affordances disabled (40% opacity, `cursor: not-allowed`, matching the app's existing disabled-control convention) rather than hidden — a viewer should be able to see that an action exists and is simply not theirs to take, not wonder why a button is missing.
 
+**Built 2026-08-31 (BL-068, v0.22.0)** — as-built, with two deliberate deviations from the sketch above:
+- **Workflow canvas**: the `.chip-shared` badge sits in the editor **toolbar next to the Workflow name**, not pinned to each node — the whole canvas is read-only at once, and the toolbar is where the name/Run controls (also disabled) already are, so one badge there reads cleaner than a repeated corner tag. The device/feed **palette is hidden** entirely in read-only mode (nothing to drag), rather than shown-but-dimmed.
+- **Overview map**: a shared Device's marker carries a compact corner **padlock dot** (`.map-marker-shared`, `--info` fill), not the full "Shared" pill — the pill doesn't fit a ~40px map marker. The pill is still used on the list rows exactly as described.
+- List-row buttons use the native `disabled` attribute (the app's button CSS already renders that as the dimmed / `not-allowed` state) plus a "Shared with you — read-only" `title`.
+
 ### Admin "Shared resources" screen — added 2026-08-31
 
 `CLAUDE-CONCEPT.md` section 17.4, `BACKLOG.md` BL-069. A new tab in Settings, alongside the existing admin-only Users tab (same gating, same tab-strip placement) — table pattern copied from `UsersTable.tsx`/`BugReportsTable.tsx` like every other list in this app. Columns: Type (Device/Workflow/Item Feed, small `.chip` tag), Name, Owner (name + email, small text under it, mirroring the Devices list's Name+Collector-ID stacked pattern), Shared (a toggle switch, not a button — this is a persistent on/off state, not an action to click through a confirmation for). No row click-through to the underlying record — this table's only interactive element is the toggle itself.
+
+**Built 2026-08-31 (BL-069, v0.22.0)** as `components/SharedResourcesTable.tsx`, tab label "Shared resources" (4th tab, after Bug Reports). New `.toggle-switch` component in `globals.css` — 38×22px pill, `--border-strong` off / `--success` on, 18px white knob sliding 16px, `:disabled` at 50% opacity during the in-flight PATCH. One flat table (not grouped by owner — sorted by name within each type, types concatenated); the toggle flips optimistically and reverts with an error snack if the PATCH fails.
 
 ## Iconography
 

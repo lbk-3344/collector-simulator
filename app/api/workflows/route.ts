@@ -19,6 +19,7 @@ export async function GET() {
   });
   return NextResponse.json({
     workflows: workflows.map(({ _count, ...w }) => ({ ...w, taskCount: _count.tasks, flowLinkCount: _count.flowLinks })),
+    currentUserId: session.user.id,
   });
 }
 

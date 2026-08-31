@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
     orderBy: { name: "asc" },
   });
 
-  return NextResponse.json({ devices });
+  return NextResponse.json({ devices, currentUserId: session.user.id });
 }
 
 // Two distinct creation shapes, matching PATCH's config-save/position-only

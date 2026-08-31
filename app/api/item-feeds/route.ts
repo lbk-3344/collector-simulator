@@ -22,6 +22,7 @@ export async function GET() {
 
   return NextResponse.json({
     itemFeeds: feeds.map(({ _count, ...f }) => ({ ...f, usageCount: _count.feedNodes })),
+    currentUserId: session.user.id,
   });
 }
 

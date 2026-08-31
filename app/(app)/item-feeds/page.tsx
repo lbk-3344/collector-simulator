@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useDialog } from "@/components/AppDialog";
 import { PageHeader } from "@/components/PageHeader";
+import { SharedBadge } from "@/components/SharedBadge";
 import type { ItemFeedRecord } from "@/lib/itemFeed";
 import { ItemFeedModal } from "./ItemFeedModal";
 
@@ -47,6 +48,7 @@ function summarize(f: ItemFeedRecord): string {
 
 export default function ItemFeedsPage() {
   const [feeds, setFeeds] = useState<ItemFeedRecord[] | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [modal, setModal] = useState<{ feed: ItemFeedRecord | null } | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -59,7 +61,9 @@ export default function ItemFeedsPage() {
       setError("Couldn't load item feeds.");
       return;
     }
-    setFeeds((await res.json()).itemFeeds ?? []);
+    const data = await res.json();
+    setFeeds(data.itemFeeds ?? []);
+    setCurrentUserId(data.currentUserId ?? null);
   }, []);
 
   useEffect(() => {
@@ -122,10 +126,15 @@ export default function ItemFeedsPage() {
               </tr>
             </thead>
             <tbody>
-              {feeds.map((feed) => (
+              {feeds.map((feed) => {
+                const readOnly = currentUserId != null && feed.ownerId !== currentUserId;
+                return (
                 <tr key={feed.id}>
                   <td>
-                    <div className="u-name">{feed.name}</div>
+                    <div className="u-name" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      {feed.name}
+                      {readOnly && <SharedBadge />}
+                    </div>
                   </td>
                   <td>
                     <span className={`chip ${KIND_CHIP[feed.kind]}`}>{KIND_LABEL[feed.kind]}</span>
@@ -137,7 +146,8 @@ export default function ItemFeedsPage() {
                       <button
                         className="row-icon-btn row-icon-btn-edit"
                         aria-label="Edit"
-                        title="Edit"
+                        title={readOnly ? "Shared with you — read-only" : "Edit"}
+                        disabled={readOnly}
                         onClick={() => setModal({ feed })}
                       >
                         <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
@@ -147,8 +157,8 @@ export default function ItemFeedsPage() {
                       <button
                         className="row-icon-btn row-icon-btn-delete"
                         aria-label="Delete"
-                        title="Delete"
-                        disabled={busyId === feed.id}
+                        title={readOnly ? "Shared with you — read-only" : "Delete"}
+                        disabled={busyId === feed.id || readOnly}
                         onClick={() => handleDelete(feed)}
                       >
                         <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
@@ -158,7 +168,8 @@ export default function ItemFeedsPage() {
                     </div>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

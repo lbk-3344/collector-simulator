@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useDialog } from "@/components/AppDialog";
 import { PageHeader } from "@/components/PageHeader";
+import { SharedBadge } from "@/components/SharedBadge";
 import ReadPointIcon, { READ_POINT_LABELS, type ReadPointType } from "@/components/ui/ReadPointIcon";
 import { DeviceConfigModal } from "@/components/DeviceConfigModal";
 import { getDeviceState } from "@/lib/deviceState";
@@ -64,6 +65,7 @@ const DEVICES_INFO = (
 // them from).
 export default function DevicesPage() {
   const [devices, setDevices] = useState<DeviceRecord[] | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [locations, setLocations] = useState<BartenderLocation[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
@@ -80,6 +82,7 @@ export default function DevicesPage() {
     }
     const data = await res.json();
     setDevices(data.devices ?? []);
+    setCurrentUserId(data.currentUserId ?? null);
   }, []);
 
   useEffect(() => {
@@ -192,6 +195,8 @@ export default function DevicesPage() {
               {devices.map((device) => {
                 const state = getDeviceState(device);
                 const isBusy = busyId === device.id;
+                // Visible only because it's shared → read-only (BL-068).
+                const readOnly = currentUserId != null && device.ownerId !== currentUserId;
                 return (
                   <tr key={device.id}>
                     <td>
@@ -201,7 +206,10 @@ export default function DevicesPage() {
                       </div>
                     </td>
                     <td>
-                      <div className="u-name">{device.name}</div>
+                      <div className="u-name" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        {device.name}
+                        {readOnly && <SharedBadge />}
+                      </div>
                       <div className="u-email">{device.collectorId ?? "—"}</div>
                     </td>
                     <td className="u-meta">{siteName(device.locationCode)}</td>
@@ -217,7 +225,8 @@ export default function DevicesPage() {
                         <button
                           className="row-icon-btn row-icon-btn-edit"
                           aria-label="Edit"
-                          title="Edit"
+                          title={readOnly ? "Shared with you — read-only" : "Edit"}
+                          disabled={readOnly}
                           onClick={() => setConfigModal({ device })}
                         >
                           <EditIcon />
@@ -225,8 +234,8 @@ export default function DevicesPage() {
                         <button
                           className="row-icon-btn row-icon-btn-ghost"
                           aria-label="Duplicate"
-                          title="Duplicate"
-                          disabled={isBusy}
+                          title={readOnly ? "Shared with you — read-only" : "Duplicate"}
+                          disabled={isBusy || readOnly}
                           onClick={() => handleDuplicate(device)}
                         >
                           <DuplicateIcon />
@@ -234,8 +243,8 @@ export default function DevicesPage() {
                         <button
                           className="row-icon-btn row-icon-btn-delete"
                           aria-label="Delete"
-                          title="Delete"
-                          disabled={isBusy}
+                          title={readOnly ? "Shared with you — read-only" : "Delete"}
+                          disabled={isBusy || readOnly}
                           onClick={() => handleDelete(device)}
                         >
                           <TrashIcon />

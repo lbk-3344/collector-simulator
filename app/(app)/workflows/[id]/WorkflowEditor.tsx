@@ -16,6 +16,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { useDialog } from "@/components/AppDialog";
+import { SharedBadge } from "@/components/SharedBadge";
 import { ItemFeedModal } from "../../item-feeds/ItemFeedModal";
 import type { ItemFeedRecord } from "@/lib/itemFeed";
 import { TaskNode, type TaskChannel } from "./TaskNode";
@@ -49,6 +50,7 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
   const { screenToFlowPosition } = useReactFlow();
 
   const [workflow, setWorkflow] = useState<Any | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [tasks, setTasks] = useState<Any[]>([]);
   const [feedNodes, setFeedNodes] = useState<Any[]>([]);
   const [feedLinks, setFeedLinks] = useState<Any[]>([]);
@@ -72,6 +74,10 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
 
   const feedNodeIds = useMemo(() => new Set(feedNodes.map((f) => f.id)), [feedNodes]);
 
+  // BL-068: a Workflow shared with the current user (owned by someone else) is
+  // fully read-only — no node/edge editing, no run toggle, no config popovers.
+  const readOnly = workflow != null && currentUserId != null && workflow.ownerId !== currentUserId;
+
   const load = useCallback(async () => {
     const [wfRes, devRes, feedRes] = await Promise.all([
       fetch(`/api/workflows/${workflowId}`),
@@ -80,8 +86,10 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
     ]);
     if (wfRes.status === 404) return setNotFound(true);
     if (!wfRes.ok) return setError("Couldn't load this workflow.");
-    const { workflow: wf } = await wfRes.json();
+    const wfBody = await wfRes.json();
+    const wf = wfBody.workflow;
     setWorkflow(wf);
+    setCurrentUserId(wfBody.currentUserId ?? null);
     setTasks(wf.tasks ?? []);
     setFeedNodes(wf.feedNodes ?? []);
     setFeedLinks(wf.feedLinks ?? []);
@@ -142,7 +150,10 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
       sourceHandle: "out",
       target: fl.targetTaskId,
       targetHandle: fl.targetChannelId,
-      data: { fireIntervalSeconds: fl.fireIntervalSeconds, onEdit: (id: string) => setEditFeedLinkId(id) },
+      data: {
+        fireIntervalSeconds: fl.fireIntervalSeconds,
+        onEdit: readOnly ? undefined : (id: string) => setEditFeedLinkId(id),
+      },
     })) as Edge[];
 
     const flowEdges: Edge[] = flowLinks.map((fl) => ({
@@ -157,17 +168,18 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
         delayMaxSeconds: fl.delayMaxSeconds,
         filterGtins: fl.filterGtins ?? null,
         isElse: fl.isElse,
-        onEdit: (id: string) => setEditFlowId(id),
+        onEdit: readOnly ? undefined : (id: string) => setEditFlowId(id),
       },
     })) as Edge[];
 
     setEdges([...feedEdges, ...flowEdges]);
-  }, [tasks, feedNodes, feedLinks, flowLinks, setNodes, setEdges]);
+  }, [tasks, feedNodes, feedLinks, flowLinks, setNodes, setEdges, readOnly]);
 
   // ── interactions ────────────────────────────────────────────────────
   const onDrop = useCallback(
     async (e: React.DragEvent) => {
       e.preventDefault();
+      if (readOnly) return;
       const deviceId = e.dataTransfer.getData("application/device-id");
       const feedId = e.dataTransfer.getData("application/feed-id");
       const newFeed = e.dataTransfer.getData("application/new-feed");
@@ -200,11 +212,12 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
       }
       if (res) await load();
     },
-    [screenToFlowPosition, workflowId, load]
+    [screenToFlowPosition, workflowId, load, readOnly]
   );
 
   const onConnect = useCallback(
     async (c: Connection) => {
+      if (readOnly) return;
       if (!c.source || !c.target || !c.sourceHandle || !c.targetHandle) return;
       const isFeed = feedNodeIds.has(c.source);
       const res = isFeed
@@ -237,11 +250,12 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
       }
       await load();
     },
-    [workflowId, load, feedNodeIds]
+    [workflowId, load, feedNodeIds, readOnly]
   );
 
   const onNodeDragStop = useCallback(
     (_: unknown, node: Node) => {
+      if (readOnly) return;
       const url = feedNodeIds.has(node.id) ? `/api/feed-nodes/${node.id}` : `/api/tasks/${node.id}`;
       fetch(url, {
         method: "PATCH",
@@ -249,33 +263,36 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
         body: JSON.stringify({ positionX: Math.round(node.position.x), positionY: Math.round(node.position.y) }),
       }).catch(() => {});
     },
-    [feedNodeIds]
+    [feedNodeIds, readOnly]
   );
 
   const onNodesDelete = useCallback(
     async (deleted: Node[]) => {
+      if (readOnly) return;
       for (const n of deleted) {
         const url = feedNodeIds.has(n.id) ? `/api/feed-nodes/${n.id}` : `/api/tasks/${n.id}`;
         await fetch(url, { method: "DELETE" }).catch(() => {});
       }
       await load();
     },
-    [load, feedNodeIds]
+    [load, feedNodeIds, readOnly]
   );
 
   const onEdgesDelete = useCallback(
     async (deleted: Edge[]) => {
+      if (readOnly) return;
       for (const ed of deleted) {
         const url = ed.type === "feed" ? `/api/feed-links/${ed.id}` : `/api/flow-links/${ed.id}`;
         await fetch(url, { method: "DELETE" }).catch(() => {});
       }
       await load();
     },
-    [load]
+    [load, readOnly]
   );
 
   const patchWorkflow = useCallback(
     async (body: Record<string, unknown>) => {
+      if (readOnly) return;
       const res = await fetch(`/api/workflows/${workflowId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -288,11 +305,11 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
       }
       setWorkflow((await res.json()).workflow);
     },
-    [workflowId]
+    [workflowId, readOnly]
   );
 
   async function toggleRun() {
-    if (!workflow) return;
+    if (!workflow || readOnly) return;
     if (workflow.status === "STOPPED" && feedLinks.length === 0) {
       const ok = await confirm({
         variant: "info",
@@ -332,7 +349,9 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
           onChange={(e) => setWorkflow((w: Any) => ({ ...w, name: e.target.value }))}
           onBlur={(e) => e.target.value.trim() && patchWorkflow({ name: e.target.value.trim() })}
           placeholder="Workflow name"
+          disabled={readOnly}
         />
+        {readOnly && <SharedBadge />}
         <div className="wf-toolbar-spacer" />
         <label className="wf-duration">
           Auto-stop after
@@ -342,6 +361,7 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
             value={workflow?.maxRunDurationMinutes ?? 240}
             onChange={(e) => setWorkflow((w: Any) => ({ ...w, maxRunDurationMinutes: Number(e.target.value) }))}
             onBlur={(e) => Number(e.target.value) > 0 && patchWorkflow({ maxRunDurationMinutes: Number(e.target.value) })}
+            disabled={readOnly}
           />
           min
         </label>
@@ -351,7 +371,8 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
         <button
           className={`btn ${workflow?.status === "RUNNING" ? "btn-danger" : "btn-primary"}`}
           onClick={toggleRun}
-          disabled={!workflow}
+          disabled={!workflow || readOnly}
+          title={readOnly ? "Shared with you — read-only" : undefined}
         >
           {workflow?.status === "RUNNING" ? "Stop" : "Run"}
         </button>
@@ -366,6 +387,7 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
       {error && <div className="snack snack-danger" style={{ margin: "0 0 8px" }}>{error}</div>}
 
       <div className="wf-canvas-wrap">
+        {!readOnly && (
         <aside className="wf-palette">
           <div className="wf-palette-title">Your devices</div>
           {paletteDevices.length === 0 ? (
@@ -419,6 +441,7 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
             <span className="wf-palette-item-type">drag</span>
           </div>
         </aside>
+        )}
 
         <div className="wf-canvas" onDrop={onDrop} onDragOver={(e) => e.preventDefault()}>
           <ReactFlow
@@ -429,6 +452,7 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
             onConnect={onConnect}
             onNodeDragStop={onNodeDragStop}
             onNodeClick={async (_, node) => {
+              if (readOnly) return;
               if (node.type !== "feed") return;
               const id = (node.data as Any).itemFeedId as string | undefined;
               if (!id) return;
@@ -441,6 +465,10 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
             onEdgesDelete={onEdgesDelete}
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
+            nodesDraggable={!readOnly}
+            nodesConnectable={!readOnly}
+            edgesReconnectable={!readOnly}
+            deleteKeyCode={readOnly ? null : undefined}
             fitView
             proOptions={{ hideAttribution: true }}
           >

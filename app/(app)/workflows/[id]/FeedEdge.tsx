@@ -4,7 +4,7 @@ import { BaseEdge, EdgeLabelRenderer, getBezierPath, type EdgeProps } from "@xyf
 
 export interface FeedEdgeData {
   fireIntervalSeconds: number;
-  onEdit: (id: string) => void;
+  onEdit?: (id: string) => void;
   [key: string]: unknown;
 }
 
@@ -21,7 +21,8 @@ export function FeedEdge({ id, sourceX, sourceY, targetX, targetY, sourcePositio
           type="button"
           className="wf-edge-label wf-edge-label-feed"
           style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` }}
-          onClick={() => d.onEdit(id)}
+          onClick={() => d.onEdit?.(id)}
+          disabled={!d.onEdit}
         >
           every {d.fireIntervalSeconds}s
         </button>

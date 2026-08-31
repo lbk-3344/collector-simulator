@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useDialog } from "@/components/AppDialog";
 import { PageHeader } from "@/components/PageHeader";
+import { SharedBadge } from "@/components/SharedBadge";
 
 const WORKFLOWS_INFO = (
   <>
@@ -37,6 +38,8 @@ function StopIcon() {
 
 interface WorkflowRow {
   id: string;
+  ownerId: string;
+  shared: boolean;
   name: string;
   status: "RUNNING" | "STOPPED";
   maxRunDurationMinutes: number | null;
@@ -50,6 +53,7 @@ export default function WorkflowsPage() {
   const router = useRouter();
   const { confirm } = useDialog();
   const [rows, setRows] = useState<WorkflowRow[] | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [bulkBusy, setBulkBusy] = useState(false);
@@ -58,8 +62,12 @@ export default function WorkflowsPage() {
     setError(null);
     const res = await fetch("/api/workflows");
     if (!res.ok) return setError("Couldn't load workflows.");
-    setRows((await res.json()).workflows ?? []);
+    const data = await res.json();
+    setRows(data.workflows ?? []);
+    setCurrentUserId(data.currentUserId ?? null);
   }, []);
+
+  const mine = (wf: WorkflowRow) => currentUserId == null || wf.ownerId === currentUserId;
 
   useEffect(() => {
     load();
@@ -91,7 +99,8 @@ export default function WorkflowsPage() {
   }
 
   async function setAll(status: "RUNNING" | "STOPPED") {
-    const targets = (rows ?? []).filter((w) => w.status !== status);
+    // Only workflows the current user owns — a shared one would 403.
+    const targets = (rows ?? []).filter((w) => w.status !== status && mine(w));
     if (targets.length === 0) return;
     setError(null);
     setBulkBusy(true);
@@ -137,14 +146,14 @@ export default function WorkflowsPage() {
                 <button
                   className="btn btn-secondary"
                   onClick={() => setAll("RUNNING")}
-                  disabled={bulkBusy || rows.every((w) => w.status === "RUNNING")}
+                  disabled={bulkBusy || !rows.some((w) => mine(w) && w.status !== "RUNNING")}
                 >
                   Start all
                 </button>
                 <button
                   className="btn btn-secondary"
                   onClick={() => setAll("STOPPED")}
-                  disabled={bulkBusy || rows.every((w) => w.status === "STOPPED")}
+                  disabled={bulkBusy || !rows.some((w) => mine(w) && w.status !== "STOPPED")}
                 >
                   Stop all
                 </button>
@@ -179,10 +188,15 @@ export default function WorkflowsPage() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((wf) => (
+              {rows.map((wf) => {
+                const readOnly = !mine(wf);
+                return (
                 <tr key={wf.id} style={{ cursor: "pointer" }} onClick={() => router.push(`/workflows/${wf.id}`)}>
                   <td>
-                    <div className="u-name">{wf.name}</div>
+                    <div className="u-name" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      {wf.name}
+                      {readOnly && <SharedBadge />}
+                    </div>
                     {wf.autoStoppedAt && <div className="u-email">auto-stopped {new Date(wf.autoStoppedAt).toLocaleString()}</div>}
                   </td>
                   <td>
@@ -197,8 +211,8 @@ export default function WorkflowsPage() {
                       <button
                         className={`row-icon-btn ${wf.status === "RUNNING" ? "row-icon-btn-stop" : "row-icon-btn-run"}`}
                         aria-label={wf.status === "RUNNING" ? "Stop" : "Start"}
-                        title={wf.status === "RUNNING" ? "Stop" : "Start"}
-                        disabled={busyId === wf.id || bulkBusy}
+                        title={readOnly ? "Shared with you — read-only" : wf.status === "RUNNING" ? "Stop" : "Start"}
+                        disabled={busyId === wf.id || bulkBusy || readOnly}
                         onClick={() => setStatus(wf.id, wf.status === "RUNNING" ? "STOPPED" : "RUNNING")}
                       >
                         {wf.status === "RUNNING" ? <StopIcon /> : <PlayIcon />}
@@ -206,8 +220,8 @@ export default function WorkflowsPage() {
                       <button
                         className="row-icon-btn row-icon-btn-delete"
                         aria-label="Delete"
-                        title="Delete"
-                        disabled={busyId === wf.id}
+                        title={readOnly ? "Shared with you — read-only" : "Delete"}
+                        disabled={busyId === wf.id || readOnly}
                         onClick={() => handleDelete(wf)}
                       >
                         <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
@@ -217,7 +231,8 @@ export default function WorkflowsPage() {
                     </div>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
