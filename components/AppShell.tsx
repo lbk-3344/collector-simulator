@@ -39,6 +39,17 @@ const NAV_ITEMS = [
     ),
   },
   {
+    href: "/item-feeds",
+    label: "Item Feeds",
+    icon: (
+      <svg viewBox="0 0 20 20" fill="none" strokeWidth="1.6" strokeLinejoin="round">
+        <path d="M10 2.6 17.4 6 10 9.4 2.6 6 10 2.6Z" />
+        <path d="M2.6 10 10 13.4 17.4 10" />
+        <path d="M2.6 14 10 17.4 17.4 14" />
+      </svg>
+    ),
+  },
+  {
     href: "/workflows",
     label: "Workflows",
     icon: (
@@ -51,17 +62,6 @@ const NAV_ITEMS = [
         <line x1="5" y1="11" x2="8.3" y2="14.4" />
         <line x1="11.7" y1="5.6" x2="15" y2="9" />
         <line x1="11.7" y1="14.4" x2="15" y2="11" />
-      </svg>
-    ),
-  },
-  {
-    href: "/item-feeds",
-    label: "Item Feeds",
-    icon: (
-      <svg viewBox="0 0 20 20" fill="none" strokeWidth="1.6" strokeLinejoin="round">
-        <path d="M10 2.6 17.4 6 10 9.4 2.6 6 10 2.6Z" />
-        <path d="M2.6 10 10 13.4 17.4 10" />
-        <path d="M2.6 14 10 17.4 17.4 14" />
       </svg>
     ),
   },

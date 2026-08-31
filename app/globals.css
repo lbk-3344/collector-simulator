@@ -161,6 +161,28 @@ svg { display: block; }
 
 .page-title { font-size: 20px; font-weight: 700; letter-spacing: -0.005em; margin: 0 0 20px; }
 
+/* Shared list-page heading with an INFO disclosure (components/PageHeader.tsx) */
+.page-heading { margin-bottom: 20px; }
+.page-heading-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.page-heading-title { display: flex; align-items: center; gap: 9px; }
+.page-info-toggle {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; border-radius: 999px; flex-shrink: 0;
+  border: 1px solid var(--border-strong); background: var(--surface); color: var(--ink-2);
+  cursor: pointer; transition: background .12s, color .12s, border-color .12s;
+}
+.page-info-toggle svg { width: 14px; height: 14px; }
+.page-info-toggle:hover { color: var(--accent-primary); border-color: var(--accent-primary); }
+.page-info-toggle[aria-expanded="true"] { background: var(--accent-primary); color: var(--accent-primary-contrast); border-color: var(--accent-primary); }
+.page-info-panel {
+  margin-top: 12px; padding: 13px 16px; max-width: 760px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  font-size: 13px; line-height: 1.6; color: var(--ink-2);
+}
+.page-info-panel p { margin: 0 0 8px; }
+.page-info-panel p:last-child { margin-bottom: 0; }
+.page-info-panel strong { color: var(--ink); font-weight: 600; }
+
 .user-btn {
   display: flex; align-items: center; gap: 9px; padding: 5px 9px 5px 5px;
   border-radius: 999px; border: 1px solid transparent; background: none; cursor: pointer;
@@ -358,6 +380,9 @@ svg { display: block; }
 .tab .badge { display: inline-flex; align-items: center; justify-content: center; min-width: 16px; height: 16px; padding: 0 4px; margin-left: 6px; border-radius: 999px; background: var(--accent-brand); color: #fff; font-size: 10px; font-weight: 700; }
 
 .table-scroll { overflow-x: auto; }
+/* A list table sitting in its own white card, lifted off the page bg (BUG #cmth55eoh) */
+.table-scroll.panel { padding: 4px 0; }
+.table-scroll.panel table.users th { padding-top: 14px; }
 table.users { width: 100%; border-collapse: collapse; min-width: 640px; }
 table.users th { text-align: left; font-family: var(--font-ui); font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); padding: 0 16px 10px; border-bottom: 1px solid var(--border); }
 table.users td { padding: 12px 16px; border-bottom: 1px solid var(--border); font-size: 13px; vertical-align: middle; }
@@ -404,6 +429,12 @@ select.role-select:disabled { opacity: .5; cursor: not-allowed; }
 .row-icon-btn-edit:hover { background: var(--accent-brand-ink); }
 .row-icon-btn-delete { background: transparent; color: var(--ink-2); border: 1px solid var(--border-strong); }
 .row-icon-btn-delete:hover { background: var(--danger-tint); color: var(--danger); border-color: var(--danger-border); }
+/* Workflow list row run/stop toggle (BUG #cmth579bx) */
+.row-icon-btn-run { background: var(--success-tint); color: var(--success); border: 1px solid var(--success-border); }
+.row-icon-btn-run:hover { background: var(--success); color: #fff; }
+.row-icon-btn-stop { background: var(--warning-tint); color: var(--warning); border: 1px solid var(--warning-border); }
+.row-icon-btn-stop:hover { background: var(--warning); color: #fff; }
+.row-icon-btn-run svg, .row-icon-btn-stop svg { width: 13px; height: 13px; }
 
 .note { margin-top: 18px; font-size: 12px; color: var(--ink-3); }
 .error-banner { margin-bottom: 14px; padding: 10px 14px; border-radius: var(--radius); background: var(--danger-tint); color: var(--danger); border: 1px solid var(--danger-border); font-size: 12.5px; }

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useDialog } from "@/components/AppDialog";
+import { PageHeader } from "@/components/PageHeader";
 import ReadPointIcon, { READ_POINT_LABELS, type ReadPointType } from "@/components/ui/ReadPointIcon";
 import { DeviceConfigModal } from "@/components/DeviceConfigModal";
 import { getDeviceState } from "@/lib/deviceState";
@@ -32,6 +33,20 @@ const STATE_LABELS: Record<string, string> = {
   AUTOMATED: "Automated",
   PROBLEM: "Problem",
 };
+
+const DEVICES_INFO = (
+  <>
+    <p>
+      A <strong>device</strong> is a simulated read point — a stand-in for a real Bartender DataCollector, carrying the
+      fields a real collector registration needs (collector ID, type, site, channels).
+    </p>
+    <p>
+      Configure a device, then <strong>publish</strong> it to register it for real on the Track &amp; Trace platform. Its
+      state (Off / Active / Automated / Problem) reflects whether it is configured, published, and attached to a running
+      workflow.
+    </p>
+  </>
+);
 
 // Tenant-wide Devices list, replacing the placeholder — see
 // CHARTE-GRAPHIQUE.md "Devices list page", BACKLOG.md BL-047. Table pattern
@@ -120,14 +135,15 @@ export default function DevicesPage() {
 
   return (
     <section className="fade-in">
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-        <h1 className="page-title" style={{ margin: 0 }}>
-          Devices
-        </h1>
-        <button className="btn btn-primary" onClick={() => setConfigModal({ device: null })}>
-          + Add device
-        </button>
-      </div>
+      <PageHeader
+        title="Devices"
+        info={DEVICES_INFO}
+        action={
+          <button className="btn btn-primary" onClick={() => setConfigModal({ device: null })}>
+            + Add device
+          </button>
+        }
+      />
 
       {error && <div className="snack snack-danger">{error}</div>}
       {warning && <div className="snack snack-warning">{warning}</div>}
@@ -137,7 +153,7 @@ export default function DevicesPage() {
       ) : devices.length === 0 ? (
         <p className="note">No devices yet.</p>
       ) : (
-        <div className="table-scroll">
+        <div className="panel table-scroll">
           <table className="users">
             <thead>
               <tr>

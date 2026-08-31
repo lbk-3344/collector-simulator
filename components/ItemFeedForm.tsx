@@ -21,8 +21,8 @@ const KINDS: { value: ItemFeedKind; label: string; info: string }[] = [
   },
   {
     value: "PRESENT",
-    label: "Present",
-    info: "Pulls from what's actually recorded as present in a specific site + zone right now (via the Inventory API). A firing can come back with fewer items than requested — or none — if the zone is empty.",
+    label: "In stock",
+    info: "Pulls from what's actually in stock in a specific site + zone right now (via the Inventory API). A firing can come back with fewer items than requested — or none — if the zone is empty.",
   },
   {
     value: "FIXED",

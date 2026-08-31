@@ -2,14 +2,32 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useDialog } from "@/components/AppDialog";
+import { PageHeader } from "@/components/PageHeader";
 import type { ItemFeedRecord } from "@/lib/itemFeed";
 import { ItemFeedModal } from "./ItemFeedModal";
 
 // Item Feed library (BL-058, CLAUDE-CONCEPT.md 16.1) — reusable batch-of-items
 // definitions, attachable to any Task's Channel input on the Part 2 canvas.
 
-const KIND_LABEL: Record<string, string> = { NEW: "New", PRESENT: "Present", FIXED: "Fixed" };
+// "In stock" is the user-facing label for the PRESENT kind (BUG #cmth5k10o).
+// The enum value stays PRESENT everywhere in code/DB/docs.
+const KIND_LABEL: Record<string, string> = { NEW: "New", PRESENT: "In stock", FIXED: "Fixed" };
 const KIND_CHIP: Record<string, string> = { NEW: "chip-success", PRESENT: "chip-info", FIXED: "chip-warning" };
+
+const ITEM_FEEDS_INFO = (
+  <>
+    <p>
+      An <strong>item feed</strong> is a reusable definition of a batch of items that a workflow task fires onto one of
+      its channels while the workflow runs.
+    </p>
+    <p>
+      <strong>New</strong> mints brand-new serialized items on the Bartender Track &amp; Trace platform (real and
+      permanent, capped at 10 per firing). <strong>In stock</strong> pulls whatever is actually recorded as present in a
+      site + zone right now. <strong>Fixed</strong> sends the same explicit EPC/URN list every time.
+    </p>
+    <p>Define a feed once here, then drop it onto any workflow canvas as one or more feed nodes.</p>
+  </>
+);
 
 function summarize(f: ItemFeedRecord): string {
   if (f.kind === "FIXED") return `${f.fixedItems?.length ?? 0} fixed item${(f.fixedItems?.length ?? 0) === 1 ? "" : "s"}`;
@@ -72,14 +90,15 @@ export default function ItemFeedsPage() {
 
   return (
     <section className="fade-in">
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-        <h1 className="page-title" style={{ margin: 0 }}>
-          Item Feeds
-        </h1>
-        <button className="btn btn-primary" onClick={() => setModal({ feed: null })}>
-          + New item feed
-        </button>
-      </div>
+      <PageHeader
+        title="Item Feeds"
+        info={ITEM_FEEDS_INFO}
+        action={
+          <button className="btn btn-primary" onClick={() => setModal({ feed: null })}>
+            + New item feed
+          </button>
+        }
+      />
 
       {error && <div className="snack snack-danger">{error}</div>}
 
@@ -87,11 +106,11 @@ export default function ItemFeedsPage() {
         <p className="note">Loading item feeds…</p>
       ) : feeds.length === 0 ? (
         <p className="note">
-          No item feeds yet. An item feed is a reusable batch of items — new (minted), present (pulled from a zone), or a
+          No item feeds yet. An item feed is a reusable batch of items — new (minted), in stock (pulled from a zone), or a
           fixed list — that a workflow task fires on its channel.
         </p>
       ) : (
-        <div className="table-scroll">
+        <div className="panel table-scroll">
           <table className="users">
             <thead>
               <tr>

@@ -11,6 +11,8 @@ export interface FeedNodeData {
 }
 
 const KIND_ICON: Record<string, string> = { NEW: "✦", PRESENT: "◧", FIXED: "≡" };
+// "In stock" is the user-facing label for PRESENT (BUG #cmth5k10o).
+const KIND_LABEL: Record<string, string> = { NEW: "NEW", PRESENT: "IN STOCK", FIXED: "FIXED" };
 
 // A Feed Node — one canvas placement of a reusable Item Feed. Distinct
 // navy/white style vs Task nodes (CHARTE-GRAPHIQUE.md "Workflow canvas — Feed
@@ -26,7 +28,7 @@ export function FeedNodeComponent({ data }: NodeProps) {
       <div className="wf-feed-node-text">
         <span className="wf-feed-node-name">{d.feedName}</span>
         <span className="wf-feed-node-kind">
-          {d.feedKind} · {d.detail}
+          {KIND_LABEL[d.feedKind] ?? d.feedKind} · {d.detail}
         </span>
       </div>
       <Handle type="source" position={Position.Right} id="out" className="wf-handle wf-handle-feed" />

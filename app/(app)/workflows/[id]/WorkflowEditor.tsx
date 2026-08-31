@@ -31,6 +31,10 @@ const edgeTypes = { flow: FlowEdge, feed: FeedEdge };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Any = any;
 
+// "In stock" is the user-facing label for the PRESENT kind (BUG #cmth5k10o);
+// the enum value stays PRESENT.
+const FEED_KIND_LABEL: Record<string, string> = { NEW: "NEW", PRESENT: "IN STOCK", FIXED: "FIXED" };
+
 function feedDetail(f: Any): string {
   if (!f) return "";
   if (f.kind === "FIXED") return "fixed list";
@@ -399,7 +403,7 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
               }}
             >
               {f.name}
-              <span className="wf-palette-item-type">{f.kind}</span>
+              <span className="wf-palette-item-type">{FEED_KIND_LABEL[f.kind] ?? f.kind}</span>
             </div>
           ))}
           <div
