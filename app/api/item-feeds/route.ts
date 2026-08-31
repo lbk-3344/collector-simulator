@@ -15,11 +15,11 @@ export async function GET() {
 
   const feeds = await prisma.itemFeed.findMany({
     orderBy: { name: "asc" },
-    include: { _count: { select: { taskChannelInputs: true } } },
+    include: { _count: { select: { feedNodes: true } } },
   });
 
   return NextResponse.json({
-    itemFeeds: feeds.map(({ _count, ...f }) => ({ ...f, usageCount: _count.taskChannelInputs })),
+    itemFeeds: feeds.map(({ _count, ...f }) => ({ ...f, usageCount: _count.feedNodes })),
   });
 }
 

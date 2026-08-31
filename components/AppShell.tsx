@@ -65,16 +65,6 @@ const NAV_ITEMS = [
       </svg>
     ),
   },
-  {
-    href: "/items",
-    label: "Serialized Items",
-    icon: (
-      <svg viewBox="0 0 20 20" fill="none" strokeWidth="1.6">
-        <polygon points="2.5,7 8.5,2.5 17.5,2.5 17.5,11.5 8.5,17.5" />
-        <circle cx="13" cy="6.2" r="1.1" fill="currentColor" stroke="none" />
-      </svg>
-    ),
-  },
 ];
 
 export function AppShell({

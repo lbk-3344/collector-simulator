@@ -38,7 +38,9 @@ export interface StockResult {
 export interface StockQuery {
   locationCode?: string;
   zoneCode?: string;
-  pid?: string; // GTIN
+  // GTIN filter(s). Omit / empty = "all GTINs present in the zone" — the
+  // PRESENT feed's ALL match mode (2026-08-30 revision).
+  pids?: string[];
   sku?: string;
   groupBy?: "sku" | "pid" | "zone";
   page?: number;
@@ -50,11 +52,12 @@ export interface StockQuery {
 // params server-side, so we also filter `results` client-side as a safety
 // net (see 7.8) — harmless if the real API does filter properly.
 export async function getStock(tenantUrl: string, apiKey: string, query: StockQuery): Promise<StockResult> {
+  const pids = (query.pids ?? []).map((p) => String(p).trim()).filter(Boolean);
   const params = new URLSearchParams();
   params.set("groupBy", query.groupBy ?? "zone");
   if (query.locationCode) params.set("locationCode", query.locationCode);
   if (query.zoneCode) params.set("zoneCode", query.zoneCode);
-  if (query.pid) params.set("pid", query.pid);
+  for (const p of pids) params.append("pid", p);
   if (query.sku) params.set("sku", query.sku);
   if (query.page) params.set("page", String(query.page));
   if (query.pageSize) params.set("pageSize", String(query.pageSize));
@@ -95,7 +98,7 @@ export async function getStock(tenantUrl: string, apiKey: string, query: StockQu
   let results = Array.isArray(b?.results) ? b!.results : [];
   if (query.locationCode) results = results.filter((r) => r.locationCode === query.locationCode);
   if (query.zoneCode) results = results.filter((r) => r.zoneCode === query.zoneCode);
-  if (query.pid) results = results.filter((r) => r.pid === query.pid);
+  if (pids.length > 0) results = results.filter((r) => r.pid != null && pids.includes(r.pid));
 
   return {
     ok: true,

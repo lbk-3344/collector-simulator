@@ -3,33 +3,29 @@
 import { useEffect, useMemo, useState } from "react";
 import type { BartenderProduct, BartenderCategory } from "@/lib/bartenderProducts";
 
-// Reusable product / category picker for the Item Feed form (BL-055). The
-// legacy Product API has no server-side search (7.7), so this fetches the
-// full list once and filters client-side by label / GTIN, optionally scoped
-// to a category.
+// Reusable multi-select product / category picker for the Item Feed form
+// (BL-055, revised 2026-08-30 — a Feed can list several GTINs). The legacy
+// Product API has no server-side search (7.7), so this fetches the full list
+// once and filters client-side by label / GTIN, optionally scoped to a
+// category.
 
 function productLabel(p: BartenderProduct): string {
   return p.productLabelShort || p.productLabelLong || p.productCode || p.gtin;
 }
 
-export interface ProductSelection {
-  gtin: string | null;
-  categoryCode: string | null;
-  label: string;
-}
-
 export function ProductPicker({
-  value,
+  gtins,
+  categoryCode,
   onChange,
 }: {
-  value: { gtin: string | null; categoryCode: string | null };
-  onChange: (sel: ProductSelection) => void;
+  gtins: string[];
+  categoryCode: string | null;
+  onChange: (next: { gtins: string[]; categoryCode: string | null }) => void;
 }) {
   const [products, setProducts] = useState<BartenderProduct[] | null>(null);
   const [categories, setCategories] = useState<BartenderCategory[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const [categoryCode, setCategoryCode] = useState(value.categoryCode ?? "");
 
   useEffect(() => {
     let cancelled = false;
@@ -49,16 +45,34 @@ export function ProductPicker({
     };
   }, []);
 
+  const selected = new Set(gtins);
+
   const filtered = useMemo(() => {
     if (!products) return [];
     const q = query.trim().toLowerCase();
     return products
       .filter((p) => !categoryCode || p.categoryLevel1Code === categoryCode || p.categoryParent === categoryCode)
       .filter((p) => !q || productLabel(p).toLowerCase().includes(q) || p.gtin.includes(q))
-      .slice(0, 200);
+      .slice(0, 250);
   }, [products, query, categoryCode]);
 
-  const selected = products?.find((p) => p.gtin === value.gtin) ?? null;
+  const labelFor = (gtin: string) => products?.find((p) => p.gtin === gtin);
+
+  function toggle(gtin: string) {
+    const next = new Set(selected);
+    if (next.has(gtin)) next.delete(gtin);
+    else next.add(gtin);
+    onChange({ gtins: [...next], categoryCode });
+  }
+
+  function addWholeCategory() {
+    if (!categoryCode || !products) return;
+    const next = new Set(selected);
+    for (const p of products) {
+      if (p.categoryLevel1Code === categoryCode || p.categoryParent === categoryCode) next.add(p.gtin);
+    }
+    onChange({ gtins: [...next], categoryCode });
+  }
 
   return (
     <div className="product-picker">
@@ -78,11 +92,8 @@ export function ProductPicker({
         <div className="field-block" style={{ flex: 1 }}>
           <label>Category</label>
           <select
-            value={categoryCode}
-            onChange={(e) => {
-              setCategoryCode(e.target.value);
-              onChange({ gtin: value.gtin, categoryCode: e.target.value || null, label: selected ? productLabel(selected) : "" });
-            }}
+            value={categoryCode ?? ""}
+            onChange={(e) => onChange({ gtins, categoryCode: e.target.value || null })}
           >
             <option value="">Any</option>
             {categories.map((c) => (
@@ -94,9 +105,19 @@ export function ProductPicker({
         </div>
       </div>
 
-      {value.gtin && selected && (
-        <div className="snack snack-success" style={{ display: "flex" }}>
-          Selected: {productLabel(selected)} · {selected.gtin}
+      {categoryCode && (
+        <button type="button" className="attr-add-link" onClick={addWholeCategory}>
+          + Add every product in this category
+        </button>
+      )}
+
+      {gtins.length > 0 && (
+        <div className="product-picker-chips">
+          {gtins.map((g) => (
+            <span key={g} className="chip chip-brand" role="button" tabIndex={0} onClick={() => toggle(g)} title="Remove">
+              {labelFor(g) ? productLabel(labelFor(g)!) : g} ✕
+            </span>
+          ))}
         </div>
       )}
 
@@ -114,12 +135,13 @@ export function ProductPicker({
             <button
               key={p.gtin}
               type="button"
-              className={`product-picker-item${p.gtin === value.gtin ? " selected" : ""}`}
-              onClick={() =>
-                onChange({ gtin: p.gtin, categoryCode: categoryCode || null, label: productLabel(p) })
-              }
+              className={`product-picker-item${selected.has(p.gtin) ? " selected" : ""}`}
+              onClick={() => toggle(p.gtin)}
             >
-              <span className="product-picker-item-label">{productLabel(p)}</span>
+              <span className="product-picker-item-label">
+                {selected.has(p.gtin) ? "✓ " : ""}
+                {productLabel(p)}
+              </span>
               <span className="product-picker-item-gtin">{p.gtin}</span>
             </button>
           ))

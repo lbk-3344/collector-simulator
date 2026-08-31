@@ -32,48 +32,59 @@ function filterMatches(link: any, gtin: string | null): boolean {
 
 interface ResolvedBatch {
   items: string[];
+  // The batch's GTIN for Flow Link filtering — the sole GTIN when the batch
+  // is single-GTIN, else null (a mixed-GTIN NEW batch can't be filtered by a
+  // single value; revisit with per-item GTINs if needed).
   gtin: string | null;
   note?: string;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function resolveBatch(feed: any, creds: Awaited<ReturnType<typeof getServiceCredentials>>): Promise<ResolvedBatch> {
+function feedGtins(feed: any): string[] {
+  return Array.isArray(feed.gtins) ? feed.gtins.map((g: unknown) => String(g).trim()).filter(Boolean) : [];
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function resolveBatch(feed: any, creds: ServiceCreds): Promise<ResolvedBatch> {
   if (feed.kind === "FIXED") {
     const items = Array.isArray(feed.fixedItems) ? (feed.fixedItems as string[]) : [];
-    return { items, gtin: feed.gtin ?? null };
+    return { items, gtin: null };
   }
 
   const quantity = randInt(feed.quantityMin ?? 1, feed.quantityMax ?? feed.quantityMin ?? 1);
+  const gtins = feedGtins(feed);
 
   if (feed.kind === "NEW") {
-    if (!creds) return { items: [], gtin: feed.gtin ?? null, note: "no Bartender connection configured for the run engine" };
-    if (!feed.gtin) return { items: [], gtin: null, note: "NEW feed has no GTIN" };
+    if (!creds) return { items: [], gtin: null, note: "no Bartender connection configured for the run engine" };
+    if (gtins.length === 0) return { items: [], gtin: null, note: "NEW feed has no GTIN" };
     try {
-      // mintSerializedItems clamps to MAX_NEW_ITEMS_PER_FIRING internally.
-      const items = await mintSerializedItems(creds.tenantUrl, creds.username, creds.password, feed.gtin, quantity);
-      return { items, gtin: feed.gtin };
+      // mintSerializedItems clamps the TOTAL to MAX_NEW_ITEMS_PER_FIRING and
+      // splits it randomly across the feed's GTINs.
+      const minted = await mintSerializedItems(creds.tenantUrl, creds.username, creds.password, gtins, quantity);
+      const distinct = new Set(minted.map((m) => m.gtin));
+      return { items: minted.map((m) => m.epc), gtin: distinct.size === 1 ? [...distinct][0] : null };
     } catch (e) {
       const msg = e instanceof SerializationError ? e.message : "serialization call failed";
-      return { items: [], gtin: feed.gtin, note: msg };
+      return { items: [], gtin: null, note: msg };
     }
   }
 
-  // PRESENT — query real stock in the zone; the Inventory API only returns
-  // aggregate counts (no individual EPCs), so pulled items are placeholder
-  // identifiers keyed to the GTIN. Flagged: real EPC enumeration needs a
-  // different endpoint.
-  if (!creds) return { items: [], gtin: feed.gtin ?? null, note: "no Bartender connection configured for the run engine" };
+  // PRESENT — query real stock in the zone. The Inventory API returns
+  // aggregate counts (no individual EPCs — 7.8), so pulled items are
+  // placeholder ids (can't be pushed to the platform; local sim only).
+  if (!creds) return { items: [], gtin: null, note: "no Bartender connection configured for the run engine" };
+  const useAll = feed.presentMatchMode === "ALL";
   const stock = await getStock(creds.tenantUrl, creds.apiKey, {
     groupBy: "zone",
     locationCode: feed.locationCode ?? undefined,
     zoneCode: feed.zoneCode ?? undefined,
-    pid: feed.gtin ?? undefined,
+    pids: useAll ? undefined : gtins,
   });
-  if (!stock.ok) return { items: [], gtin: feed.gtin ?? null, note: stock.errorMessage };
+  if (!stock.ok) return { items: [], gtin: null, note: stock.errorMessage };
   const available = stock.results.reduce((sum, r) => sum + (r.qty ?? 0), 0);
   const pull = Math.min(available, quantity);
-  const items = Array.from({ length: pull }, (_, i) => `present:${feed.gtin ?? feed.zoneCode}:${Date.now()}:${i}`);
-  return { items, gtin: feed.gtin ?? null };
+  const items = Array.from({ length: pull }, (_, i) => `present:${feed.zoneCode ?? "zone"}:${Date.now()}:${i}`);
+  return { items, gtin: !useAll && gtins.length === 1 ? gtins[0] : null };
 }
 
 interface ReadPushStats {
@@ -172,43 +183,42 @@ export async function runTick(): Promise<TickSummary> {
   };
   const creds = await getServiceCredentials();
 
-  // ── 1. Firing ────────────────────────────────────────────────────────
-  const dueInputs = await prisma.taskChannelInput.findMany({
+  // ── 1. Firing — one per due FeedLink (cadence lives on the FeedLink) ──
+  const dueLinks = await prisma.feedLink.findMany({
     where: {
-      inputType: "ITEM_FEED",
-      itemFeedId: { not: null },
       fireIntervalSeconds: { gt: 0 },
-      task: { workflow: { status: "RUNNING" } },
+      workflow: { status: "RUNNING" },
     },
     include: {
-      itemFeed: true,
-      task: { select: { id: true, deviceId: true, workflowId: true, device: { select: { collectorId: true } } } },
+      feedNode: { include: { itemFeed: true } },
+      targetTask: { select: { id: true, deviceId: true, workflowId: true, device: { select: { collectorId: true } } } },
     },
   });
 
-  for (const input of dueInputs) {
-    const intervalMs = (input.fireIntervalSeconds ?? 0) * 1000;
-    const due = !input.lastFiredAt || now.getTime() - input.lastFiredAt.getTime() >= intervalMs;
-    if (!due || !input.itemFeed) continue;
+  for (const link of dueLinks) {
+    const intervalMs = (link.fireIntervalSeconds ?? 0) * 1000;
+    const due = !link.lastFiredAt || now.getTime() - link.lastFiredAt.getTime() >= intervalMs;
+    const feed = link.feedNode?.itemFeed;
+    if (!due || !feed) continue;
 
     // Optimistic claim on lastFiredAt so a concurrent tick can't double-fire.
-    const claim = await prisma.taskChannelInput.updateMany({
-      where: { id: input.id, lastFiredAt: input.lastFiredAt },
+    const claim = await prisma.feedLink.updateMany({
+      where: { id: link.id, lastFiredAt: link.lastFiredAt },
       data: { lastFiredAt: now },
     });
     if (claim.count === 0) continue;
 
-    const batch = await resolveBatch(input.itemFeed, creds);
-    if (batch.note) summary.notes.push(`feed "${input.itemFeed.name}": ${batch.note}`);
-    if (input.itemFeed.kind === "NEW") summary.itemsMinted += batch.items.length;
+    const batch = await resolveBatch(feed, creds);
+    if (batch.note) summary.notes.push(`feed "${feed.name}": ${batch.note}`);
+    if (feed.kind === "NEW") summary.itemsMinted += batch.items.length;
     summary.firedInputs++;
 
     await emitReadAndScheduleHops({
-      workflowId: input.task.workflowId,
-      taskId: input.task.id,
-      deviceId: input.task.deviceId,
-      collectorId: input.task.device?.collectorId ?? null,
-      channelId: input.channelId,
+      workflowId: link.targetTask.workflowId,
+      taskId: link.targetTask.id,
+      deviceId: link.targetTask.deviceId,
+      collectorId: link.targetTask.device?.collectorId ?? null,
+      channelId: link.targetChannelId,
       items: batch.items,
       gtin: batch.gtin,
       at: now,

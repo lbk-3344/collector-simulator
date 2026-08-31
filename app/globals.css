@@ -569,6 +569,8 @@ select.role-select:disabled { opacity: .5; cursor: not-allowed; }
 }
 .wf-palette-item:active { cursor: grabbing; }
 .wf-palette-item-type { font-family: var(--font-mono); font-size: 9.5px; font-weight: 400; color: var(--ink-3); }
+.wf-palette-item-feed { background: var(--accent-primary); color: var(--accent-primary-contrast); border-color: var(--accent-primary); }
+.wf-palette-item-feed .wf-palette-item-type { color: rgba(255,255,255,0.7); }
 .wf-canvas { flex: 1; min-width: 0; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; background: var(--surface-2); }
 
 .wf-node {
@@ -599,6 +601,20 @@ select.role-select:disabled { opacity: .5; cursor: not-allowed; }
 }
 .wf-edge-label:hover { border-color: var(--accent-primary); color: var(--ink); }
 .wf-edge-label.is-else { background: var(--warning-tint); color: var(--warning); border-color: var(--warning-border); }
+.wf-edge-label-feed { background: var(--accent-primary); color: var(--accent-primary-contrast); border-color: var(--accent-primary); }
+
+/* Feed Node — distinct navy/white style vs Task nodes (CHARTE-GRAPHIQUE.md). */
+.wf-feed-node {
+  display: flex; align-items: center; gap: 9px; padding: 10px 12px; min-width: 170px;
+  background: var(--accent-primary); color: var(--accent-primary-contrast);
+  border: 1px solid var(--accent-primary); border-radius: 9px; box-shadow: var(--shell-shadow);
+  font-family: var(--font-ui);
+}
+.wf-feed-node-icon { font-size: 20px; line-height: 1; flex-shrink: 0; opacity: 0.9; }
+.wf-feed-node-text { display: flex; flex-direction: column; line-height: 1.25; overflow: hidden; }
+.wf-feed-node-name { font-size: 12.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wf-feed-node-kind { font-size: 10px; opacity: 0.72; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wf-handle-feed { background: #fff !important; }
 
 .wf-activity {
   width: 300px; flex-shrink: 0; background: var(--surface); border: 1px solid var(--border);

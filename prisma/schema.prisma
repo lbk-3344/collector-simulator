@@ -35,11 +35,10 @@ enum ItemFeedKind {
   FIXED // a literal, explicit EPC/URN list — fires the exact same items every time
 }
 
-// What feeds one Channel of a Task (CLAUDE-CONCEPT.md section 16.2).
-enum TaskInputType {
-  ITEM_FEED // entry point — fires its Item Feed on its own interval while the Workflow runs
-  FLOW_LINK // receives batches from upstream Task Channels
-  NONE // not fed by this Workflow
+// PRESENT Item Feed matching (BL-058, revised 2026-08-30).
+enum PresentMatchMode {
+  GTIN_LIST // match only the GTINs listed in `gtins`
+  ALL // match whatever's present in the zone, no GTIN filter — PRESENT only
 }
 
 // ─── NextAuth required tables (via @auth/prisma-adapter) ────────────────────
@@ -193,6 +192,8 @@ model Workflow {
   updatedAt DateTime @updatedAt
 
   tasks          Task[]
+  feedNodes      FeedNode[]
+  feedLinks      FeedLink[]
   flowLinks      FlowLink[]
   inFlightBatches InFlightBatch[]
   simulatedReads SimulatedRead[]
@@ -246,9 +247,12 @@ model Task {
   positionX  Int? // canvas position (Part 2's editor)
   positionY  Int?
 
-  channelInputs TaskChannelInput[]
-  outgoingLinks FlowLink[]         @relation("FlowLinkSource")
-  incomingLinks FlowLink[]         @relation("FlowLinkTarget")
+  // A Channel's inbound connections are whatever FeedLinks/FlowLinks target
+  // it — any number of each, at once (BL-059 revised: "multiple feeds as
+  // input of a device"). No exclusive-choice field.
+  incomingFeedLinks FeedLink[]
+  outgoingFlowLinks FlowLink[] @relation("FlowLinkSource")
+  incomingFlowLinks FlowLink[] @relation("FlowLinkTarget")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -256,24 +260,48 @@ model Task {
   @@index([workflowId])
 }
 
-// One input assignment per Channel of a Task's Device — "as many input as
-// channels" (16.2). Exactly one of Item Feed / incoming Flow Link / unused.
-model TaskChannelInput {
-  id        String        @id @default(cuid())
-  taskId    String
-  task      Task          @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  channelId String // matches an id in the Device's own `channels` Json array, e.g. "CH1"
-  inputType TaskInputType @default(NONE)
+// One placement of a reusable ItemFeed onto one Workflow's canvas. The same
+// ItemFeed can have many FeedNodes — same canvas or different Workflows
+// (BL-059 revised, CLAUDE-CONCEPT.md 16.2).
+model FeedNode {
+  id         String   @id @default(cuid())
+  workflowId String
+  workflow   Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  itemFeedId String
+  itemFeed   ItemFeed @relation(fields: [itemFeedId], references: [id], onDelete: Cascade)
+  positionX  Int?
+  positionY  Int?
 
-  itemFeedId          String?
-  itemFeed            ItemFeed? @relation(fields: [itemFeedId], references: [id], onDelete: SetNull)
-  fireIntervalSeconds Int? // only meaningful when inputType = ITEM_FEED
-  lastFiredAt         DateTime? // run engine (BL-061) — last time this entry Channel fired
+  feedLinks FeedLink[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([taskId, channelId])
+  @@index([workflowId])
+}
+
+// Edge: one FeedNode's output -> one Task's Channel. Firing cadence lives
+// here, not on the Channel, since a Channel can have several FeedLinks.
+model FeedLink {
+  id         String   @id @default(cuid())
+  workflowId String
+  workflow   Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  feedNodeId String
+  feedNode   FeedNode @relation(fields: [feedNodeId], references: [id], onDelete: Cascade)
+
+  targetTaskId    String
+  targetTask      Task   @relation(fields: [targetTaskId], references: [id], onDelete: Cascade)
+  targetChannelId String // matches an id in the Device's own `channels` Json array
+
+  fireIntervalSeconds Int // how often this edge fires while the Workflow is RUNNING
+  lastFiredAt         DateTime? // run engine (BL-061)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([workflowId])
+  @@index([targetTaskId])
 }
 
 // A Channel-to-Channel edge in a Workflow graph (CLAUDE-CONCEPT.md 16.3).
@@ -315,10 +343,15 @@ model ItemFeed {
   name String
   kind ItemFeedKind
 
-  // Product selector — NEW/PRESENT only, resolved to one concrete GTIN at
-  // creation time (category is a finder, not a live per-firing pick — 16.1).
-  gtin         String?
-  categoryCode String?
+  // NEW: one or more GTINs, required (minting needs a concrete GTIN).
+  // PRESENT: used only when presentMatchMode = GTIN_LIST. (BL-058 revised
+  // 2026-08-30 — a Feed is no longer limited to a single GTIN.)
+  gtins        Json? // string[]
+  categoryCode String? // authoring-time bulk-add helper — resolves into `gtins`, not a live reference
+
+  // PRESENT only, default GTIN_LIST. ALL = "match anything present in the
+  // zone" — `gtins` is ignored.
+  presentMatchMode PresentMatchMode?
 
   // NEW/PRESENT only. Equal min/max = a fixed count each firing.
   quantityMin Int?
@@ -331,7 +364,7 @@ model ItemFeed {
   // FIXED only — explicit EPC hex or URN strings, user-entered (string[]).
   fixedItems Json?
 
-  taskChannelInputs TaskChannelInput[]
+  feedNodes FeedNode[] // each is one canvas placement of this Feed
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

@@ -9,9 +9,12 @@ const WORKFLOW_INCLUDE = {
   tasks: {
     include: {
       device: { select: { id: true, name: true, type: true, collectorId: true, channels: true } },
-      channelInputs: true,
     },
   },
+  feedNodes: {
+    include: { itemFeed: { select: { id: true, name: true, kind: true, gtins: true, presentMatchMode: true } } },
+  },
+  feedLinks: true,
   flowLinks: true,
 } as const;
 

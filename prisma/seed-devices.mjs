@@ -11,15 +11,18 @@ import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
-// Order matters — FKs. Tasks/FlowLinks cascade from Workflow/Device, but be explicit.
+// Order matters — most cascade from Workflow/Device, but be explicit.
+await prisma.simulatedRead.deleteMany({});
+await prisma.inFlightBatch.deleteMany({});
+await prisma.feedLink.deleteMany({});
 await prisma.flowLink.deleteMany({});
-await prisma.taskChannelInput.deleteMany({});
+await prisma.feedNode.deleteMany({});
 await prisma.task.deleteMany({});
 await prisma.itemFeed.deleteMany({});
 await prisma.device.deleteMany({});
 await prisma.workflow.deleteMany({});
 
-const packLine = await prisma.workflow.create({ data: { name: "Pack Line A", status: "RUNNING" } });
+const packLine = await prisma.workflow.create({ data: { name: "Pack Line A", status: "STOPPED" } });
 const inboundQc = await prisma.workflow.create({ data: { name: "Inbound QC", status: "STOPPED" } });
 
 const NOW = new Date();
@@ -182,43 +185,79 @@ const devices = [
   },
 ];
 
+const tasksByName = {};
 let taskCount = 0;
 for (const { workflow, ...data } of devices) {
   const device = await prisma.device.create({ data });
   if (workflow) {
-    await prisma.task.create({ data: { workflowId: workflow.id, deviceId: device.id, name: device.name } });
+    const task = await prisma.task.create({
+      data: { workflowId: workflow.id, deviceId: device.id, name: device.name },
+    });
+    tasksByName[device.name] = task;
     taskCount++;
   }
 }
 
-// One Item Feed of each kind (BL-058) so the library page has content.
-await prisma.itemFeed.createMany({
-  data: [
-    {
-      name: "Fresh cartons (NEW)",
-      kind: "NEW",
-      gtin: "03663328010013",
-      quantityMin: 3,
-      quantityMax: 8,
-    },
-    {
-      name: "Warehouse Receiving stock (PRESENT)",
-      kind: "PRESENT",
-      gtin: "00400020000941",
-      locationCode: "TANDTWAREHOUSE",
-      zoneCode: "DEMOTT.00003.1000000000002",
-      quantityMin: 1,
-      quantityMax: 5,
-    },
-    {
-      name: "Golden sample pallet (FIXED)",
-      kind: "FIXED",
-      fixedItems: ["3034DF978000FA400000005D", "urn:epc:id:sgtin:0366332.801001.1000"],
-    },
-  ],
+// Item Feeds (BL-058 revised) — multi-GTIN, and one PRESENT/ALL example.
+const feedNew = await prisma.itemFeed.create({
+  data: {
+    name: "Fresh cartons (NEW)",
+    kind: "NEW",
+    gtins: ["03663328010013", "03663328010020"],
+    quantityMin: 2,
+    quantityMax: 5,
+  },
+});
+await prisma.itemFeed.create({
+  data: {
+    name: "Warehouse Receiving stock (PRESENT, GTIN list)",
+    kind: "PRESENT",
+    presentMatchMode: "GTIN_LIST",
+    gtins: ["00400020000941"],
+    locationCode: "TANDTWAREHOUSE",
+    zoneCode: "DEMOTT.00003.1000000000002",
+    quantityMin: 1,
+    quantityMax: 5,
+  },
+});
+await prisma.itemFeed.create({
+  data: {
+    name: "Anything in Storage Area 1 (PRESENT, ALL)",
+    kind: "PRESENT",
+    presentMatchMode: "ALL",
+    locationCode: "TANDTWAREHOUSE",
+    zoneCode: "DEMOTT.00003.1000000000012",
+    quantityMin: 1,
+    quantityMax: 10,
+  },
+});
+await prisma.itemFeed.create({
+  data: {
+    name: "Golden sample pallet (FIXED)",
+    kind: "FIXED",
+    fixedItems: ["3034DF978000FA400000005D", "urn:epc:id:sgtin:0366332.801001.1000"],
+  },
 });
 
+// A small graph on "Pack Line A": NEW feed → dock portal, which flows to the
+// sorting tabletop. (Left STOPPED — start it from the canvas.)
+const dock = tasksByName["Portal — Membase Dock 1"];
+if (dock) {
+  const fn = await prisma.feedNode.create({
+    data: { workflowId: packLine.id, itemFeedId: feedNew.id, positionX: 40, positionY: 80 },
+  });
+  await prisma.feedLink.create({
+    data: {
+      workflowId: packLine.id,
+      feedNodeId: fn.id,
+      targetTaskId: dock.id,
+      targetChannelId: "CH1",
+      fireIntervalSeconds: 60,
+    },
+  });
+}
+
 console.log(
-  `Seeded 2 workflows, ${devices.length} devices (${taskCount} as Tasks), 3 item feeds across TTMEMBASE, TANDTWAREHOUSE, GRANITEFALLSSHOP.`
+  `Seeded 2 workflows, ${devices.length} devices (${taskCount} as Tasks), 4 item feeds + 1 feed node/link, across TTMEMBASE, TANDTWAREHOUSE, GRANITEFALLSSHOP.`
 );
 await prisma.$disconnect();

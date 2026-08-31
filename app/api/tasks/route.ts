@@ -10,7 +10,7 @@ import { prisma } from "@/lib/prisma";
 
 const TASK_INCLUDE = {
   device: { select: { id: true, name: true, type: true, locationCode: true, channels: true } },
-  channelInputs: true,
+  incomingFeedLinks: true,
 } as const;
 
 export async function GET(req: NextRequest) {

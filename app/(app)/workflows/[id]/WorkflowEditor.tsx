@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ReactFlow,
@@ -19,32 +19,37 @@ import { useDialog } from "@/components/AppDialog";
 import { ItemFeedModal } from "../../item-feeds/ItemFeedModal";
 import type { ItemFeedRecord } from "@/lib/itemFeed";
 import { TaskNode, type TaskChannel } from "./TaskNode";
+import { FeedNodeComponent } from "./FeedNodeComponent";
 import { FlowEdge } from "./FlowEdge";
+import { FeedEdge } from "./FeedEdge";
 import { ActivityPanel } from "./ActivityPanel";
 import { EdgeConfigPanel } from "./EdgeConfigPanel";
-import { ChannelInputPicker } from "./ChannelInputPicker";
 
-const nodeTypes = { task: TaskNode };
-const edgeTypes = { flow: FlowEdge };
+const nodeTypes = { task: TaskNode, feed: FeedNodeComponent };
+const edgeTypes = { flow: FlowEdge, feed: FeedEdge };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-type ApiTask = any;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type ApiLink = any;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type ApiWorkflow = any;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type ApiDevice = any;
+type Any = any;
+
+function feedDetail(f: Any): string {
+  if (!f) return "";
+  if (f.kind === "FIXED") return "fixed list";
+  if (f.kind === "PRESENT" && f.presentMatchMode === "ALL") return "any GTIN in zone";
+  const n = Array.isArray(f.gtins) ? f.gtins.length : 0;
+  return n === 1 ? `GTIN ${f.gtins[0]}` : n > 1 ? `${n} GTINs` : "no GTIN";
+}
 
 function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
   const router = useRouter();
   const { confirm } = useDialog();
   const { screenToFlowPosition } = useReactFlow();
 
-  const [workflow, setWorkflow] = useState<ApiWorkflow | null>(null);
-  const [tasks, setTasks] = useState<ApiTask[]>([]);
-  const [links, setLinks] = useState<ApiLink[]>([]);
-  const [devices, setDevices] = useState<ApiDevice[]>([]);
+  const [workflow, setWorkflow] = useState<Any | null>(null);
+  const [tasks, setTasks] = useState<Any[]>([]);
+  const [feedNodes, setFeedNodes] = useState<Any[]>([]);
+  const [feedLinks, setFeedLinks] = useState<Any[]>([]);
+  const [flowLinks, setFlowLinks] = useState<Any[]>([]);
+  const [devices, setDevices] = useState<Any[]>([]);
   const [feeds, setFeeds] = useState<ItemFeedRecord[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
@@ -52,14 +57,12 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
-  const [assignTarget, setAssignTarget] = useState<{ taskId: string; channelId: string } | null>(null);
-  const [editEdgeId, setEditEdgeId] = useState<string | null>(null);
+  const [editFlowId, setEditFlowId] = useState<string | null>(null);
+  const [editFeedLinkId, setEditFeedLinkId] = useState<string | null>(null);
   const [newFeedModal, setNewFeedModal] = useState(false);
   const [showActivity, setShowActivity] = useState(false);
 
-  // Keep the latest server data reachable from stable callbacks.
-  const dataRef = useRef({ tasks, links });
-  dataRef.current = { tasks, links };
+  const feedNodeIds = useMemo(() => new Set(feedNodes.map((f) => f.id)), [feedNodes]);
 
   const load = useCallback(async () => {
     const [wfRes, devRes, feedRes] = await Promise.all([
@@ -67,18 +70,14 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
       fetch("/api/devices"),
       fetch("/api/item-feeds"),
     ]);
-    if (wfRes.status === 404) {
-      setNotFound(true);
-      return;
-    }
-    if (!wfRes.ok) {
-      setError("Couldn't load this workflow.");
-      return;
-    }
+    if (wfRes.status === 404) return setNotFound(true);
+    if (!wfRes.ok) return setError("Couldn't load this workflow.");
     const { workflow: wf } = await wfRes.json();
     setWorkflow(wf);
     setTasks(wf.tasks ?? []);
-    setLinks(wf.flowLinks ?? []);
+    setFeedNodes(wf.feedNodes ?? []);
+    setFeedLinks(wf.feedLinks ?? []);
+    setFlowLinks(wf.flowLinks ?? []);
     setDevices((await devRes.json().catch(() => ({ devices: [] }))).devices ?? []);
     setFeeds((await feedRes.json().catch(() => ({ itemFeeds: [] }))).itemFeeds ?? []);
   }, [workflowId]);
@@ -87,94 +86,102 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
     load();
   }, [load]);
 
-  // ── derive React Flow nodes/edges from server data ────────────────────
-  const rebuild = useCallback(
-    (t: ApiTask[], l: ApiLink[]) => {
-      const outputsByTask: Record<string, Record<string, boolean>> = {};
-      for (const link of l) {
-        (outputsByTask[link.sourceTaskId] ??= {})[link.sourceChannelId] = true;
-      }
-
-      const feedName = new Map(feeds.map((f) => [f.id, f.name]));
-
-      setNodes(
-        t.map((task, i) => {
-          const channels: TaskChannel[] = Array.isArray(task.device?.channels) ? task.device.channels : [];
-          const inputs: Record<string, { inputType: "ITEM_FEED" | "FLOW_LINK" | "NONE"; itemFeedName?: string; fireIntervalSeconds?: number | null }> = {};
-          for (const ci of task.channelInputs ?? []) {
-            inputs[ci.channelId] = {
-              inputType: ci.inputType,
-              itemFeedName: ci.itemFeedId ? feedName.get(ci.itemFeedId) : undefined,
-              fireIntervalSeconds: ci.fireIntervalSeconds,
-            };
-          }
-          return {
-            id: task.id,
-            type: "task",
-            position: {
-              x: task.positionX ?? 80 + (i % 4) * 260,
-              y: task.positionY ?? 80 + Math.floor(i / 4) * 200,
-            },
-            data: {
-              taskId: task.id,
-              deviceName: task.name || task.device?.name || "Device",
-              deviceType: task.device?.type ?? "APP",
-              collectorId: task.device?.collectorId ?? null,
-              channels,
-              inputs,
-              outputs: outputsByTask[task.id] ?? {},
-              onAssign: (taskId: string, channelId: string) => setAssignTarget({ taskId, channelId }),
-            },
-          } as Node;
-        })
-      );
-
-      setEdges(
-        l.map(
-          (link) =>
-            ({
-              id: link.id,
-              type: "flow",
-              source: link.sourceTaskId,
-              sourceHandle: link.sourceChannelId,
-              target: link.targetTaskId,
-              targetHandle: link.targetChannelId,
-              data: {
-                delayMinSeconds: link.delayMinSeconds,
-                delayMaxSeconds: link.delayMaxSeconds,
-                filterGtins: link.filterGtins ?? null,
-                isElse: link.isElse,
-                onEdit: (id: string) => setEditEdgeId(id),
-              },
-            }) as Edge
-        )
-      );
-    },
-    [feeds, setNodes, setEdges]
-  );
-
+  // ── derive React Flow nodes/edges ────────────────────────────────────
   useEffect(() => {
-    rebuild(tasks, links);
-  }, [tasks, links, rebuild]);
+    const fedCountByTask: Record<string, Record<string, number>> = {};
+    const bump = (taskId: string, ch: string) => {
+      ((fedCountByTask[taskId] ??= {})[ch] ??= 0), (fedCountByTask[taskId][ch] += 1);
+    };
+    for (const fl of feedLinks) bump(fl.targetTaskId, fl.targetChannelId);
+    for (const fl of flowLinks) bump(fl.targetTaskId, fl.targetChannelId);
 
-  // ── canvas interactions ──────────────────────────────────────────────
+    const taskNodes: Node[] = tasks.map((task, i) => {
+      const channels: TaskChannel[] = Array.isArray(task.device?.channels) ? task.device.channels : [];
+      return {
+        id: task.id,
+        type: "task",
+        position: { x: task.positionX ?? 320 + (i % 3) * 260, y: task.positionY ?? 60 + Math.floor(i / 3) * 210 },
+        data: {
+          taskId: task.id,
+          deviceName: task.name || task.device?.name || "Device",
+          deviceType: task.device?.type ?? "APP",
+          collectorId: task.device?.collectorId ?? null,
+          channels,
+          fedChannels: fedCountByTask[task.id] ?? {},
+        },
+      } as Node;
+    });
+
+    const feedNodeNodes: Node[] = feedNodes.map((fn, i) => ({
+      id: fn.id,
+      type: "feed",
+      position: { x: fn.positionX ?? 40, y: fn.positionY ?? 60 + i * 130 },
+      data: {
+        feedNodeId: fn.id,
+        feedName: fn.itemFeed?.name ?? "Feed",
+        feedKind: fn.itemFeed?.kind ?? "NEW",
+        detail: feedDetail(fn.itemFeed),
+      },
+    })) as Node[];
+
+    setNodes([...feedNodeNodes, ...taskNodes]);
+
+    const feedEdges: Edge[] = feedLinks.map((fl) => ({
+      id: fl.id,
+      type: "feed",
+      source: fl.feedNodeId,
+      sourceHandle: "out",
+      target: fl.targetTaskId,
+      targetHandle: fl.targetChannelId,
+      data: { fireIntervalSeconds: fl.fireIntervalSeconds, onEdit: (id: string) => setEditFeedLinkId(id) },
+    })) as Edge[];
+
+    const flowEdges: Edge[] = flowLinks.map((fl) => ({
+      id: fl.id,
+      type: "flow",
+      source: fl.sourceTaskId,
+      sourceHandle: fl.sourceChannelId,
+      target: fl.targetTaskId,
+      targetHandle: fl.targetChannelId,
+      data: {
+        delayMinSeconds: fl.delayMinSeconds,
+        delayMaxSeconds: fl.delayMaxSeconds,
+        filterGtins: fl.filterGtins ?? null,
+        isElse: fl.isElse,
+        onEdit: (id: string) => setEditFlowId(id),
+      },
+    })) as Edge[];
+
+    setEdges([...feedEdges, ...flowEdges]);
+  }, [tasks, feedNodes, feedLinks, flowLinks, setNodes, setEdges]);
+
+  // ── interactions ────────────────────────────────────────────────────
   const onDrop = useCallback(
     async (e: React.DragEvent) => {
       e.preventDefault();
       const deviceId = e.dataTransfer.getData("application/device-id");
-      if (!deviceId) return;
+      const feedId = e.dataTransfer.getData("application/feed-id");
       const pos = screenToFlowPosition({ x: e.clientX, y: e.clientY });
-      const res = await fetch("/api/tasks", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ workflowId, deviceId, positionX: Math.round(pos.x), positionY: Math.round(pos.y) }),
-      });
-      if (!res.ok) {
-        const d = await res.json().catch(() => null);
-        setError(d?.error ?? "Couldn't add that device.");
-        return;
+      const p = { positionX: Math.round(pos.x), positionY: Math.round(pos.y) };
+      let res: Response | null = null;
+      if (deviceId) {
+        res = await fetch("/api/tasks", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ workflowId, deviceId, ...p }),
+        });
+      } else if (feedId) {
+        res = await fetch("/api/feed-nodes", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ workflowId, itemFeedId: feedId, ...p }),
+        });
       }
-      await load();
+      if (res && !res.ok) {
+        const d = await res.json().catch(() => null);
+        setError(d?.error ?? "Couldn't add that.");
+      }
+      if (res) await load();
     },
     [screenToFlowPosition, workflowId, load]
   );
@@ -182,17 +189,30 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
   const onConnect = useCallback(
     async (c: Connection) => {
       if (!c.source || !c.target || !c.sourceHandle || !c.targetHandle) return;
-      const res = await fetch("/api/flow-links", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          workflowId,
-          sourceTaskId: c.source,
-          sourceChannelId: c.sourceHandle,
-          targetTaskId: c.target,
-          targetChannelId: c.targetHandle,
-        }),
-      });
+      const isFeed = feedNodeIds.has(c.source);
+      const res = isFeed
+        ? await fetch("/api/feed-links", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              workflowId,
+              feedNodeId: c.source,
+              targetTaskId: c.target,
+              targetChannelId: c.targetHandle,
+              fireIntervalSeconds: 60,
+            }),
+          })
+        : await fetch("/api/flow-links", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              workflowId,
+              sourceTaskId: c.source,
+              sourceChannelId: c.sourceHandle,
+              targetTaskId: c.target,
+              targetChannelId: c.targetHandle,
+            }),
+          });
       if (!res.ok) {
         const d = await res.json().catch(() => null);
         setError(d?.error ?? "Couldn't create that link.");
@@ -200,34 +220,43 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
       }
       await load();
     },
-    [workflowId, load]
+    [workflowId, load, feedNodeIds]
   );
 
-  const onNodeDragStop = useCallback((_: unknown, node: Node) => {
-    fetch(`/api/tasks/${node.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ positionX: Math.round(node.position.x), positionY: Math.round(node.position.y) }),
-    }).catch(() => {});
-  }, []);
+  const onNodeDragStop = useCallback(
+    (_: unknown, node: Node) => {
+      const url = feedNodeIds.has(node.id) ? `/api/feed-nodes/${node.id}` : `/api/tasks/${node.id}`;
+      fetch(url, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ positionX: Math.round(node.position.x), positionY: Math.round(node.position.y) }),
+      }).catch(() => {});
+    },
+    [feedNodeIds]
+  );
 
   const onNodesDelete = useCallback(
     async (deleted: Node[]) => {
-      for (const n of deleted) await fetch(`/api/tasks/${n.id}`, { method: "DELETE" }).catch(() => {});
+      for (const n of deleted) {
+        const url = feedNodeIds.has(n.id) ? `/api/feed-nodes/${n.id}` : `/api/tasks/${n.id}`;
+        await fetch(url, { method: "DELETE" }).catch(() => {});
+      }
       await load();
     },
-    [load]
+    [load, feedNodeIds]
   );
 
   const onEdgesDelete = useCallback(
     async (deleted: Edge[]) => {
-      for (const ed of deleted) await fetch(`/api/flow-links/${ed.id}`, { method: "DELETE" }).catch(() => {});
+      for (const ed of deleted) {
+        const url = ed.type === "feed" ? `/api/feed-links/${ed.id}` : `/api/flow-links/${ed.id}`;
+        await fetch(url, { method: "DELETE" }).catch(() => {});
+      }
       await load();
     },
     [load]
   );
 
-  // ── toolbar actions ──────────────────────────────────────────────────
   const patchWorkflow = useCallback(
     async (body: Record<string, unknown>) => {
       const res = await fetch(`/api/workflows/${workflowId}`, {
@@ -247,19 +276,14 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
 
   async function toggleRun() {
     if (!workflow) return;
-    if (workflow.status === "STOPPED") {
-      const runnable = tasks.some((t) =>
-        (t.channelInputs ?? []).some((ci: { inputType: string }) => ci.inputType === "ITEM_FEED")
-      );
-      if (!runnable) {
-        const ok = await confirm({
-          variant: "info",
-          title: "Nothing will fire",
-          message: "This workflow has no channel fed by an item feed, so running it won't generate anything yet. Start it anyway?",
-          confirmLabel: "Start anyway",
-        });
-        if (!ok) return;
-      }
+    if (workflow.status === "STOPPED" && feedLinks.length === 0) {
+      const ok = await confirm({
+        variant: "info",
+        title: "Nothing will fire",
+        message: "This workflow has no feed link, so running it won't generate anything yet. Start it anyway?",
+        confirmLabel: "Start anyway",
+      });
+      if (!ok) return;
     }
     await patchWorkflow({ status: workflow.status === "RUNNING" ? "STOPPED" : "RUNNING" });
   }
@@ -288,7 +312,7 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
         <input
           className="wf-name-input"
           value={workflow?.name ?? ""}
-          onChange={(e) => setWorkflow((w: ApiWorkflow) => ({ ...w, name: e.target.value }))}
+          onChange={(e) => setWorkflow((w: Any) => ({ ...w, name: e.target.value }))}
           onBlur={(e) => e.target.value.trim() && patchWorkflow({ name: e.target.value.trim() })}
           placeholder="Workflow name"
         />
@@ -299,7 +323,7 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
             type="number"
             min={1}
             value={workflow?.maxRunDurationMinutes ?? 240}
-            onChange={(e) => setWorkflow((w: ApiWorkflow) => ({ ...w, maxRunDurationMinutes: Number(e.target.value) }))}
+            onChange={(e) => setWorkflow((w: Any) => ({ ...w, maxRunDurationMinutes: Number(e.target.value) }))}
             onBlur={(e) => Number(e.target.value) > 0 && patchWorkflow({ maxRunDurationMinutes: Number(e.target.value) })}
           />
           min
@@ -326,10 +350,10 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
 
       <div className="wf-canvas-wrap">
         <aside className="wf-palette">
-          <div className="wf-palette-title">Devices</div>
+          <div className="wf-palette-title">Your devices</div>
           {paletteDevices.length === 0 ? (
             <p className="note" style={{ fontSize: 11, marginTop: 6 }}>
-              No published, unattached devices. Configure &amp; publish devices first.
+              No published, unattached devices.
             </p>
           ) : (
             paletteDevices.map((d) => (
@@ -347,6 +371,27 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
               </div>
             ))
           )}
+
+          <div className="wf-palette-title" style={{ marginTop: 16 }}>
+            Item feeds
+          </div>
+          {feeds.map((f) => (
+            <div
+              key={f.id}
+              className="wf-palette-item wf-palette-item-feed"
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer.setData("application/feed-id", f.id);
+                e.dataTransfer.effectAllowed = "move";
+              }}
+            >
+              {f.name}
+              <span className="wf-palette-item-type">{f.kind}</span>
+            </div>
+          ))}
+          <button type="button" className="attr-add-link" style={{ marginTop: 6 }} onClick={() => setNewFeedModal(true)}>
+            + New feed
+          </button>
         </aside>
 
         <div className="wf-canvas" onDrop={onDrop} onDragOver={(e) => e.preventDefault()}>
@@ -372,67 +417,50 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
         {showActivity && <ActivityPanel workflowId={workflowId} onClose={() => setShowActivity(false)} />}
       </div>
 
-      {assignTarget && (
-        <ChannelInputPicker
-          feeds={feeds}
-          current={
-            tasks
-              .find((t) => t.id === assignTarget.taskId)
-              ?.channelInputs?.find((ci: { channelId: string }) => ci.channelId === assignTarget.channelId) ?? null
-          }
-          onNewFeed={() => setNewFeedModal(true)}
-          onClose={() => setAssignTarget(null)}
-          onSave={async (payload) => {
-            const task = tasks.find((t) => t.id === assignTarget.taskId);
-            const channels: TaskChannel[] = task?.device?.channels ?? [];
-            // full replace of this task's channelInputs
-            const existing = new Map(
-              (task?.channelInputs ?? []).map((ci: { channelId: string }) => [ci.channelId, ci])
-            );
-            existing.set(assignTarget.channelId, {
-              channelId: assignTarget.channelId,
-              inputType: payload.inputType,
-              itemFeedId: payload.itemFeedId ?? null,
-              fireIntervalSeconds: payload.fireIntervalSeconds ?? null,
-            });
-            const channelInputs = channels
-              .map((ch) => existing.get(ch.id))
-              .filter(Boolean)
-              .filter((ci) => (ci as { inputType: string }).inputType !== "NONE" || existing.has((ci as { channelId: string }).channelId));
-            await fetch(`/api/tasks/${assignTarget.taskId}`, {
+      {editFlowId && (
+        <EdgeConfigPanel
+          link={flowLinks.find((l) => l.id === editFlowId)}
+          siblingElseCount={(() => {
+            const link = flowLinks.find((l) => l.id === editFlowId);
+            if (!link) return 0;
+            return flowLinks.filter(
+              (l) => l.id !== link.id && l.sourceTaskId === link.sourceTaskId && l.sourceChannelId === link.sourceChannelId && l.isElse
+            ).length;
+          })()}
+          onClose={() => setEditFlowId(null)}
+          onSave={async (body) => {
+            await fetch(`/api/flow-links/${editFlowId}`, {
               method: "PATCH",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ channelInputs }),
+              body: JSON.stringify(body),
             });
-            setAssignTarget(null);
+            setEditFlowId(null);
+            await load();
+          }}
+          onDelete={async () => {
+            await fetch(`/api/flow-links/${editFlowId}`, { method: "DELETE" });
+            setEditFlowId(null);
             await load();
           }}
         />
       )}
 
-      {editEdgeId && (
-        <EdgeConfigPanel
-          link={links.find((l) => l.id === editEdgeId)}
-          siblingElseCount={(() => {
-            const link = links.find((l) => l.id === editEdgeId);
-            if (!link) return 0;
-            return links.filter(
-              (l) => l.id !== link.id && l.sourceTaskId === link.sourceTaskId && l.sourceChannelId === link.sourceChannelId && l.isElse
-            ).length;
-          })()}
-          onClose={() => setEditEdgeId(null)}
-          onSave={async (body) => {
-            await fetch(`/api/flow-links/${editEdgeId}`, {
+      {editFeedLinkId && (
+        <FeedLinkPanel
+          link={feedLinks.find((l) => l.id === editFeedLinkId)}
+          onClose={() => setEditFeedLinkId(null)}
+          onSave={async (fireIntervalSeconds) => {
+            await fetch(`/api/feed-links/${editFeedLinkId}`, {
               method: "PATCH",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(body),
+              body: JSON.stringify({ fireIntervalSeconds }),
             });
-            setEditEdgeId(null);
+            setEditFeedLinkId(null);
             await load();
           }}
           onDelete={async () => {
-            await fetch(`/api/flow-links/${editEdgeId}`, { method: "DELETE" });
-            setEditEdgeId(null);
+            await fetch(`/api/feed-links/${editFeedLinkId}`, { method: "DELETE" });
+            setEditFeedLinkId(null);
             await load();
           }}
         />
@@ -448,6 +476,63 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
         }}
       />
     </section>
+  );
+}
+
+function FeedLinkPanel({
+  link,
+  onClose,
+  onSave,
+  onDelete,
+}: {
+  link: Any;
+  onClose: () => void;
+  onSave: (interval: number) => void;
+  onDelete: () => void;
+}) {
+  const [interval, setInterval] = useState<number>(link?.fireIntervalSeconds ?? 60);
+  if (!link) return null;
+  return (
+    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal fade-in" role="dialog" aria-modal="true" style={{ width: 380 }}>
+        <div className="modal-head">
+          <h2>Feed link</h2>
+          <button className="modal-close" aria-label="Close" onClick={onClose}>
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7">
+              <line x1="5" y1="5" x2="15" y2="15" />
+              <line x1="15" y1="5" x2="5" y2="15" />
+            </svg>
+          </button>
+        </div>
+        <div className="modal-body">
+          <div className="field-block">
+            <label htmlFor="flInterval">Fire every (seconds)</label>
+            <input
+              id="flInterval"
+              type="number"
+              min={5}
+              value={interval}
+              onChange={(e) => setInterval(Math.max(5, Number(e.target.value) || 5))}
+            />
+            <span className="note" style={{ marginTop: 4 }}>
+              While the workflow is running, this feed fires a fresh batch into the channel this often.
+            </span>
+          </div>
+        </div>
+        <div className="modal-foot">
+          <button className="btn btn-ghost-danger" onClick={onDelete}>
+            Delete link
+          </button>
+          <div style={{ flex: 1 }} />
+          <button className="btn btn-secondary" onClick={onClose}>
+            Cancel
+          </button>
+          <button className="btn btn-primary" onClick={() => onSave(interval)}>
+            Save
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 

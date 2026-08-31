@@ -13,7 +13,15 @@ const KIND_CHIP: Record<string, string> = { NEW: "chip-success", PRESENT: "chip-
 
 function summarize(f: ItemFeedRecord): string {
   if (f.kind === "FIXED") return `${f.fixedItems?.length ?? 0} fixed item${(f.fixedItems?.length ?? 0) === 1 ? "" : "s"}`;
-  const product = f.gtin ? `GTIN ${f.gtin}` : f.categoryCode ? `category ${f.categoryCode}` : "no product";
+  const n = f.gtins?.length ?? 0;
+  const product =
+    f.kind === "PRESENT" && f.presentMatchMode === "ALL"
+      ? "any GTIN in zone"
+      : n === 1
+        ? `GTIN ${f.gtins![0]}`
+        : n > 1
+          ? `${n} GTINs`
+          : "no product";
   const qty = f.quantityMin === f.quantityMax ? `${f.quantityMin}` : `${f.quantityMin}–${f.quantityMax}`;
   const where = f.kind === "PRESENT" ? ` · ${f.locationCode}/${f.zoneCode}` : "";
   return `${product} · qty ${qty}${where}`;
@@ -46,7 +54,7 @@ export default function ItemFeedsPage() {
       title: "Delete item feed",
       message:
         (feed.usageCount ?? 0) > 0
-          ? `"${feed.name}" is used by ${feed.usageCount} task channel${feed.usageCount === 1 ? "" : "s"} — deleting it will fail until it's detached there.`
+          ? `"${feed.name}" is placed on ${feed.usageCount} workflow canvas${feed.usageCount === 1 ? "" : "es"}. Deleting it removes those placements too. Continue?`
           : `Delete "${feed.name}"? This can't be undone.`,
       confirmLabel: "Delete",
       danger: true,

@@ -12,11 +12,11 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
 
   const itemFeed = await prisma.itemFeed.findUnique({
     where: { id: params.id },
-    include: { _count: { select: { taskChannelInputs: true } } },
+    include: { _count: { select: { feedNodes: true } } },
   });
   if (!itemFeed) return NextResponse.json({ error: "Item feed not found" }, { status: 404 });
   const { _count, ...rest } = itemFeed;
-  return NextResponse.json({ itemFeed: { ...rest, usageCount: _count.taskChannelInputs } });
+  return NextResponse.json({ itemFeed: { ...rest, usageCount: _count.feedNodes } });
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
@@ -39,19 +39,13 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  // Block deletion while any Task Channel still points at this feed (BL-058).
-  const usageCount = await prisma.taskChannelInput.count({ where: { itemFeedId: params.id } });
-  if (usageCount > 0) {
-    return NextResponse.json(
-      { error: `This item feed is used by ${usageCount} task channel${usageCount === 1 ? "" : "s"}. Detach it there first.` },
-      { status: 409 }
-    );
-  }
-
+  // Deleting the definition cascade-removes its FeedNodes/FeedLinks too
+  // (schema onDelete: Cascade) — the UI warns with the usage count first.
+  const usageCount = await prisma.feedNode.count({ where: { itemFeedId: params.id } });
   try {
     await prisma.itemFeed.delete({ where: { id: params.id } });
   } catch {
     return NextResponse.json({ error: "Item feed not found" }, { status: 404 });
   }
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, removedFeedNodes: usageCount });
 }

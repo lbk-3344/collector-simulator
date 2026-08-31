@@ -10,9 +10,10 @@
 
 export const MAX_NEW_ITEMS_PER_FIRING = 10; // Luc's explicit safety cap, 2026-08-30
 // — "we will level up the limit later when it is fully baked in." Do NOT raise
-// this without an explicit instruction from Luc.
+// this without an explicit instruction from Luc. This is a TOTAL across
+// however many GTINs one firing touches, NOT a per-GTIN allowance.
 
-/** The quantity actually sent to the API for a requested amount — exported so the cap is unit-testable. */
+/** The total quantity actually minted for a requested amount — exported so the cap is unit-testable. */
 export function cappedQuantity(requested: number): number {
   return Math.max(1, Math.min(Math.floor(Number(requested) || 0), MAX_NEW_ITEMS_PER_FIRING));
 }
@@ -20,31 +21,17 @@ export function cappedQuantity(requested: number): number {
 export class SerializationError extends Error {}
 
 // GET {tenantUrl}/serialization-api/rest/serialization/hexas/sgtin96/gtin/{gtin}?quantity={n}
-// HTTP Basic auth (same stored Track & Trace username/password as 7.4/7.7).
-// Response: a plain JSON array of SGTIN-96 hex EPC strings, e.g.
-// ["3034DF978000FA400000005D"]. Throws SerializationError on any non-2xx
-// (e.g. a GTIN whose GS1 check digit the API rejects — see 7.6) or network
-// failure, so a caller (the Part 2 run engine) can't mistake a failure for
-// "zero items".
-export async function mintSerializedItems(
+// HTTP Basic auth. Response: a plain JSON array of SGTIN-96 hex EPC strings.
+async function mintForOneGtin(
   tenantUrl: string,
   username: string,
   password: string,
   gtin: string,
   quantity: number
 ): Promise<string[]> {
-  const requested = Math.floor(Number(quantity) || 0);
-  const capped = cappedQuantity(requested);
-  if (requested > MAX_NEW_ITEMS_PER_FIRING) {
-    // Surface, don't swallow — visible in logs that the cap did something.
-    console.warn(
-      `[serialization] requested quantity ${requested} clamped to ${capped} (MAX_NEW_ITEMS_PER_FIRING=${MAX_NEW_ITEMS_PER_FIRING})`
-    );
-  }
-
   const url = `${tenantUrl.replace(/\/+$/, "")}/serialization-api/rest/serialization/hexas/sgtin96/gtin/${encodeURIComponent(
     gtin
-  )}?quantity=${capped}`;
+  )}?quantity=${quantity}`;
   const auth = `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`;
 
   let res: Response;
@@ -66,12 +53,52 @@ export async function mintSerializedItems(
     throw new SerializationError(message);
   }
 
-  let epcs: string[] = [];
   try {
     const body = JSON.parse(raw);
-    if (Array.isArray(body)) epcs = body.filter((x): x is string => typeof x === "string");
+    if (Array.isArray(body)) return body.filter((x): x is string => typeof x === "string");
   } catch {
     throw new SerializationError("Unexpected (non-array) response from the Serialization API.");
   }
-  return epcs;
+  return [];
+}
+
+// Called by the run engine for a NEW-kind Item Feed's firing (BL-056 revised
+// 2026-08-30 — a Feed can list several GTINs). `quantity` is clamped to
+// MAX_NEW_ITEMS_PER_FIRING *in total*, then each unit is assigned a uniformly
+// random GTIN from `gtins`, grouped, and minted per distinct GTIN — the
+// per-GTIN allocation policy from CLAUDE-CONCEPT.md 16.1 (flagged as not yet
+// Luc-confirmed). Returns `{ gtin, epc }[]` so the caller knows which item is
+// which GTIN. Throws SerializationError on any failure so the caller can't
+// mistake it for "zero items".
+export async function mintSerializedItems(
+  tenantUrl: string,
+  username: string,
+  password: string,
+  gtins: string[],
+  quantity: number
+): Promise<{ gtin: string; epc: string }[]> {
+  const list = gtins.map((g) => String(g).trim()).filter(Boolean);
+  if (list.length === 0) throw new SerializationError("NEW feed has no GTIN to mint.");
+
+  const requested = Math.floor(Number(quantity) || 0);
+  const total = cappedQuantity(requested);
+  if (requested > MAX_NEW_ITEMS_PER_FIRING) {
+    console.warn(
+      `[serialization] requested total ${requested} clamped to ${total} (MAX_NEW_ITEMS_PER_FIRING=${MAX_NEW_ITEMS_PER_FIRING}, across ${list.length} GTIN(s))`
+    );
+  }
+
+  // Assign each unit a random GTIN, then group.
+  const perGtin = new Map<string, number>();
+  for (let i = 0; i < total; i++) {
+    const g = list[Math.floor(Math.random() * list.length)];
+    perGtin.set(g, (perGtin.get(g) ?? 0) + 1);
+  }
+
+  const out: { gtin: string; epc: string }[] = [];
+  for (const [gtin, count] of perGtin) {
+    const epcs = await mintForOneGtin(tenantUrl, username, password, gtin, count);
+    for (const epc of epcs) out.push({ gtin, epc });
+  }
+  return out;
 }

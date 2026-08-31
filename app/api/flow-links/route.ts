@@ -61,18 +61,9 @@ export async function POST(req: NextRequest) {
   if ("error" in result) return NextResponse.json({ error: result.error }, { status: 400 });
 
   try {
+    // A Channel can have any number of FeedLinks/FlowLinks targeting it —
+    // no exclusive-choice bookkeeping (BL-059 revised).
     const flowLink = await prisma.flowLink.create({ data: result.data });
-    // The target Channel is now fed by a Flow Link — a Channel is either fed
-    // by one Item Feed or by any number of Flow Links, never both (16.2).
-    await prisma.taskChannelInput.upsert({
-      where: { taskId_channelId: { taskId: result.data.targetTaskId, channelId: result.data.targetChannelId } },
-      create: {
-        taskId: result.data.targetTaskId,
-        channelId: result.data.targetChannelId,
-        inputType: "FLOW_LINK",
-      },
-      update: { inputType: "FLOW_LINK", itemFeedId: null, fireIntervalSeconds: null },
-    });
     return NextResponse.json({ flowLink });
   } catch {
     return NextResponse.json({ error: "Source or target task not found" }, { status: 404 });

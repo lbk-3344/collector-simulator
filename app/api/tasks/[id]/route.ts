@@ -7,9 +7,9 @@ import { prisma } from "@/lib/prisma";
 
 const TASK_INCLUDE = {
   device: { select: { id: true, name: true, type: true, locationCode: true, channels: true } },
-  channelInputs: true,
-  outgoingLinks: true,
-  incomingLinks: true,
+  incomingFeedLinks: true,
+  outgoingFlowLinks: true,
+  incomingFlowLinks: true,
 } as const;
 
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
@@ -21,8 +21,8 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   return NextResponse.json({ task });
 }
 
-// PATCH: name / canvas position, and/or a full replace of channelInputs
-// (`channelInputs: [{ channelId, inputType, itemFeedId?, fireIntervalSeconds? }]`).
+// PATCH: name / canvas position only. A Channel's inputs are FeedLinks /
+// FlowLinks now (BL-059 revised) — managed through their own routes.
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -33,39 +33,16 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (typeof body.positionX === "number") data.positionX = Math.round(body.positionX);
   if (typeof body.positionY === "number") data.positionY = Math.round(body.positionY);
 
-  const existing = await prisma.task.findUnique({ where: { id: params.id }, select: { id: true } });
-  if (!existing) return NextResponse.json({ error: "Task not found" }, { status: 404 });
+  if (Object.keys(data).length === 0) {
+    return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
+  }
 
-  const replaceInputs = Array.isArray(body.channelInputs);
-  const inputRows = replaceInputs
-    ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (body.channelInputs as any[])
-        .filter((ci) => ci && typeof ci.channelId === "string" && ci.channelId)
-        .map((ci) => ({
-          taskId: params.id,
-          channelId: ci.channelId,
-          inputType:
-            ci.inputType === "ITEM_FEED" || ci.inputType === "FLOW_LINK" ? ci.inputType : "NONE",
-          itemFeedId: typeof ci.itemFeedId === "string" && ci.itemFeedId ? ci.itemFeedId : null,
-          fireIntervalSeconds:
-            typeof ci.fireIntervalSeconds === "number" && ci.fireIntervalSeconds > 0
-              ? Math.round(ci.fireIntervalSeconds)
-              : null,
-        }))
-    : [];
-
-  await prisma.$transaction([
-    prisma.task.update({ where: { id: params.id }, data }),
-    ...(replaceInputs
-      ? [
-          prisma.taskChannelInput.deleteMany({ where: { taskId: params.id } }),
-          ...(inputRows.length ? [prisma.taskChannelInput.createMany({ data: inputRows })] : []),
-        ]
-      : []),
-  ]);
-
-  const task = await prisma.task.findUnique({ where: { id: params.id }, include: TASK_INCLUDE });
-  return NextResponse.json({ task });
+  try {
+    const task = await prisma.task.update({ where: { id: params.id }, data, include: TASK_INCLUDE });
+    return NextResponse.json({ task });
+  } catch {
+    return NextResponse.json({ error: "Task not found" }, { status: 404 });
+  }
 }
 
 export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
