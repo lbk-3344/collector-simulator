@@ -96,20 +96,6 @@ Changed from Supplier Connect:
   - `.snack-warning` (`#B4740E`) → **Seagull navy** `#0D1E2C` — white text on this amber fails AA (~3.9:1).
 - Replaces the old pattern everywhere it currently appears: `BartenderConnectionTab.tsx` (Saved / Test connection result), `.error-banner` on `UsersTable.tsx` and `(auth)/login/page.tsx`, and the equivalent message in `BugReportModal.tsx` — one consistent component instead of four ad-hoc instances. The existing tint-based `.chip-*` classes (status badges on list rows, e.g. device online/offline) are untouched — this only replaces the plain-text/banner feedback pattern, not the tag/badge system.
 
-### In-app dialogs — added 2026-08-29
-
-**Decided 2026-08-29.** Luc's explicit ask: **no browser-native dialogs** (`confirm()`, `alert()`, `window.prompt`) anywhere. Every confirmation, warning, error, or success acknowledgement uses an in-app modal instead. This **reverses the "still the existing native `confirm()` pattern" note** under "Device config screen" → *Delete confirmation, published Device only* (2026-08-29, BL-053/054) — that flow now uses this dialog too.
-
-- **Component**: `components/AppDialog.tsx` — an `<AppDialogProvider>` mounted once in `AppShell` (beside `BugReportModal`), exposing a `useDialog()` hook with `confirm(opts): Promise<boolean>` and `alert(opts): Promise<void>`. Reuses the existing `.modal-overlay` / `.modal` / `.modal-head` / `.modal-foot` structure; a `.dialog-overlay` bumps `z-index` to 200 so a confirm raised from inside another modal stays on top.
-- **Layout**: title bar (short reason) + close button; body is a big round variant icon on the **left** with the message on the **right**; action buttons in the footer (`.btn-secondary` cancel + `.btn-primary`/`.btn-danger` confirm — `danger: true` picks the red button). Escape and overlay-click both resolve as cancel/dismiss.
-- **Variants** (`.dialog-icon-{success,info,warning,error}`), icon + tint from the theme-aware semantic tokens so both themes track automatically:
-  - `success` → `--success` (green) on `--success-tint`
-  - `info` → `--accent-primary` (**navy** in light, light-blue in dark) on `--accent-primary-tint`
-  - `warning` → `--warning` (amber) on `--warning-tint`
-  - `error` → `--danger` (red) on `--danger-tint`
-- **Migrated on introduction**: the two native `confirm()` calls that existed — delete-user (`UsersTable.tsx`) and delete-device (`devices/page.tsx`), both as `variant: "warning"`, `danger: true`, confirm label "Delete". All future confirmations/alerts go through `useDialog()`.
-- Distinct from `.snack` (2026-08-27): snacks are inline, non-blocking result feedback; this dialog is blocking and modal (needs an explicit choice or acknowledgement).
-
 ### Site selector card — added 2026-08-27
 
 First of the four Overview top cards, replacing what was previously a `.stat-card`. New class `.site-card`: `.panel`-style container (surface + border + `--radius`), flex row layout — a large world/globe icon on the left (~40-44px, line-art style consistent with the existing `ReadPointIcon` set), and on the right a stacked text block: the selected site's **name** large and bold (roughly the size of `.stat-card .n`, ~20-22px), with city/state/country beneath it in small muted text (~11-12px, `var(--ink-2)`, comma-separated, omitting any missing field rather than showing empty commas). The name is clickable — hover/focus shows it's interactive (underline or a small chevron) — and opens a dropdown (reuse the existing avatar-menu/`.user-menu-item` dropdown pattern: a small elevated panel, one row per site, current selection indicated) listing every other Location; picking one closes the dropdown and updates the card.
@@ -180,7 +166,7 @@ A "+ Add channel" link below the rows, same styling as "+ Add attribute" (`.attr
 
 - **Sync error banner** — reuses the existing `.error-banner` component verbatim (no new class), placed at the top of the modal body, above the fields. Shown whenever `lastSyncError` is set on the Device being edited: the plain-language message from the failed `POST /collectors/register` call (e.g. "Bartender rejected this device: locationId TTMEMBASE is not bound to this API key."), so a sync failure is visible the moment the modal opens, not just at the instant it happened. Cleared the next time a sync succeeds; a Device that's never been published simply never shows it.
 - **Per-Channel reconciliation flag** — when the most recent successful publish/resync reported a `CONFLICT` or `BROKEN` mapping issue for a specific Channel (`platformReconciliation`), that Channel's row gets a small inline warning triangle (14px, `--warning` for `CONFLICT`, `--danger` for `BROKEN`) right after its id, with the platform's own short status word as a `title` tooltip — informational only, doesn't block editing or re-saving that row.
-- **Delete confirmation, published Device only** — no new modal; a second sequential `useDialog().confirm()` (see "In-app dialogs", 2026-08-29 — superseded the native `confirm()` this note originally specified) after the existing "Delete permanently?" one: *"Also deregister it from the real Bartender platform? This removes its Zone mappings there and can't be undone."* Answering either way still deletes the local row.
+- **Delete confirmation, published Device only** — no new modal; still the existing native `confirm()` pattern (`app/(app)/devices/page.tsx`), just a second sequential call after the existing "Delete permanently?" one: *"Also deregister it from the real Bartender platform? This removes its Zone mappings there and can't be undone."* Answering either way still deletes the local row.
 
 ### Devices list page — added 2026-08-28
 
@@ -225,5 +211,7 @@ Usage: import the default export from `components/ui/ReadPointIcon.tsx` and pass
 
 - Regenerate `style-guide.html` from the revised tokens above, then re-run BL-017 (port tokens into `globals.css`/`tailwind.config.ts`) against the revised values — `npm install @fontsource/inter @fontsource/jetbrains-mono` as part of that same pass (BL-030).
 - Rebuild the app shell to the layout above (BL-031).
-- Once BL-003 (core entity model) is settled, mock up the real screens (Devices, Workflows, Serialized Items, Bug Reports) using these tokens.
+- BL-003 (core entity model) is settled 2026-08-30 — see `CLAUDE-CONCEPT.md` section 16. Once the canvas is built, mock up the real screens (Devices, Workflows, Bug Reports) using these tokens. **"Serialized Items" is no longer a planned screen** — removed from the sidebar nav 2026-08-30, see below.
+
+**Workflow canvas — Feed Node visual style, added 2026-08-30**: an Item Feed placed on the canvas is visually distinct from a Task node — big icon (kind-appropriate: e.g. the same icon language as `ReadPointIcon` but Feed-specific, not a read-point type), **solid navy (`--accent-primary`) background, white text/icon** — the inverse of a Task node's white-card/navy-header treatment. A kind badge (`NEW`/`PRESENT`/`FIXED`) sits on the Feed Node the same way Device-type badges work elsewhere. See `CLAUDE-CONCEPT.md` section 16.3/16.4 for the full interaction spec (Feed Nodes are placeable multiple times, connected to Task Channel inputs via a Feed Link edge).
 - Confirm with Luc whether dark mode is worth keeping as a real feature or was just exploratory here.

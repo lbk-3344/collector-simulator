@@ -42,7 +42,7 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 button { font-family: inherit; }
-.wrap { max-width: 1240px; margin: 0 auto; padding: 40px 28px 90px; }
+.wrap { max-width: 1500px; margin: 0 auto; padding: 40px 28px 90px; }
 
 .eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent-brand); margin: 0 0 8px; }
 h1 { font-size: 24px; font-weight: 700; letter-spacing: -0.01em; margin: 0 0 6px; }
@@ -144,6 +144,22 @@ section.block { margin-bottom: 40px; }
 
 .tech-note { padding: 14px 18px; border-left: 3px solid var(--accent-primary); font-size: 12.5px; color: var(--ink-2); }
 .tech-note code { font-family: var(--font-mono); background: var(--surface-2); padding: 1px 5px; border-radius: 4px; color: var(--ink); }
+
+/* ---- feed node (2026-08-30 revision) ---- */
+.fnode { position: absolute; width: 150px; background: var(--accent-primary); border-radius: 10px; box-shadow: 0 4px 14px rgba(13,30,44,0.22); padding: 14px 14px 12px; color: #fff; }
+.fnode-icon { width: 34px; height: 34px; border-radius: 8px; background: rgba(255,255,255,0.16); display: flex; align-items: center; justify-content: center; margin-bottom: 8px; }
+.fnode-icon svg { width: 19px; height: 19px; stroke: #fff; fill: none; stroke-width: 2; }
+.fnode-badge { display: inline-block; font-size: 9.5px; font-weight: 700; letter-spacing: 0.04em; background: rgba(255,255,255,0.18); color: #fff; border-radius: 999px; padding: 2px 8px; margin-bottom: 6px; }
+.fnode-name { font-size: 12.5px; font-weight: 700; line-height: 1.3; }
+.fnode-out { position: absolute; right: -6px; top: 50%; width: 11px; height: 11px; border-radius: 50%; background: #fff; border: 2px solid var(--accent-primary); }
+
+.palette-feed-card { display: flex; align-items: center; gap: 9px; padding: 9px 10px; border-radius: 7px; background: var(--accent-primary); color: #fff; margin-bottom: 8px; cursor: grab; }
+.palette-feed-card svg { width: 15px; height: 15px; stroke: #fff; fill: none; stroke-width: 2; flex-shrink: 0; }
+.palette-feed-name { font-size: 12px; font-weight: 700; }
+.palette-feed-kind { font-size: 10px; color: rgba(255,255,255,0.75); font-family: var(--font-mono); }
+.palette-add-feed { display: flex; align-items: center; gap: 8px; padding: 9px 10px; border-radius: 7px; border: 1.5px dashed var(--accent-primary); color: var(--accent-primary); font-size: 12px; font-weight: 700; cursor: pointer; margin-bottom: 4px; }
+.palette-add-feed svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; }
+.palette-section-gap { margin-top: 18px; }
 </style>
 </head>
 <body>
@@ -151,11 +167,11 @@ section.block { margin-bottom: 40px; }
 
   <p class="eyebrow">Bartender Track &amp; Trace Simulator · Concept draft · 2026-08-30</p>
   <h1>Workflow canvas editor</h1>
-  <p class="subtitle">How building a Workflow actually feels: drag a Task in from your Devices, wire Flow Links between Channels, click an edge to set its delay and filter. The canvas below is live — click any edge's label chip to see its config panel open.</p>
+  <p class="subtitle">How building a Workflow actually feels: drag a Task in from your Devices, drag an Item Feed in as its own navy node, wire Feed Links and Flow Links between them, click any edge to configure it. The canvas below is live — click any edge's label chip to see its config panel open.</p>
 
   <section class="block">
     <h2>The editor</h2>
-    <p class="section-note">Left: a palette of your configured Devices — drag one onto the canvas to create a Task. Center: the canvas itself, showing the same dock → sort → storage flow as before, now as editable nodes with one port per Channel.</p>
+    <p class="section-note">Left: two palettes — your configured Devices, and your Item Feeds (plus "+ New Feed" to define one without leaving the canvas). Center: the canvas itself — Task nodes (white) and Feed nodes (navy) are visually distinct; the same Feed can be dragged in more than once as separate instances.</p>
 
     <div class="editor">
       <div class="editor-toolbar">
@@ -173,6 +189,11 @@ section.block { margin-bottom: 40px; }
           <div class="palette-card"><svg viewBox="0 0 24 24"><path d="M3 21V9l9-6 9 6v12M8 21v-6h8v6"/></svg><div class="palette-card-text"><div class="palette-card-name">SHELF-01</div><div class="palette-card-sub">Zone A · Storage</div></div></div>
           <div class="palette-card"><svg viewBox="0 0 24 24"><path d="M3 21V9l9-6 9 6v12M8 21v-6h8v6"/></svg><div class="palette-card-text"><div class="palette-card-name">SHELF-02</div><div class="palette-card-sub">Zone B · Storage</div></div></div>
           <div class="palette-hint">Drag a device onto the canvas to add it as a Task. Each Channel becomes a port.</div>
+
+          <div class="palette-label palette-section-gap">Item Feeds</div>
+          <div class="palette-add-feed"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>New Feed</div>
+          <div class="palette-feed-card"><svg viewBox="0 0 24 24"><path d="M12 3v10M12 13l6-3.5M12 13l-6-3.5M12 13v8"/></svg><div><div class="palette-feed-name">New pallet — Widget X</div><div class="palette-feed-kind">NEW</div></div></div>
+          <div class="palette-hint">Drag a Feed onto the canvas to place it — the same Feed can be placed more than once.</div>
         </div>
 
         <div class="canvas" id="canvas">
@@ -180,23 +201,32 @@ section.block { margin-bottom: 40px; }
             <defs>
               <marker id="ah" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#5B6B78"/></marker>
             </defs>
-            <path d="M 258 90 C 320 90 320 90 380 90" fill="none" stroke="#5B6B78" stroke-width="1.5" marker-end="url(#ah)"/>
-            <path d="M 638 80 C 700 80 700 30 760 30" fill="none" stroke="#5B6B78" stroke-width="1.5" marker-end="url(#ah)"/>
-            <path d="M 638 130 C 700 130 700 210 760 210" fill="none" stroke="#5B6B78" stroke-width="1.5" marker-end="url(#ah)"/>
+            <path d="M 172 108 C 205 108 205 100 240 100" fill="none" stroke="#0D1E2C" stroke-width="1.5" marker-end="url(#ah)"/>
+            <path d="M 458 90 C 520 90 520 90 580 90" fill="none" stroke="#5B6B78" stroke-width="1.5" marker-end="url(#ah)"/>
+            <path d="M 838 80 C 900 80 900 30 960 30" fill="none" stroke="#5B6B78" stroke-width="1.5" marker-end="url(#ah)"/>
+            <path d="M 838 130 C 900 130 900 210 960 210" fill="none" stroke="#5B6B78" stroke-width="1.5" marker-end="url(#ah)"/>
           </svg>
 
-          <div class="edge-label-chip" style="top:90px; left:319px;" onclick="showPop(this,'e1')">30–90s</div>
-          <div class="edge-label-chip" id="chipE2" style="top:52px; left:700px;" onclick="showPop(this,'e2')">GTIN A · 10–20s</div>
-          <div class="edge-label-chip else-chip" style="top:170px; left:700px;" onclick="showPop(this,'e3')">else · 10–20s</div>
+          <div class="edge-label-chip" id="chipE0" style="top:104px; left:206px; background:var(--accent-primary); color:#fff; border-color:var(--accent-primary);" onclick="showPop(this,'e0')">every 60s</div>
+          <div class="edge-label-chip" style="top:90px; left:519px;" onclick="showPop(this,'e1')">30–90s</div>
+          <div class="edge-label-chip" id="chipE2" style="top:52px; left:900px;" onclick="showPop(this,'e2')">GTIN A · 10–20s</div>
+          <div class="edge-label-chip else-chip" style="top:170px; left:900px;" onclick="showPop(this,'e3')">else · 10–20s</div>
 
-          <div class="tnode" style="top:40px; left:40px;">
+          <div class="fnode" style="top:68px; left:20px;">
+            <div class="fnode-icon"><svg viewBox="0 0 24 24"><path d="M12 3v10M12 13l6-3.5M12 13l-6-3.5M12 13v8"/></svg></div>
+            <div class="fnode-badge">NEW</div>
+            <div class="fnode-name">New pallet — Widget X</div>
+            <div class="fnode-out"></div>
+          </div>
+
+          <div class="tnode" style="top:40px; left:240px;">
             <div class="tnode-head"><svg viewBox="0 0 24 24"><path d="M4 7h16v13H4zM4 7l3-4h10l3 4"/></svg><div><div class="tnode-title">Dock intake</div><div class="tnode-sub">PORTAL-01</div></div></div>
             <div class="tnode-ports">
-              <div class="port-row out"><span class="port-label">CH1 — New pallet · Widget X</span><span class="port-dot fed"></span></div>
+              <div class="port-row out"><span class="port-label">CH1</span><span class="port-dot fed"></span></div>
             </div>
           </div>
 
-          <div class="tnode" style="top:40px; left:380px;">
+          <div class="tnode" style="top:40px; left:580px;">
             <div class="tnode-head"><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><path d="M4 10h16M10 4v16"/></svg><div><div class="tnode-title">Sorting</div><div class="tnode-sub">TABLETOP-01</div></div></div>
             <div class="tnode-ports">
               <div class="port-row"><span class="port-dot linked"></span><span class="port-label">CH1 ← linked</span></div>
@@ -205,28 +235,30 @@ section.block { margin-bottom: 40px; }
             </div>
           </div>
 
-          <div class="tnode" style="top:0px; left:760px;">
+          <div class="tnode" style="top:0px; left:960px;">
             <div class="tnode-head"><svg viewBox="0 0 24 24"><path d="M3 21V9l9-6 9 6v12M8 21v-6h8v6"/></svg><div><div class="tnode-title">Storage — Zone A</div><div class="tnode-sub">SHELF-01</div></div></div>
             <div class="tnode-ports">
               <div class="port-row"><span class="port-dot linked"></span><span class="port-label">CH1 ← linked</span></div>
             </div>
           </div>
 
-          <div class="tnode selected" style="top:180px; left:760px;">
+          <div class="tnode selected" style="top:180px; left:960px;">
             <div class="tnode-head"><svg viewBox="0 0 24 24"><path d="M3 21V9l9-6 9 6v12M8 21v-6h8v6"/></svg><div><div class="tnode-title">Storage — Zone B</div><div class="tnode-sub">SHELF-02</div></div></div>
             <div class="tnode-ports">
               <div class="port-row"><span class="port-dot linked"></span><span class="port-label">CH1 ← linked</span></div>
             </div>
           </div>
 
-          <div class="edge-pop" id="pop" style="top:210px; left:530px; display:none;">
+          <div class="edge-pop" id="pop" style="top:210px; left:730px; display:none;">
             <span class="close-x" onclick="hidePop()">✕</span>
             <h4 id="popTitle">Flow Link — Sorting → Storage B</h4>
-            <label>Delay range (seconds)</label>
-            <div class="row2"><input type="number" value="10" id="dmin"><input type="number" value="20" id="dmax"></div>
-            <label>Filter</label>
-            <div class="chiprow"><span class="chip-mini" id="filterChip">else (catch-all)</span></div>
-            <div class="else-row"><input type="checkbox" id="elseBox" checked disabled><span>Catch-all — receives anything no other edge from this Task claims</span></div>
+            <div id="popBody">
+              <label>Delay range (seconds)</label>
+              <div class="row2"><input type="number" value="10" id="dmin"><input type="number" value="20" id="dmax"></div>
+              <label>Filter</label>
+              <div class="chiprow"><span class="chip-mini" id="filterChip">else (catch-all)</span></div>
+              <div class="else-row"><input type="checkbox" id="elseBox" checked disabled><span>Catch-all — receives anything no other edge from this Task claims</span></div>
+            </div>
             <div class="pop-actions"><button class="pop-btn" onclick="hidePop()">Cancel</button><button class="pop-btn primary" onclick="hidePop()">Save</button></div>
           </div>
         </div>
@@ -238,11 +270,12 @@ section.block { margin-bottom: 40px; }
     <h2>The interaction, step by step</h2>
     <div class="panel" style="padding:20px 24px;">
       <div class="steps">
-        <div class="step"><div class="step-num">1</div><div class="step-text"><b>Drag a Device</b> from the left palette onto the canvas. It drops in as a Task node with one port per Channel — outbound-capable Channels on the right edge, inbound on the left.</div></div>
-        <div class="step"><div class="step-num">2</div><div class="step-text"><b>Assign each unlinked port</b> by clicking it — opens the Item Feed picker (existing library, or create new) for that Channel's input.</div></div>
-        <div class="step"><div class="step-num">3</div><div class="step-text"><b>Draw a Flow Link</b> by dragging from an output port to another Task's input port. The edge appears immediately with default delay 0–0s and no filter (implicit else) — refine it in step 4.</div></div>
-        <div class="step"><div class="step-num">4</div><div class="step-text"><b>Click any edge's label chip</b> to open its config panel (try one above): set the delay range and, when a Task has more than one outgoing edge, a GTIN/category filter per edge — exactly one edge per Task is allowed to stay the catch-all "else".</div></div>
-        <div class="step"><div class="step-num">5</div><div class="step-text"><b>Run</b> starts the simulation: items appear at each Task's fed inputs, cross to linked Tasks after their edge's delay, and generate a read event at each Channel along the way (local simulation for now — no live <code style="font-family:var(--font-mono)">POST /reads</code> yet).</div></div>
+        <div class="step"><div class="step-num">1</div><div class="step-text"><b>Drag a Device</b> from the left palette onto the canvas. It drops in as a white Task node with one port per Channel.</div></div>
+        <div class="step"><div class="step-num">2</div><div class="step-text"><b>Drag an Item Feed</b> from the second palette — an existing one, or "+ New Feed" to define one inline. It drops in as its own navy node (try the one above). The same Feed can be dragged in more than once as separate instances.</div></div>
+        <div class="step"><div class="step-num">3</div><div class="step-text"><b>Draw a Feed Link</b> by dragging from a Feed node's output to a Task Channel's input (the navy edge above, click it to set the firing interval) — a Channel can take any number of Feed Links and Flow Links at once, from the same Feed or different ones.</div></div>
+        <div class="step"><div class="step-num">4</div><div class="step-text"><b>Draw a Flow Link</b> by dragging from a Task's output port to another Task's input port. The edge appears immediately with default delay 0–0s and no filter (implicit else) — refine it next.</div></div>
+        <div class="step"><div class="step-num">5</div><div class="step-text"><b>Click any edge's label chip</b> to open its config panel (try one above): a Feed Link gets a firing interval, a Flow Link gets a delay range and, when a Task has more than one outgoing edge, a GTIN/category filter — exactly one edge per Task is allowed to stay the catch-all "else".</div></div>
+        <div class="step"><div class="step-num">6</div><div class="step-text"><b>Run</b> starts the simulation: each Feed Link fires on its own interval, items cross Flow Links after their delay, and a read event is generated at each Channel along the way (local simulation for now — no live <code style="font-family:var(--font-mono)">POST /reads</code> yet).</div></div>
       </div>
     </div>
   </section>
@@ -259,10 +292,15 @@ function showPop(el, id){
   document.querySelectorAll('.edge-label-chip').forEach(c=>c.classList.remove('active'));
   el.classList.add('active');
   var pop = document.getElementById('pop');
-  var rect = el.getBoundingClientRect();
-  var canvasRect = document.getElementById('canvas').getBoundingClientRect();
-  pop.style.left = (el.offsetLeft - 100) + 'px';
-  pop.style.top = (el.offsetTop + 16) + 'px';
+  pop.style.left = Math.max(0, el.offsetLeft - 40) + 'px';
+  pop.style.top = (el.offsetTop + 20) + 'px';
+  if (id === 'e0') {
+    document.getElementById('popTitle').textContent = 'Feed Link — New pallet · Widget X → Dock intake CH1';
+    document.getElementById('popBody').innerHTML = '<label>Firing interval (seconds)</label><input type="number" value="60" style="width:100%; padding:5px 7px; border:1px solid var(--border-strong); border-radius:5px; font-size:12px; font-family:var(--font-mono);"><p style="font-size:11px; color:var(--ink-2); margin-top:10px;">Fires automatically on this interval while the Workflow is running — mints up to the Feed\'s configured quantity, capped at 10 real items per firing.</p>';
+    pop.style.display = 'block';
+    return;
+  }
+  document.getElementById('popBody').innerHTML = '<label>Delay range (seconds)</label><div class="row2"><input type="number" value="10" id="dmin"><input type="number" value="20" id="dmax"></div><label>Filter</label><div class="chiprow"><span class="chip-mini" id="filterChip">else (catch-all)</span></div><div class="else-row"><input type="checkbox" id="elseBox" checked disabled><span>Catch-all — receives anything no other edge from this Task claims</span></div>';
   var titles = {e1:'Flow Link — Dock intake → Sorting', e2:'Flow Link — Sorting → Storage A', e3:'Flow Link — Sorting → Storage B'};
   var filters = {e1:'no filter', e2:'GTIN 03663328010013', e3:'else (catch-all)'};
   var mins = {e1:30, e2:10, e3:10}, maxs = {e1:90, e2:20, e3:20};
