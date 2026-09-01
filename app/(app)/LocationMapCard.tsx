@@ -47,6 +47,19 @@ export function LocationMapCard({ locationCode, devices, currentUserId, onDevice
   // no reposition drag, no editable config modal. Copy/Duplicate stay
   // available (they don't mutate the shared record — §17.3).
   const isReadOnly = (d: DeviceRecord) => currentUserId != null && d.ownerId !== currentUserId;
+
+  // Devices with no map coords yet — duplicated from the Devices list, or
+  // their Site was just changed (which clears the old coords, route side).
+  // Instead of hiding them, stage them in a column near the floor plan's
+  // top-left so Edit mode can drag each into place.
+  const unplacedIds = devices.filter((d) => d.positionX == null || d.positionY == null).map((d) => d.id);
+  const displayPos = (d: DeviceRecord): { x: number; y: number } => {
+    if (d.positionX != null && d.positionY != null) return { x: d.positionX, y: d.positionY };
+    // Staging tray, top-left of the floor plan — a loose 4-wide grid so
+    // several unplaced devices don't stack on one spot.
+    const i = Math.max(0, unplacedIds.indexOf(d.id));
+    return { x: 56 + (i % 4) * 60, y: 56 + Math.floor(i / 4) * 60 };
+  };
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [hasMap, setHasMap] = useState(false);
@@ -291,14 +304,18 @@ export function LocationMapCard({ locationCode, devices, currentUserId, onDevice
       setConfigModal({ device, lockTypeAndSite: true, deleteOnCancelIfUnsaved: false, readOnly: true });
       return;
     }
+    // Start the drag from where the marker actually sits — its real coords,
+    // or its staged position if it's not placed yet (else an unplaced drag
+    // would jump from 0,0).
+    const p0 = displayPos(device);
     deviceDragRef.current = {
       id: device.id,
       startClientX: e.clientX,
       startClientY: e.clientY,
-      startPosX: device.positionX ?? 0,
-      startPosY: device.positionY ?? 0,
-      currentPosX: device.positionX ?? 0,
-      currentPosY: device.positionY ?? 0,
+      startPosX: p0.x,
+      startPosY: p0.y,
+      currentPosX: p0.x,
+      currentPosY: p0.y,
       moved: false,
     };
   }
@@ -462,12 +479,12 @@ export function LocationMapCard({ locationCode, devices, currentUserId, onDevice
             </div>
           ))}
 
-          {devices
-            .filter((d) => d.positionX !== null && d.positionY !== null)
-            .map((device) => {
+          {devices.map((device) => {
               const isDragging = draggingDeviceVisual?.id === device.id;
-              const left = isDragging ? draggingDeviceVisual!.x : (device.positionX as number);
-              const top = isDragging ? draggingDeviceVisual!.y : (device.positionY as number);
+              const base = displayPos(device);
+              const left = isDragging ? draggingDeviceVisual!.x : base.x;
+              const top = isDragging ? draggingDeviceVisual!.y : base.y;
+              const unplaced = device.positionX == null || device.positionY == null;
               const readOnly = isReadOnly(device);
               return (
                 <div
@@ -476,8 +493,9 @@ export function LocationMapCard({ locationCode, devices, currentUserId, onDevice
                   style={{ left, top, transform: `translate(-50%, -50%) scale(${markerCounterScale})` }}
                 >
                   <span
-                    className={`map-marker-device${editMode && !readOnly ? " draggable" : ""}`}
+                    className={`map-marker-device${editMode && !readOnly ? " draggable" : ""}${unplaced ? " unplaced" : ""}`}
                     style={{ background: `var(--device-${getDeviceState(device).toLowerCase()})`, pointerEvents: "auto", position: "relative" }}
+                    title={unplaced ? `${device.name} — not placed on this map yet; drag it into position in Edit mode` : undefined}
                     onMouseDown={editMode ? (e) => handleDeviceMouseDown(e, device) : undefined}
                     onClick={!editMode ? () => handleDeviceClick(device) : undefined}
                     onContextMenu={editMode ? (e) => handleDeviceContextMenu(e, device) : undefined}

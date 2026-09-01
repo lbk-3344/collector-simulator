@@ -329,6 +329,9 @@ svg { display: block; }
 }
 .map-marker-device.draggable { cursor: grab; }
 .map-marker-device.draggable:active { cursor: grabbing; }
+/* Not placed on this map yet (duplicated, or Site just changed) — staged
+   near the top-left, dashed ring so it reads as "drag me into position". */
+.map-marker-device.unplaced { outline: 2px dashed var(--ink-3); outline-offset: 3px; }
 .map-marker-zone-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent-brand); border: 2px solid var(--surface); box-shadow: var(--shell-shadow); }
 .map-marker-label { font-size: 9.5px; font-weight: 600; background: var(--surface); color: var(--ink); padding: 1px 5px; border-radius: 4px; white-space: nowrap; box-shadow: var(--shell-shadow); }
 

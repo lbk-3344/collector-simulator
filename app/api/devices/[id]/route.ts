@@ -82,11 +82,17 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
   const existing = await prisma.device.findUnique({
     where: { id: params.id },
-    select: { configVersion: true, publishedAt: true },
+    select: { configVersion: true, publishedAt: true, locationCode: true },
   });
   if (!existing) {
     return NextResponse.json({ error: "Device not found" }, { status: 404 });
   }
+
+  // Changing the Site invalidates any saved map position — the coords are in
+  // floor-plan pixels of the *previous* Site's plan. Clear them so the device
+  // shows as "unplaced" on the new Site's map, ready to be dragged into place
+  // (LocationMapCard stages null-position devices near the top-left).
+  const siteChanged = Boolean(existing.locationCode) && body.locationCode !== existing.locationCode;
 
   // A save syncs to the platform if the Device is already published, or this
   // save is an explicit Publish (section 15.8).
@@ -108,7 +114,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   try {
     const device = await prisma.device.update({
       where: { id: params.id },
-      data,
+      data: siteChanged ? { ...data, positionX: null, positionY: null } : data,
       include: DEVICE_INCLUDE,
     });
     return NextResponse.json({ device });
