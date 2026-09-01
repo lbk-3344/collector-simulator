@@ -32,8 +32,24 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (typeof body.targetChannelId === "string" && body.targetChannelId) {
     data.targetChannelId = body.targetChannelId;
   }
+  // Endpoint reconnection (BUG #10) — move the source to another feed node,
+  // or the target to another task.
+  if (typeof body.feedNodeId === "string" && body.feedNodeId) data.feedNodeId = body.feedNodeId;
+  if (typeof body.targetTaskId === "string" && body.targetTaskId) data.targetTaskId = body.targetTaskId;
   if (Object.keys(data).length === 0) {
     return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
+  }
+
+  if (typeof data.feedNodeId === "string" || typeof data.targetTaskId === "string") {
+    const link = await prisma.feedLink.findUnique({ where: { id: params.id }, select: { workflowId: true } });
+    if (typeof data.feedNodeId === "string") {
+      const n = await prisma.feedNode.count({ where: { id: data.feedNodeId, workflowId: link?.workflowId } });
+      if (n !== 1) return NextResponse.json({ error: "The feed node must be in the same workflow." }, { status: 400 });
+    }
+    if (typeof data.targetTaskId === "string") {
+      const t = await prisma.task.count({ where: { id: data.targetTaskId, workflowId: link?.workflowId } });
+      if (t !== 1) return NextResponse.json({ error: "The task must be in the same workflow." }, { status: 400 });
+    }
   }
 
   const feedLink = await prisma.feedLink.update({ where: { id: params.id }, data });

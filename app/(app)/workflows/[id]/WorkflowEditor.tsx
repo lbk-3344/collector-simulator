@@ -78,6 +78,11 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
   // pastes. Gated by the page-wide `readOnly` flag, not per-node (§16.9).
   const [feedClipboard, setFeedClipboard] = useState<{ itemFeedId: string } | null>(null);
   const [feedContextMenu, setFeedContextMenu] = useState<{ x: number; y: number; node: Node } | null>(null);
+  // Task node + link right-click menus (BUG #14). `linkClipboard` holds a
+  // copied link's settings (not its endpoints) for Cut/Copy/Paste.
+  const [taskContextMenu, setTaskContextMenu] = useState<{ x: number; y: number; node: Node } | null>(null);
+  const [edgeContextMenu, setEdgeContextMenu] = useState<{ x: number; y: number; edge: Edge } | null>(null);
+  const [linkClipboard, setLinkClipboard] = useState<{ type: "flow" | "feed"; data: Record<string, unknown> } | null>(null);
 
   const feedNodeIds = useMemo(() => new Set(feedNodes.map((f) => f.id)), [feedNodes]);
 
@@ -349,6 +354,114 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
     [confirm, load, readOnly]
   );
 
+  // ── BUG #14: task / link context-menu actions ──────────────────────────
+  const deleteTask = useCallback(
+    async (taskId: string, deviceName: string) => {
+      if (readOnly) return;
+      const ok = await confirm({
+        variant: "warning",
+        title: "Delete task",
+        message: `Remove "${deviceName}" and its links from this workflow?`,
+        confirmLabel: "Delete",
+        danger: true,
+      });
+      if (!ok) return;
+      const res = await fetch(`/api/tasks/${taskId}`, { method: "DELETE" });
+      if (!res.ok) setError((await res.json().catch(() => null))?.error ?? "Couldn't delete that task.");
+      await load();
+    },
+    [confirm, load, readOnly]
+  );
+
+  const deleteEdge = useCallback(
+    async (edge: Edge) => {
+      if (readOnly) return;
+      const url = edge.type === "feed" ? `/api/feed-links/${edge.id}` : `/api/flow-links/${edge.id}`;
+      await fetch(url, { method: "DELETE" }).catch(() => {});
+      await load();
+    },
+    [load, readOnly]
+  );
+
+  // The subset of a link's settings that Copy/Paste carries (endpoints stay).
+  const linkSettings = useCallback(
+    (edge: Edge): { type: "flow" | "feed"; data: Record<string, unknown> } | null => {
+      if (edge.type === "feed") {
+        const fl = feedLinks.find((l) => l.id === edge.id);
+        if (!fl) return null;
+        return { type: "feed", data: { fireIntervalSeconds: fl.fireIntervalSeconds } };
+      }
+      const fl = flowLinks.find((l) => l.id === edge.id);
+      if (!fl) return null;
+      return {
+        type: "flow",
+        data: {
+          delayMinSeconds: fl.delayMinSeconds,
+          delayMaxSeconds: fl.delayMaxSeconds,
+          filterGtins: fl.filterGtins ?? null,
+          isElse: fl.isElse,
+        },
+      };
+    },
+    [feedLinks, flowLinks]
+  );
+
+  const pasteLinkSettings = useCallback(
+    async (edge: Edge) => {
+      if (readOnly || !linkClipboard || linkClipboard.type !== edge.type) return;
+      const url = edge.type === "feed" ? `/api/feed-links/${edge.id}` : `/api/flow-links/${edge.id}`;
+      const res = await fetch(url, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(linkClipboard.data),
+      });
+      if (!res.ok) setError((await res.json().catch(() => null))?.error ?? "Couldn't paste those link settings.");
+      await load();
+    },
+    [linkClipboard, load, readOnly]
+  );
+
+  // ── BUG #10: drag an edge endpoint onto a different node/handle ─────────
+  const onReconnect = useCallback(
+    async (oldEdge: Edge, conn: Connection) => {
+      if (readOnly || !conn.source || !conn.target || !conn.targetHandle) return;
+      if (oldEdge.type === "feed") {
+        if (!feedNodeIds.has(conn.source)) {
+          setError("A feed link must start at a feed node.");
+          return;
+        }
+        const res = await fetch(`/api/feed-links/${oldEdge.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            feedNodeId: conn.source,
+            targetTaskId: conn.target,
+            targetChannelId: conn.targetHandle,
+          }),
+        });
+        if (!res.ok) setError((await res.json().catch(() => null))?.error ?? "Couldn't move that feed link.");
+      } else {
+        if (!conn.sourceHandle || feedNodeIds.has(conn.source) || feedNodeIds.has(conn.target)) {
+          setError("A flow link connects two task channels.");
+          return;
+        }
+        const res = await fetch(`/api/flow-links/${oldEdge.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sourceTaskId: conn.source,
+            sourceChannelId: conn.sourceHandle,
+            targetTaskId: conn.target,
+            targetChannelId: conn.targetHandle,
+          }),
+        });
+        if (!res.ok) setError((await res.json().catch(() => null))?.error ?? "Couldn't move that flow link.");
+      }
+      await load();
+    },
+    [feedNodeIds, load, readOnly]
+  );
+
   const patchWorkflow = useCallback(
     async (body: Record<string, unknown>) => {
       if (readOnly) return;
@@ -522,12 +635,20 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
               setFeedModal({ feed: itemFeed, dropPos: null });
             }}
             onNodeContextMenu={(e, node) => {
-              // Feed Nodes only — right-click opens Copy/Paste/Duplicate
-              // (BL-071). Task cloning has its own entry points elsewhere.
-              if (readOnly || node.type !== "feed") return;
+              if (readOnly) return;
               e.preventDefault();
-              setFeedContextMenu({ x: e.clientX, y: e.clientY, node });
+              // Feed Node → Copy/Paste/Duplicate/Remove (BL-071); Task node →
+              // Delete only (BUG #14 — no device copy/paste).
+              if (node.type === "feed") setFeedContextMenu({ x: e.clientX, y: e.clientY, node });
+              else if (node.type === "task") setTaskContextMenu({ x: e.clientX, y: e.clientY, node });
             }}
+            onEdgeContextMenu={(e, edge) => {
+              // Link → Cut / Copy / Paste / Delete (BUG #14).
+              if (readOnly) return;
+              e.preventDefault();
+              setEdgeContextMenu({ x: e.clientX, y: e.clientY, edge });
+            }}
+            onReconnect={onReconnect}
             onNodesDelete={onNodesDelete}
             onEdgesDelete={onEdgesDelete}
             nodeTypes={nodeTypes}
@@ -535,6 +656,7 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
             nodesDraggable={!readOnly}
             nodesConnectable={!readOnly}
             edgesReconnectable={!readOnly}
+            reconnectRadius={18}
             deleteKeyCode={readOnly ? null : undefined}
             fitView
             proOptions={{ hideAttribution: true }}
@@ -651,6 +773,44 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
           }
           deleteLabel="Remove from workflow"
           onClose={() => setFeedContextMenu(null)}
+        />
+      )}
+
+      {taskContextMenu && (
+        <ContextMenu
+          x={taskContextMenu.x}
+          y={taskContextMenu.y}
+          onDelete={() =>
+            deleteTask(
+              taskContextMenu.node.id,
+              ((taskContextMenu.node.data as Any).deviceName as string) ?? "this task"
+            )
+          }
+          onClose={() => setTaskContextMenu(null)}
+        />
+      )}
+
+      {edgeContextMenu && (
+        <ContextMenu
+          x={edgeContextMenu.x}
+          y={edgeContextMenu.y}
+          canPaste={linkClipboard?.type === edgeContextMenu.edge.type}
+          copyLabel="Copy settings"
+          pasteLabel="Paste settings"
+          cutLabel="Cut settings"
+          onCopy={() => {
+            const s = linkSettings(edgeContextMenu.edge);
+            if (s) setLinkClipboard(s);
+          }}
+          onCut={() => {
+            const s = linkSettings(edgeContextMenu.edge);
+            if (s) setLinkClipboard(s);
+            deleteEdge(edgeContextMenu.edge);
+          }}
+          onPaste={() => pasteLinkSettings(edgeContextMenu.edge)}
+          onDelete={() => deleteEdge(edgeContextMenu.edge)}
+          deleteLabel="Delete link"
+          onClose={() => setEdgeContextMenu(null)}
         />
       )}
     </section>

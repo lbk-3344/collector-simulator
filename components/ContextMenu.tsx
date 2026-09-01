@@ -3,14 +3,12 @@
 import { useEffect, useRef } from "react";
 
 // Generic right-click context menu (CLAUDE-CONCEPT.md 15.9 / 16.9, CHARTE
-// "Context menu") — Copy / Paste / Duplicate. Content-agnostic: used for
-// Overview-map Device markers (BL-066) and Workflow-canvas Feed Nodes
-// (BL-071). Plain fixed-position panel, dismiss behaviour copied from
-// UserMenu.tsx.
+// "Context menu"). Every action is optional — only the rows whose handler is
+// passed are rendered. Used for Overview-map Device markers (BL-066),
+// Workflow-canvas Feed Nodes (BL-071), Task nodes and links (BUG #14).
 
-const MENU_W = 172;
-const MENU_H_BASE = 132; // Copy / Paste / Duplicate
-const MENU_H_WITH_DELETE = 186; // + separator + Delete
+const MENU_W = 176;
+const ROW_H = 36;
 
 function CopyGlyph() {
   return (
@@ -30,6 +28,15 @@ function PasteGlyph() {
     </svg>
   );
 }
+function CutGlyph() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="5.5" cy="14" r="2.5" />
+      <circle cx="14.5" cy="14" r="2.5" />
+      <path d="M7.5 12 16 3M12.5 12 4 3" />
+    </svg>
+  );
+}
 function TrashGlyph() {
   return (
     <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
@@ -41,24 +48,32 @@ function TrashGlyph() {
 export function ContextMenu({
   x,
   y,
-  canPaste,
+  canPaste = false,
   onCopy,
   onPaste,
+  onCut,
   onDuplicate,
   onDelete,
+  copyLabel = "Copy",
+  pasteLabel = "Paste",
+  cutLabel = "Cut",
+  duplicateLabel = "Duplicate",
   deleteLabel = "Delete",
   onClose,
 }: {
   x: number;
   y: number;
-  canPaste: boolean;
-  onCopy: () => void;
-  onPaste: () => void;
-  onDuplicate: () => void;
-  // Optional 4th, destructive row — rendered only when provided (e.g. the
-  // Workflow canvas' "Remove from workflow" on a Feed Node). The map's marker
-  // menu omits it.
+  canPaste?: boolean;
+  onCopy?: () => void;
+  onPaste?: () => void;
+  onCut?: () => void;
+  onDuplicate?: () => void;
+  // Optional destructive row, rendered under a separator.
   onDelete?: () => void;
+  copyLabel?: string;
+  pasteLabel?: string;
+  cutLabel?: string;
+  duplicateLabel?: string;
   deleteLabel?: string;
   onClose: () => void;
 }) {
@@ -82,8 +97,8 @@ export function ContextMenu({
     };
   }, [onClose]);
 
-  // Clamp so the panel never renders past the viewport's right/bottom edge.
-  const menuH = onDelete ? MENU_H_WITH_DELETE : MENU_H_BASE;
+  const topRows = [onCopy, onCut, onPaste, onDuplicate].filter(Boolean).length;
+  const menuH = topRows * ROW_H + (onDelete ? ROW_H + 9 : 0) + 12;
   const left = Math.max(8, Math.min(x, window.innerWidth - MENU_W - 8));
   const top = Math.max(8, Math.min(y, window.innerHeight - menuH - 8));
 
@@ -94,27 +109,39 @@ export function ContextMenu({
 
   return (
     <div ref={ref} className="ctx-menu" style={{ left, top }} role="menu">
-      <button type="button" className="ctx-menu-item" role="menuitem" onClick={run(onCopy)}>
-        <CopyGlyph />
-        Copy
-      </button>
-      <button
-        type="button"
-        className="ctx-menu-item"
-        role="menuitem"
-        disabled={!canPaste}
-        onClick={canPaste ? run(onPaste) : undefined}
-      >
-        <PasteGlyph />
-        Paste
-      </button>
-      <button type="button" className="ctx-menu-item" role="menuitem" onClick={run(onDuplicate)}>
-        <CopyGlyph />
-        Duplicate
-      </button>
+      {onCopy && (
+        <button type="button" className="ctx-menu-item" role="menuitem" onClick={run(onCopy)}>
+          <CopyGlyph />
+          {copyLabel}
+        </button>
+      )}
+      {onCut && (
+        <button type="button" className="ctx-menu-item" role="menuitem" onClick={run(onCut)}>
+          <CutGlyph />
+          {cutLabel}
+        </button>
+      )}
+      {onPaste && (
+        <button
+          type="button"
+          className="ctx-menu-item"
+          role="menuitem"
+          disabled={!canPaste}
+          onClick={canPaste ? run(onPaste) : undefined}
+        >
+          <PasteGlyph />
+          {pasteLabel}
+        </button>
+      )}
+      {onDuplicate && (
+        <button type="button" className="ctx-menu-item" role="menuitem" onClick={run(onDuplicate)}>
+          <CopyGlyph />
+          {duplicateLabel}
+        </button>
+      )}
       {onDelete && (
         <>
-          <div className="ctx-menu-sep" role="separator" />
+          {topRows > 0 && <div className="ctx-menu-sep" role="separator" />}
           <button type="button" className="ctx-menu-item danger" role="menuitem" onClick={run(onDelete)}>
             <TrashGlyph />
             {deleteLabel}

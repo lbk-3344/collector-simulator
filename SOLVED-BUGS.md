@@ -128,3 +128,21 @@ I want to be able to filter the device list (and also the feed list) by location
 **Resolved:** 2026-09-01
 
 Could we have the same behavior than on the workflow map, using the various button of the mouse or the mouse wheel.
+
+---
+
+## #10 — Relinking in workflow graph
+
+**Reported:** 2026-09-01 by Luc Bellissard <lbellissard@seagullsoftware.com>
+**Resolved:** 2026-09-01
+
+I'd like to be able to reposition source or destination of link to another corresponding object.
+
+---
+
+## #14 — contextual menu for device or link in the workflow graph
+
+**Reported:** 2026-09-01 by Luc Bellissard <lbellissard@seagullsoftware.com>
+**Resolved:** 2026-09-01
+
+I'd like to be bale to delete device or link by right clicking. I'd like also to cut, copy and paste link (not device) through that contextual menu.

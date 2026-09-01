@@ -28,6 +28,9 @@ function buildPatch(body: any) {
   if (typeof body.isElse === "boolean") data.isElse = body.isElse;
   if (typeof body.sourceChannelId === "string" && body.sourceChannelId) data.sourceChannelId = body.sourceChannelId;
   if (typeof body.targetChannelId === "string" && body.targetChannelId) data.targetChannelId = body.targetChannelId;
+  // Endpoint reconnection (BUG #10) — move a link to a different Task.
+  if (typeof body.sourceTaskId === "string" && body.sourceTaskId) data.sourceTaskId = body.sourceTaskId;
+  if (typeof body.targetTaskId === "string" && body.targetTaskId) data.targetTaskId = body.targetTaskId;
   return data;
 }
 
@@ -42,7 +45,19 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 
   const body = await req.json().catch(() => ({}));
-  const flowLink = await prisma.flowLink.update({ where: { id: params.id }, data: buildPatch(body) });
+  const data = buildPatch(body);
+
+  // A reconnected endpoint (BUG #10) must land on a Task in this same workflow.
+  if (typeof data.sourceTaskId === "string" || typeof data.targetTaskId === "string") {
+    const link = await prisma.flowLink.findUnique({ where: { id: params.id }, select: { workflowId: true } });
+    const ids = [data.sourceTaskId, data.targetTaskId].filter((v): v is string => typeof v === "string");
+    const ok = await prisma.task.count({ where: { id: { in: ids }, workflowId: link?.workflowId } });
+    if (ok !== ids.length) {
+      return NextResponse.json({ error: "A flow link can only connect tasks in the same workflow." }, { status: 400 });
+    }
+  }
+
+  const flowLink = await prisma.flowLink.update({ where: { id: params.id }, data });
   return NextResponse.json({ flowLink });
 }
 
