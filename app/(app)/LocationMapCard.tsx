@@ -518,6 +518,7 @@ export function LocationMapCard({ locationCode, devices, currentUserId, onDevice
                 >
                   <span
                     className={`map-marker-device${editMode && !readOnly ? " draggable" : ""}${unplaced ? " unplaced" : ""}`}
+                    data-state={getDeviceState(device).toLowerCase()}
                     style={{ background: `var(--device-${getDeviceState(device).toLowerCase()})`, pointerEvents: "auto", position: "relative" }}
                     title={unplaced ? `${device.name} — not placed on this map yet; drag it into position in Edit mode` : undefined}
                     onMouseDown={editMode ? (e) => handleDeviceMouseDown(e, device) : undefined}

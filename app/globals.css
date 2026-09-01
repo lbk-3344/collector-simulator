@@ -327,6 +327,9 @@ svg { display: block; }
   width: 36px; height: 36px; border-radius: 50%;
   color: #fff; box-shadow: var(--shell-shadow); cursor: pointer; border: none;
 }
+/* Automated state uses a light-green fill — a white icon washes out on it
+   (worst in dark mode), so its glyph goes near-black instead. */
+.map-marker-device[data-state="automated"] { color: #0D1E2C; }
 .map-marker-device.draggable { cursor: grab; }
 .map-marker-device.draggable:active { cursor: grabbing; }
 /* Not placed on this map yet (duplicated, or Site just changed) — staged

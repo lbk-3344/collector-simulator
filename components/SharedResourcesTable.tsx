@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import type { BartenderLocation } from "@/lib/bartenderLocations";
 
 // BL-069 — admin-only "Shared resources" screen (CLAUDE-CONCEPT.md §17.4/§17.6).
 // Lists every Device / Workflow / Item Feed across all owners with a toggle
@@ -15,6 +16,7 @@ type Row = {
   name: string;
   sub: string; // device type / feed kind / "" for workflows
   collectorId: string | null; // devices only — tells apart same-named devices
+  locationCode: string | null; // devices (always) + PRESENT feeds; null otherwise
   shared: boolean;
   owner: { id: string; name: string | null; email: string };
 };
@@ -32,8 +34,21 @@ const FEED_KIND_LABEL: Record<string, string> = { NEW: "New", PRESENT: "In stock
 
 export function SharedResourcesTable() {
   const [rows, setRows] = useState<Row[] | null>(null);
+  const [locations, setLocations] = useState<BartenderLocation[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
+
+  const siteName = useCallback(
+    (code: string | null) => (code ? locations.find((l) => l.code === code)?.name ?? code : "—"),
+    [locations]
+  );
+
+  useEffect(() => {
+    fetch("/api/locations")
+      .then((res) => (res.ok ? res.json() : { locations: [] }))
+      .then((data) => setLocations(data.locations ?? []))
+      .catch(() => setLocations([]));
+  }, []);
 
   const load = useCallback(async () => {
     setError(null);
@@ -50,6 +65,7 @@ export function SharedResourcesTable() {
         name: d.name as string,
         sub: (d.type as string) ?? "",
         collectorId: (d.collectorId as string | null) ?? null,
+        locationCode: (d.locationCode as string | null) ?? null,
         shared: Boolean(d.shared),
         owner: d.owner as Row["owner"],
       })),
@@ -59,6 +75,7 @@ export function SharedResourcesTable() {
         name: w.name as string,
         sub: "",
         collectorId: null,
+        locationCode: null,
         shared: Boolean(w.shared),
         owner: w.owner as Row["owner"],
       })),
@@ -68,6 +85,7 @@ export function SharedResourcesTable() {
         name: f.name as string,
         sub: FEED_KIND_LABEL[f.kind as string] ?? (f.kind as string) ?? "",
         collectorId: null,
+        locationCode: (f.locationCode as string | null) ?? null,
         shared: Boolean(f.shared),
         owner: f.owner as Row["owner"],
       })),
@@ -111,6 +129,7 @@ export function SharedResourcesTable() {
             <tr>
               <th>Type</th>
               <th>Name</th>
+              <th>Location</th>
               <th>Owner</th>
               <th>Shared with everyone</th>
             </tr>
@@ -130,6 +149,7 @@ export function SharedResourcesTable() {
                       <div className="u-meta">{row.collectorId ?? "no Collector ID yet"}</div>
                     )}
                   </td>
+                  <td>{siteName(row.locationCode)}</td>
                   <td>
                     <div className="u-name">{row.owner?.name ?? "—"}</div>
                     <div className="u-email">{row.owner?.email}</div>

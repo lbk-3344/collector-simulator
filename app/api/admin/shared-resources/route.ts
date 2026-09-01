@@ -17,11 +17,14 @@ export async function GET() {
   const owner = { select: { id: true, name: true, email: true } };
   const [devices, workflows, itemFeeds] = await Promise.all([
     prisma.device.findMany({
-      select: { id: true, name: true, type: true, collectorId: true, shared: true, owner },
+      select: { id: true, name: true, type: true, collectorId: true, locationCode: true, shared: true, owner },
       orderBy: { name: "asc" },
     }),
     prisma.workflow.findMany({ select: { id: true, name: true, shared: true, owner }, orderBy: { name: "asc" } }),
-    prisma.itemFeed.findMany({ select: { id: true, name: true, kind: true, shared: true, owner }, orderBy: { name: "asc" } }),
+    prisma.itemFeed.findMany({
+      select: { id: true, name: true, kind: true, locationCode: true, shared: true, owner },
+      orderBy: { name: "asc" },
+    }),
   ]);
 
   return NextResponse.json({ devices, workflows, itemFeeds });
