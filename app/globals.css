@@ -299,8 +299,8 @@ svg { display: block; }
 .overview-page > .page-title, .overview-page > .stat-grid { flex: 0 0 auto; }
 .overview-page .map-card { flex: 1 1 auto; height: calc(100vh - 320px); min-height: 360px; }
 .overview-page .map-card-viewport { position: absolute; inset: 0; width: auto; height: auto; }
-.map-card-viewport { position: relative; width: 100%; height: 100%; overflow: hidden; }
-.map-card-viewport.pannable { cursor: grab; }
+.map-card-viewport { position: relative; width: 100%; height: 100%; overflow: hidden; cursor: grab; }
+.map-card-viewport:active,
 .map-card-viewport.pannable:active { cursor: grabbing; }
 .map-card-transform { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
 .map-card-image { display: block; max-width: none; user-select: none; -webkit-user-drag: none; }

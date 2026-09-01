@@ -119,3 +119,12 @@ I'd like to display the site the feed is attached to when there is one. For New 
 **Resolved:** 2026-09-01
 
 I want to be able to filter the device list (and also the feed list) by location. Default is all site, first choice is the site that is already selected in Overview
+
+---
+
+## #13 — Zoom with mouse on the map
+
+**Reported:** 2026-09-01 by Luc Bellissard <lbellissard@seagullsoftware.com>
+**Resolved:** 2026-09-01
+
+Could we have the same behavior than on the workflow map, using the various button of the mouse or the mouse wheel.

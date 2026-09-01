@@ -73,7 +73,6 @@ export function LocationMapCard({ locationCode, devices, currentUserId, onDevice
   // constant on-screen size at any zoom level instead of shrinking to
   // sub-pixel size at the default zoomed-out "fit to screen" scale.
   const markerCounterScale = scale > 0 ? 1 / scale : 1;
-  const [panMode, setPanMode] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
   const imgRef = useRef<HTMLImageElement>(null);
@@ -147,7 +146,6 @@ export function LocationMapCard({ locationCode, devices, currentUserId, onDevice
     setError(null);
     setScale(1);
     setTranslate({ x: 0, y: 0 });
-    setPanMode(false);
     setEditMode(false);
 
     async function load() {
@@ -196,12 +194,16 @@ export function LocationMapCard({ locationCode, devices, currentUserId, onDevice
   const zoomIn = () => setScale((s) => Math.min(MAX_SCALE, +(s + SCALE_STEP).toFixed(2)));
   const zoomOut = () => setScale((s) => Math.max(minScale, +(s - SCALE_STEP).toFixed(2)));
 
+  // Pan on a plain left-drag of the map background — the panMode toggle is no
+  // longer required (BUG #13, matching the workflow canvas). Edit-mode marker
+  // drags call stopPropagation before this fires; a click that doesn't move
+  // changes nothing, so a marker's own onClick still runs.
   const onMouseDown = useCallback(
     (e: React.MouseEvent) => {
-      if (!panMode) return;
+      if (e.button !== 0) return;
       dragRef.current = { startX: e.clientX, startY: e.clientY, origX: translate.x, origY: translate.y };
     },
-    [panMode, translate]
+    [translate]
   );
   const onMouseMove = useCallback((e: React.MouseEvent) => {
     if (!dragRef.current) return;
@@ -212,6 +214,28 @@ export function LocationMapCard({ locationCode, devices, currentUserId, onDevice
   const onMouseUp = useCallback(() => {
     dragRef.current = null;
   }, []);
+
+  // Mouse-wheel zoom toward the cursor (BUG #13). Native non-passive listener
+  // so preventDefault() actually stops the page from scrolling — React's
+  // synthetic onWheel is passive.
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const rect = viewport.getBoundingClientRect();
+      const px = e.clientX - rect.left;
+      const py = e.clientY - rect.top;
+      const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
+      const next = Math.max(minScale, Math.min(MAX_SCALE, scale * factor));
+      if (Math.abs(next - scale) < 0.0005) return;
+      const ratio = next / scale;
+      setTranslate({ x: px - (px - translate.x) * ratio, y: py - (py - translate.y) * ratio });
+      setScale(+next.toFixed(3));
+    };
+    viewport.addEventListener("wheel", onWheel, { passive: false });
+    return () => viewport.removeEventListener("wheel", onWheel);
+  }, [scale, translate, minScale]);
 
   // Converts a client (viewport) coordinate into the floor-plan's own pixel
   // space by inverting the current translate/scale transform — the same
@@ -446,7 +470,7 @@ export function LocationMapCard({ locationCode, devices, currentUserId, onDevice
   return (
     <div className="panel map-card">
       <div
-        className={`map-card-viewport${panMode ? " pannable" : ""}`}
+        className={`map-card-viewport`}
         ref={viewportRef}
         onMouseDown={onMouseDown}
         onMouseMove={onMouseMove}
@@ -553,20 +577,6 @@ export function LocationMapCard({ locationCode, devices, currentUserId, onDevice
             <circle cx="9" cy="9" r="6.5" />
             <line x1="14" y1="14" x2="18" y2="18" />
             <line x1="6" y1="9" x2="12" y2="9" />
-          </svg>
-        </button>
-        <button
-          className={`map-control-btn${panMode ? " active" : ""}`}
-          onClick={() => setPanMode((v) => !v)}
-          aria-label="Toggle pan mode"
-          aria-pressed={panMode}
-          title="Pan"
-        >
-          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6">
-            <path d="M10 3v6M10 3l-2 2M10 3l2 2" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M10 17v-6M10 17l-2-2M10 17l2-2" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M3 10h6M3 10l2-2M3 10l2 2" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M17 10h-6M17 10l-2-2M17 10l-2 2" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </button>
         <button className="map-control-btn" onClick={applyFit} aria-label="Fit to screen" title="Fit to screen">
