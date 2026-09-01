@@ -314,8 +314,9 @@ export function DeviceConfigModal({
     onSaved(saved);
   }
 
-  // CONFLICT / BROKEN reconciliation entries only — OFFLINE is expected
-  // (this app never sends heartbeats) and not surfaced. Section 15.8.
+  // CONFLICT / BROKEN reconciliation entries only. OFFLINE mappings are not
+  // surfaced here — whether to act on them once real heartbeats exist
+  // (BL-072, §15.10) is a separate, still-open product question. Section 15.8.
   function conflictOrBrokenMappings(d: DeviceRecord | null): ReconciliationMapping[] {
     const mappings = d?.platformReconciliation?.affectedMappings ?? [];
     return mappings.filter((m) => m.mappingStatus === "CONFLICT" || m.mappingStatus === "BROKEN");
@@ -401,6 +402,17 @@ export function DeviceConfigModal({
           )}
           <fieldset className="modal-fields" disabled={readOnly}>
           {syncBanner && <div className="error-banner">{syncBanner}</div>}
+          {/* Real heartbeat health (BL-072, §15.10) — same "only show it once
+              there's something to show" posture as the sync banner above. */}
+          {syncSource?.lastHeartbeatError && (
+            <div className="error-banner">Heartbeat failing: {syncSource.lastHeartbeatError}</div>
+          )}
+          {syncSource?.lastHeartbeatStatus && !syncSource.lastHeartbeatError && (
+            <p className="note" style={{ marginTop: 0 }}>
+              Last heartbeat: {syncSource.lastHeartbeatStatus}
+              {syncSource.lastHeartbeatSentAt && `, ${new Date(syncSource.lastHeartbeatSentAt).toLocaleString()}`}
+            </p>
+          )}
           {postSave?.lastSyncError && (
             <div className="snack snack-danger">Saved here — publishing to Bartender failed.</div>
           )}

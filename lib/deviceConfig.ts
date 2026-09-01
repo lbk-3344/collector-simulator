@@ -47,6 +47,10 @@ export interface DeviceRecord {
   lastSyncedAt: string | null;
   lastSyncError: string | null;
   platformReconciliation: PlatformReconciliation | null;
+  // Real heartbeat health (BL-072, CLAUDE-CONCEPT.md section 15.10).
+  lastHeartbeatSentAt: string | null;
+  lastHeartbeatStatus: string | null;
+  lastHeartbeatError: string | null;
   // The Device's Task (BL-059) — its link to a Workflow, one per Device.
   // null when the Device isn't on any Workflow's canvas.
   task: { id: string; name: string | null; workflow: WorkflowRecord | null } | null;

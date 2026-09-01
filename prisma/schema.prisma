@@ -169,6 +169,13 @@ model Device {
   lastSyncError          String? // message from the most recent failed register/deregister call; cleared on the next success
   platformReconciliation Json? // the register response's `reconciliation` block, if any — { affectedMappings: [{ channelId, mappingStatus, issue, detail, ... }] }
 
+  // Real heartbeat tracking (BL-072, CLAUDE-CONCEPT.md section 15.10). A
+  // scheduled tick PUTs /collectors/{collectorId}/heartbeat every
+  // heartbeatTimeoutSeconds/2 for every published, heartbeat-enabled Device.
+  lastHeartbeatSentAt DateTime? // stamped on every attempt (success or failure) — drives the due-check
+  lastHeartbeatStatus String? // "ONLINE" | "CONFIG_PENDING" | "FAILED", from the most recent attempt
+  lastHeartbeatError  String? // message from the most recent FAILED attempt; cleared on the next success
+
   // A Device relates to a Workflow *through* a Task now (BL-059,
   // CLAUDE-CONCEPT.md 16.6) — the old direct `workflowId` FK is gone.
   task Task?

@@ -1,0 +1,86 @@
+import { prisma } from "@/lib/prisma";
+import { getServiceCredentials } from "@/lib/bartenderLocations";
+import { sendHeartbeat } from "@/lib/bartenderDataCollector";
+
+// BL-072, CLAUDE-CONCEPT.md 15.10 — the DataCollector heartbeat tick. Modeled
+// on lib/workflowRun.ts's runTick(): one exported async function, called by a
+// thin CRON_SECRET-guarded route (app/api/cron/heartbeat-tick). An external
+// per-minute scheduler drives it (Vercel Hobby cron is daily-only), same
+// mechanism as workflow-tick.
+//
+// For every published (registered), heartbeat-enabled Device, PUT
+// /collectors/{collectorId}/heartbeat once every heartbeatTimeoutSeconds/2.
+// Never blocks anything else on a platform failure — the failure is recorded
+// on the Device and surfaced as an in-modal banner (15.10 / 15.8).
+
+export interface HeartbeatTickSummary {
+  checked: number;
+  sent: number;
+  online: number;
+  configPending: number;
+  failed: number;
+  notes: string[];
+}
+
+export async function runHeartbeatTick(): Promise<HeartbeatTickSummary> {
+  const now = new Date();
+  const summary: HeartbeatTickSummary = { checked: 0, sent: 0, online: 0, configPending: 0, failed: 0, notes: [] };
+  const creds = await getServiceCredentials();
+
+  const devices = await prisma.device.findMany({
+    where: { heartbeatEnabled: true, publishedAt: { not: null }, collectorId: { not: null } },
+    select: {
+      id: true,
+      collectorId: true,
+      heartbeatTimeoutSeconds: true,
+      lastHeartbeatSentAt: true,
+    },
+  });
+
+  for (const device of devices) {
+    summary.checked++;
+    const intervalMs = (device.heartbeatTimeoutSeconds / 2) * 1000;
+    const due =
+      !device.lastHeartbeatSentAt || now.getTime() - device.lastHeartbeatSentAt.getTime() >= intervalMs;
+    if (!due || !device.collectorId) continue;
+
+    // Optimistic claim (same pattern as FeedLink firing in the run engine) —
+    // a concurrent tick can't double-send for one due window.
+    const claim = await prisma.device.updateMany({
+      where: { id: device.id, lastHeartbeatSentAt: device.lastHeartbeatSentAt },
+      data: { lastHeartbeatSentAt: now },
+    });
+    if (claim.count === 0) continue;
+
+    if (!creds) {
+      await prisma.device.update({
+        where: { id: device.id },
+        data: { lastHeartbeatStatus: "FAILED", lastHeartbeatError: "no Bartender connection configured" },
+      });
+      summary.failed++;
+      summary.notes.push(`heartbeat ${device.collectorId}: no Bartender connection configured`);
+      continue;
+    }
+
+    const res = await sendHeartbeat(creds.tenantUrl, creds.apiKey, device.collectorId);
+    summary.sent++;
+    if (res.ok) {
+      const status = res.heartbeatStatus === "CONFIG_PENDING" ? "CONFIG_PENDING" : "ONLINE";
+      await prisma.device.update({
+        where: { id: device.id },
+        data: { lastHeartbeatStatus: status, lastHeartbeatError: null },
+      });
+      if (status === "CONFIG_PENDING") summary.configPending++;
+      else summary.online++;
+    } else {
+      await prisma.device.update({
+        where: { id: device.id },
+        data: { lastHeartbeatStatus: "FAILED", lastHeartbeatError: res.errorMessage ?? "heartbeat failed" },
+      });
+      summary.failed++;
+      summary.notes.push(`heartbeat ${device.collectorId}: ${res.errorMessage ?? "failed"}`);
+    }
+  }
+
+  return summary;
+}

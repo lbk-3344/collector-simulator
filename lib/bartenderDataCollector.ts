@@ -1,14 +1,19 @@
 import { resolveGatewayUrl } from "@/lib/bartenderLocations";
 import type { DeviceChannel } from "@/lib/deviceConfig";
 
-// Client for Bartender's datacollector-api-v3 — POST /collectors/register and
-// DELETE /collectors/{collectorId}. See CLAUDE-CONCEPT.md section 15.8 and its
-// "Phase 0 live verification" notes (2026-08-29, verified against the sandbox
-// tenant). Registration only — heartbeat (PUT .../heartbeat) and read
-// ingestion (POST /reads) are deliberately not modeled.
+// Client for Bartender's datacollector-api-v3 — POST /collectors/register,
+// DELETE /collectors/{collectorId}, POST /reads, and PUT
+// /collectors/{collectorId}/heartbeat. See CLAUDE-CONCEPT.md sections 15.8,
+// 7.5 and 15.10, plus the "Phase 0 live verification" notes (2026-08-29,
+// verified against the sandbox tenant).
 //
 // Reuses location-api-v2's two fixed gateway hosts (lib/bartenderLocations.ts),
 // just with a /datacollector path suffix; same lowercase `apikey` header.
+//
+// NOTE: the generic PUT .../heartbeat endpoint (sendHeartbeat, below) is a
+// well-specified schema and unrelated to the `heartbeatConfig` object inside
+// POST /collectors/register — Phase 0 (BL-053) could not determine that
+// object's accepted shape, so it stays omitted from the register payload.
 
 export function resolveDataCollectorGatewayUrl(tenantUrl: string): string {
   return `${resolveGatewayUrl(tenantUrl)}/datacollector`;
@@ -216,4 +221,62 @@ export async function sendReads(
     return { ok: true, status: res.status, submitted: tags.length, readStatus: b?.status, epcisEventId: b?.epcisEventId ?? null };
   }
   return { ok: false, status: res.status, submitted: tags.length, errorMessage: errorMessageFrom(body, raw, res.status) };
+}
+
+export interface SendHeartbeatResult {
+  ok: boolean;
+  status: number;
+  heartbeatStatus?: "ONLINE" | "CONFIG_PENDING" | string;
+  lastSeenAt?: string;
+  errorMessage?: string;
+}
+
+// PUT {gateway}/collectors/{collectorId}/heartbeat (datacollector-api-v3,
+// CLAUDE-CONCEPT.md 15.10).
+//
+// Live-probed 2026-09-01 against the sandbox: the ONLY accepted body field is
+// `timestamp` (ISO 8601). `configVersion` (and every other extra field tried)
+// comes back `400 VALIDATION_ERROR "Unknown field."` — the spec's assumed
+// `{ timestamp, configVersion? }` was wrong, same category as the
+// `heartbeatConfig`-on-register question. Success → `200 { status: "ONLINE",
+// lastSeenAt }`. A 404 COLLECTOR_NOT_FOUND means this collectorId was never
+// actually registered on the platform (treated as a failure, with the
+// platform's own message). `CONFIG_PENDING` is still recognized here
+// defensively in case the platform ever returns it (server-side drift
+// detection), but this app has no way to elicit it. A scheduled tick
+// (lib/deviceHeartbeat.ts) calls this every heartbeatTimeoutSeconds/2 for
+// each published, heartbeat-enabled Device.
+export async function sendHeartbeat(
+  tenantUrl: string,
+  apiKey: string,
+  collectorId: string
+): Promise<SendHeartbeatResult> {
+  const url = `${resolveDataCollectorGatewayUrl(tenantUrl)}/collectors/${encodeURIComponent(collectorId)}/heartbeat`;
+  const payload: Record<string, unknown> = { timestamp: new Date().toISOString() };
+
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "PUT",
+      headers: { apikey: apiKey, "content-type": "application/json" },
+      body: JSON.stringify(payload),
+      cache: "no-store",
+    });
+  } catch {
+    return { ok: false, status: 0, errorMessage: "Could not reach the Bartender platform." };
+  }
+
+  const raw = await res.text().catch(() => "");
+  let body: unknown = null;
+  try {
+    body = raw ? JSON.parse(raw) : null;
+  } catch {
+    /* keep raw */
+  }
+
+  if (res.ok) {
+    const b = body as { status?: "ONLINE" | "CONFIG_PENDING" | string; lastSeenAt?: string } | null;
+    return { ok: true, status: res.status, heartbeatStatus: b?.status, lastSeenAt: b?.lastSeenAt };
+  }
+  return { ok: false, status: res.status, errorMessage: errorMessageFrom(body, raw, res.status) };
 }
