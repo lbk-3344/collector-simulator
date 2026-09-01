@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useDialog } from "@/components/AppDialog";
 import { PageHeader } from "@/components/PageHeader";
 import { SharedBadge } from "@/components/SharedBadge";
+import { ActivityModal } from "./ActivityModal";
 
 const WORKFLOWS_INFO = (
   <>
@@ -17,7 +18,10 @@ const WORKFLOWS_INFO = (
       each read is pushed to the Track &amp; Trace platform for real, and batches travel the flow links to downstream
       tasks. A safety timer auto-stops a run after its configured duration.
     </p>
-    <p>Start or stop a workflow with the icon on its row, or use Start all / Stop all.</p>
+    <p>
+      Start or stop a workflow with the icon on its row, or use Start all / Stop all. The activity icon shows its
+      recent reads without opening the canvas.
+    </p>
   </>
 );
 
@@ -32,6 +36,13 @@ function StopIcon() {
   return (
     <svg viewBox="0 0 20 20" fill="currentColor" stroke="none">
       <rect x="5" y="5" width="10" height="10" rx="1.6" />
+    </svg>
+  );
+}
+function ActivityIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2.5 11h3l2-5.5 4 9 2-5.5h4" />
     </svg>
   );
 }
@@ -57,6 +68,7 @@ export default function WorkflowsPage() {
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [activityWorkflow, setActivityWorkflow] = useState<WorkflowRow | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -200,7 +212,7 @@ export default function WorkflowsPage() {
                     {wf.autoStoppedAt && <div className="u-email">auto-stopped {new Date(wf.autoStoppedAt).toLocaleString()}</div>}
                   </td>
                   <td>
-                    <span className={`chip ${wf.status === "RUNNING" ? "chip-success" : "chip-warning"}`}>
+                    <span className={`chip ${wf.status === "RUNNING" ? "chip-success" : "chip-stopped"}`}>
                       {wf.status === "RUNNING" ? "Running" : "Stopped"}
                     </span>
                   </td>
@@ -216,6 +228,14 @@ export default function WorkflowsPage() {
                         onClick={() => setStatus(wf.id, wf.status === "RUNNING" ? "STOPPED" : "RUNNING")}
                       >
                         {wf.status === "RUNNING" ? <StopIcon /> : <PlayIcon />}
+                      </button>
+                      <button
+                        className="row-icon-btn row-icon-btn-ghost"
+                        aria-label="Activity"
+                        title="Activity"
+                        onClick={() => setActivityWorkflow(wf)}
+                      >
+                        <ActivityIcon />
                       </button>
                       <button
                         className="row-icon-btn row-icon-btn-delete"
@@ -236,6 +256,14 @@ export default function WorkflowsPage() {
             </tbody>
           </table>
         </div>
+      )}
+
+      {activityWorkflow && (
+        <ActivityModal
+          workflowId={activityWorkflow.id}
+          workflowName={activityWorkflow.name}
+          onClose={() => setActivityWorkflow(null)}
+        />
       )}
     </section>
   );

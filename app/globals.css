@@ -359,6 +359,10 @@ svg { display: block; }
 .chip-info    { background: var(--info-tint);    color: var(--info);    border-color: var(--info-border); }
 .chip-danger  { background: var(--danger-tint);  color: var(--danger);  border-color: var(--danger-border); }
 .chip-warning { background: var(--warning-tint); color: var(--warning); border-color: var(--warning-border); }
+/* Bug #8 (2026-09-01): a stopped Workflow reads as solid red + dark text —
+   same red as the Devices list's "Problem" state (--device-problem ==
+   --danger) — instead of the tint-based warning-amber every other chip uses. */
+.chip-stopped { background: var(--danger); color: #0D1E2C; border-color: var(--danger); }
 .chip-brand   { background: var(--accent-brand-tint); color: var(--accent-brand-ink); }
 .chip-brand::before { display: none; }
 /* "Shared" read-only badge (BL-068) — padlock glyph, no status dot */
@@ -445,8 +449,10 @@ select.role-select:disabled { opacity: .5; cursor: not-allowed; }
 .btn:active { transform: scale(0.98); }
 .btn-primary { background: var(--accent-primary); color: var(--accent-primary-contrast); }
 .btn-primary:hover { background: var(--accent-primary-hover); }
-.btn-secondary { background: transparent; color: var(--accent-brand-ink); border: 1px solid var(--accent-brand); }
-.btn-secondary:hover { background: var(--accent-brand-tint); }
+/* Bug #9 (2026-09-01): was an orange-outline "line" button — filled orange +
+   white text, matching every other solid button in the app. */
+.btn-secondary { background: var(--accent-brand); color: var(--accent-brand-contrast); border: 1px solid var(--accent-brand); }
+.btn-secondary:hover { background: var(--accent-brand-ink); border-color: var(--accent-brand-ink); }
 .btn-danger { background: var(--danger); color: white; }
 .btn-danger:hover { opacity: .88; }
 .btn-brand { background: var(--accent-brand-tint); color: var(--accent-brand-ink); }
@@ -699,6 +705,10 @@ select.role-select:disabled { opacity: .5; cursor: not-allowed; }
 .wf-edge-label:hover { border-color: var(--accent-primary); color: var(--ink); }
 .wf-edge-label.is-else { background: var(--warning-tint); color: var(--warning); border-color: var(--warning-border); }
 .wf-edge-label-feed { background: var(--accent-primary); color: var(--accent-primary-contrast); border-color: var(--accent-primary); }
+/* Bug #6 (2026-08-31): the generic :hover above forced dark --ink text, which
+   on this chip's own navy fill was black-on-navy — invisible. Lighten to a
+   light-gray "selected" hover instead, matching every other hover in the app. */
+.wf-edge-label-feed:hover { background: var(--surface-2); color: var(--ink); border-color: var(--accent-primary); }
 
 /* Feed Node — distinct navy/white style vs Task nodes (CHARTE-GRAPHIQUE.md). */
 .wf-feed-node {

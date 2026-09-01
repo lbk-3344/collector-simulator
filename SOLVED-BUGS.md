@@ -56,3 +56,39 @@ Append-only archive of resolved bugs — number, title, description, dates, and 
 **Description:** Items Feeds should come before workflows.
 
 **Fix:** Reordered `NAV_ITEMS` in `components/AppShell.tsx` — sidebar order is now Overview · Devices · Item Feeds · Workflows.
+
+---
+
+## #6 — Mouse over a item feed link with a device has the text in black so invisible
+
+**Reported:** 2026-08-31 by Luc Bellissard <lbellissard@seagullsoftware.com>
+**Resolved:** 2026-09-01
+
+When Mouse over a item feed link with a device, the text becomes in black so invisible to human eyes, maybe have it in a very ight gray would show it is 'selected' but still be readable
+
+---
+
+## #7 — Add Activity icon in the Workflow list page
+
+**Reported:** 2026-09-01 by Luc Bellissard <lbellissard@seagullsoftware.com>
+**Resolved:** 2026-09-01
+
+Instead of having to click and open the workflow graph panel, add an icon for the activity on the main list page
+
+---
+
+## #8 — Color of Stopped workflow in Workflow list page
+
+**Reported:** 2026-09-01 by Luc Bellissard <lbellissard@seagullsoftware.com>
+**Resolved:** 2026-09-01
+
+Please use the red color in background with text in black for the stop status of a workflow, consistent with the color we use for devices.
+
+---
+
+## #9 — Color of all Orange Button
+
+**Reported:** 2026-09-01 by Luc Bellissard <lbellissard@seagullsoftware.com>
+**Resolved:** 2026-09-01
+
+Change the color of actual Orange line buttons, into an Orange filled and Text in White
