@@ -47,7 +47,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   const collectorId = await suggestCollectorId(source.locationCode, source.type);
 
-  const device = await prisma.device.create({
+  let device;
+  try {
+    device = await prisma.device.create({
     data: {
       // The clone always lands in the caller's own workspace (§17.3), never
       // marked shared, regardless of the source's owner or shared flag.
@@ -76,7 +78,20 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       // platformReconciliation left unset → null (column default)
     },
     include: DEVICE_INCLUDE,
-  });
+    });
+  } catch (e) {
+    // Almost always a Device.collectorId @unique clash — shouldn't happen now
+    // that suggestCollectorId scans for a free slot, but a concurrent
+    // duplicate of the same source could still race. Surface it cleanly
+    // instead of a 500.
+    if (e && typeof e === "object" && (e as { code?: string }).code === "P2002") {
+      return NextResponse.json(
+        { error: "Couldn't pick a free Collector ID for the copy — try again." },
+        { status: 409 }
+      );
+    }
+    throw e;
+  }
 
   return NextResponse.json({ device });
 }
