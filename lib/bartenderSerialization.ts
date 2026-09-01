@@ -1,6 +1,9 @@
-// Client for Bartender's LEGACY Serialization API (`serialization-api`) —
-// see CLAUDE-CONCEPT.md section 7.6. Temporary stand-in until
-// `serialization-api-v3-updated` is available; kept a thin, swappable module.
+import { resolveGatewayUrl } from "@/lib/bartenderLocations";
+
+// Client for Bartender's Serialization API v3 (`serialization-api-v3-updated`)
+// — see CLAUDE-CONCEPT.md section 7.6. Migrated from the legacy
+// `serialization-api` (HTTP Basic, GET .../hexas/sgtin96/...) on 2026-09-01
+// once Luc confirmed v3 was live (BL-073).
 //
 // EVERY successful call is a REAL, PERMANENT write to the live Bartender
 // tenant — the minted EPCs exist on the platform forever, there is no
@@ -8,10 +11,29 @@
 // is this app's own safety net and is enforced *inside* this function by
 // clamping, so no bug at a call site can ask for more.
 
+export function resolveSerializationGatewayUrl(tenantUrl: string): string {
+  return `${resolveGatewayUrl(tenantUrl)}/serialization`;
+}
+
+// GS1 standards this app currently supports minting. grai-96/sscc-96/giai-96
+// are also live on the platform (per Luc, 2026-09-01) but identify different
+// business objects than ItemFeed's GTIN-based product model, so they need a
+// data-model conversation first — see BL-073's follow-up note.
+export type Gs1Standard = "sgtin-96" | "sgtin-198";
+
 export const MAX_NEW_ITEMS_PER_FIRING = 10; // Luc's explicit safety cap, 2026-08-30
 // — "we will level up the limit later when it is fully baked in." Do NOT raise
 // this without an explicit instruction from Luc. This is a TOTAL across
 // however many GTINs one firing touches, NOT a per-GTIN allowance.
+
+// The v3 endpoint requires companyPrefixLength alongside the GTIN (it splits
+// the GTIN into GS1 company prefix + item reference). This app has NO live
+// source for a real per-product value yet — master-data-api (§7.7) models it
+// on its Product schema but isn't available; the legacy product-api this app
+// does call doesn't expose it. 7 is the most common real-world GCP length and
+// is what Luc's own working example hardcodes. Revisit once a real per-GTIN
+// value exists.
+const DEFAULT_COMPANY_PREFIX_LENGTH = 7;
 
 /** The total quantity actually minted for a requested amount — exported so the cap is unit-testable. */
 export function cappedQuantity(requested: number): number {
@@ -20,23 +42,42 @@ export function cappedQuantity(requested: number): number {
 
 export class SerializationError extends Error {}
 
-// GET {tenantUrl}/serialization-api/rest/serialization/hexas/sgtin96/gtin/{gtin}?quantity={n}
-// HTTP Basic auth. Response: a plain JSON array of SGTIN-96 hex EPC strings.
-async function mintForOneGtin(
+interface Gs1GeneratedSerial {
+  serialNumber?: string;
+  hex?: string;
+  epcUrn?: string;
+  epcTagUri?: string;
+}
+
+// POST {gateway}/serialization/gs1/{standard}/generate. Auth is the bare
+// lowercase `apikey` header — NOT `x-api-key` as the spec text claims (Luc's
+// live curl, 2026-09-01; the same spec-vs-reality correction already on
+// record for location-api-v2 / inventory-public-api / datacollector-api-v3).
+// `Accept-Version: v2` per Luc's example. Requests `hex` only — the sole
+// format this app stores / pushes to the platform (POST /reads' `hexa` field,
+// §7.5 / BL-063).
+async function generateGs1(
   tenantUrl: string,
-  username: string,
-  password: string,
+  apiKey: string,
+  standard: Gs1Standard,
   gtin: string,
   quantity: number
 ): Promise<string[]> {
-  const url = `${tenantUrl.replace(/\/+$/, "")}/serialization-api/rest/serialization/hexas/sgtin96/gtin/${encodeURIComponent(
-    gtin
-  )}?quantity=${quantity}`;
-  const auth = `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`;
+  const url = `${resolveSerializationGatewayUrl(tenantUrl)}/gs1/${standard}/generate`;
 
   let res: Response;
   try {
-    res = await fetch(url, { headers: { Authorization: auth }, cache: "no-store" });
+    res = await fetch(url, {
+      method: "POST",
+      headers: { apikey: apiKey, "Accept-Version": "v2", "Content-Type": "application/json" },
+      body: JSON.stringify({
+        quantity,
+        formats: ["hex"],
+        serialSource: { mode: "internal" },
+        input: { gtin, companyPrefixLength: DEFAULT_COMPANY_PREFIX_LENGTH },
+      }),
+      cache: "no-store",
+    });
   } catch {
     throw new SerializationError("Could not reach the Serialization API — check the tenant URL.");
   }
@@ -54,16 +95,16 @@ async function mintForOneGtin(
   }
 
   try {
-    const body = JSON.parse(raw);
-    if (Array.isArray(body)) return body.filter((x): x is string => typeof x === "string");
+    const body = JSON.parse(raw) as { serials?: Gs1GeneratedSerial[] };
+    return (body.serials ?? []).map((s) => s.hex).filter((h): h is string => typeof h === "string");
   } catch {
-    throw new SerializationError("Unexpected (non-array) response from the Serialization API.");
+    throw new SerializationError("Unexpected response from the Serialization API.");
   }
-  return [];
 }
 
 // Called by the run engine for a NEW-kind Item Feed's firing (BL-056 revised
-// 2026-08-30 — a Feed can list several GTINs). `quantity` is clamped to
+// 2026-08-30 — a Feed can list several GTINs; BL-073 2026-09-01 — v3 client,
+// optional per-feed `standard`). `quantity` is clamped to
 // MAX_NEW_ITEMS_PER_FIRING *in total*, then each unit is assigned a uniformly
 // random GTIN from `gtins`, grouped, and minted per distinct GTIN — the
 // per-GTIN allocation policy from CLAUDE-CONCEPT.md 16.1 (flagged as not yet
@@ -72,10 +113,10 @@ async function mintForOneGtin(
 // mistake it for "zero items".
 export async function mintSerializedItems(
   tenantUrl: string,
-  username: string,
-  password: string,
+  apiKey: string,
   gtins: string[],
-  quantity: number
+  quantity: number,
+  standard: Gs1Standard = "sgtin-96"
 ): Promise<{ gtin: string; epc: string }[]> {
   const list = gtins.map((g) => String(g).trim()).filter(Boolean);
   if (list.length === 0) throw new SerializationError("NEW feed has no GTIN to mint.");
@@ -97,7 +138,7 @@ export async function mintSerializedItems(
 
   const out: { gtin: string; epc: string }[] = [];
   for (const [gtin, count] of perGtin) {
-    const epcs = await mintForOneGtin(tenantUrl, username, password, gtin, count);
+    const epcs = await generateGs1(tenantUrl, apiKey, standard, gtin, count);
     for (const epc of epcs) out.push({ gtin, epc });
   }
   return out;

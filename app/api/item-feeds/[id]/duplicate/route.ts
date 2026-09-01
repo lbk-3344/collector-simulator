@@ -35,6 +35,7 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
       name: `${source.name} (Copy)`,
       kind: source.kind,
       categoryCode: source.categoryCode,
+      gs1Standard: source.gs1Standard,
       presentMatchMode: source.presentMatchMode,
       quantityMin: source.quantityMin,
       quantityMax: source.quantityMax,

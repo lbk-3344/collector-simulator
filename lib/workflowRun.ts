@@ -65,7 +65,13 @@ async function resolveBatch(feed: any, creds: ServiceCreds): Promise<ResolvedBat
     try {
       // mintSerializedItems clamps the TOTAL to MAX_NEW_ITEMS_PER_FIRING and
       // splits it randomly across the feed's GTINs.
-      const minted = await mintSerializedItems(creds.tenantUrl, creds.username, creds.password, gtins, quantity);
+      const minted = await mintSerializedItems(
+        creds.tenantUrl,
+        creds.apiKey,
+        gtins,
+        quantity,
+        feed.gs1Standard === "sgtin-198" ? "sgtin-198" : "sgtin-96"
+      );
       return { items: minted.map((m) => m.epc), itemGtins: minted.map((m) => m.gtin) };
     } catch (e) {
       const msg = e instanceof SerializationError ? e.message : "serialization call failed";

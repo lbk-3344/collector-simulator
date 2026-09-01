@@ -54,6 +54,7 @@ export function ItemFeedForm({
   const [presentMatchMode, setPresentMatchMode] = useState<PresentMatchMode>("GTIN_LIST");
   const [quantityMin, setQuantityMin] = useState(1);
   const [quantityMax, setQuantityMax] = useState(1);
+  const [gs1Standard, setGs1Standard] = useState("sgtin-96"); // NEW only (BL-073)
   const [locationCode, setLocationCode] = useState("");
   const [zoneCode, setZoneCode] = useState("");
   const [fixedItems, setFixedItems] = useState<string[]>([""]);
@@ -71,6 +72,7 @@ export function ItemFeedForm({
     setPresentMatchMode(feed?.presentMatchMode ?? "GTIN_LIST");
     setQuantityMin(feed?.quantityMin ?? 1);
     setQuantityMax(feed?.quantityMax ?? feed?.quantityMin ?? 1);
+    setGs1Standard(feed?.gs1Standard || "sgtin-96");
     setLocationCode(feed?.locationCode ?? "");
     setZoneCode(feed?.zoneCode ?? "");
     setFixedItems(feed?.fixedItems?.length ? feed.fixedItems : [""]);
@@ -116,6 +118,7 @@ export function ItemFeedForm({
       body.categoryCode = categoryCode;
       body.quantityMin = quantityMin;
       body.quantityMax = quantityMax;
+      if (kind === "NEW") body.gs1Standard = gs1Standard;
       if (kind === "PRESENT") {
         body.presentMatchMode = presentMatchMode;
         body.locationCode = locationCode;
@@ -246,6 +249,20 @@ export function ItemFeedForm({
         )}
         {kind === "NEW" && quantityMax > 10 && (
           <div className="snack snack-warning">New feeds are capped at 10 minted items per firing (total across all GTINs).</div>
+        )}
+
+        {kind === "NEW" && (
+          <div className="field-block">
+            <label htmlFor="feedGs1Standard">Identifier format</label>
+            <select id="feedGs1Standard" value={gs1Standard} onChange={(e) => setGs1Standard(e.target.value)}>
+              <option value="sgtin-96">SGTIN-96 (default)</option>
+              <option value="sgtin-198">SGTIN-198</option>
+            </select>
+            <span className="note" style={{ marginTop: 4 }}>
+              The GS1 EPC encoding minted on the platform. SGTIN-96 is what everything downstream expects; SGTIN-198
+              allows a longer alphanumeric serial.
+            </span>
+          </div>
         )}
 
         {kind === "PRESENT" && (

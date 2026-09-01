@@ -382,6 +382,12 @@ model ItemFeed {
   gtins        Json? // string[]
   categoryCode String? // authoring-time bulk-add helper — resolves into `gtins`, not a live reference
 
+  // NEW only. null / "sgtin-96" = default; "sgtin-198" = the longer GS1 EPC
+  // encoding (BL-073, 2026-09-01). grai-96/sscc-96/giai-96 are also live on
+  // the platform but aren't GTIN-based and don't fit this field — see BL-073's
+  // follow-up note.
+  gs1Standard String?
+
   // PRESENT only, default GTIN_LIST. ALL = "match anything present in the
   // zone" — `gtins` is ignored.
   presentMatchMode PresentMatchMode?

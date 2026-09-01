@@ -16,6 +16,8 @@ export interface ItemFeedRecord {
   kind: ItemFeedKind;
   gtins: string[] | null;
   categoryCode: string | null;
+  // NEW only — "sgtin-96" (default; null means the same) or "sgtin-198" (BL-073).
+  gs1Standard: string | null;
   presentMatchMode: PresentMatchMode | null;
   quantityMin: number | null;
   quantityMax: number | null;
@@ -46,6 +48,9 @@ export function buildItemFeedData(body: any): { error: string } | { data: Record
 
   const gtins = strArr(body.gtins);
   const categoryCode = str(body.categoryCode);
+  // NEW only. Only "sgtin-198" is a non-default choice; anything else (incl.
+  // "sgtin-96", null, garbage) normalizes to null = default sgtin-96 (BL-073).
+  const gs1Standard = body.gs1Standard === "sgtin-198" ? "sgtin-198" : null;
   const locationCode = str(body.locationCode);
   const zoneCode = str(body.zoneCode);
   const fixedItems = strArr(body.fixedItems);
@@ -86,6 +91,7 @@ export function buildItemFeedData(body: any): { error: string } | { data: Record
       kind,
       gtins: kind === "FIXED" ? null : gtins.length ? gtins : null,
       categoryCode: kind === "FIXED" ? null : categoryCode,
+      gs1Standard: kind === "NEW" ? gs1Standard : null,
       presentMatchMode: kind === "PRESENT" ? presentMatchMode : null,
       quantityMin,
       quantityMax,
