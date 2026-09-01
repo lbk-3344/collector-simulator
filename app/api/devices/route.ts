@@ -100,10 +100,18 @@ export async function POST(req: NextRequest) {
     data = { ...data, ...syncData } as typeof data;
   }
 
-  const device = await prisma.device.create({
-    data,
-    include: DEVICE_INCLUDE,
-  });
+  let device;
+  try {
+    device = await prisma.device.create({ data, include: DEVICE_INCLUDE });
+  } catch (e) {
+    if (e && typeof e === "object" && (e as { code?: string }).code === "P2002") {
+      return NextResponse.json(
+        { error: "That Collector ID is already used by another device — pick a different one." },
+        { status: 409 }
+      );
+    }
+    throw e;
+  }
 
   return NextResponse.json({ device });
 }

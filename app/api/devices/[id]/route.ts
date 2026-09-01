@@ -14,6 +14,23 @@ const DEVICE_INCLUDE = {
   task: { select: { id: true, name: true, workflow: { select: { id: true, name: true, status: true } } } },
 } as const;
 
+// A prisma.device.update can fail for reasons other than "record gone" — most
+// importantly a Collector ID clash (@unique). Map those to a clear message;
+// return null for anything unexpected so the caller rethrows (real 500).
+function updateErrorResponse(e: unknown): NextResponse | null {
+  const code = e && typeof e === "object" ? (e as { code?: string }).code : undefined;
+  if (code === "P2002") {
+    return NextResponse.json(
+      { error: "That Collector ID is already used by another device — pick a different one." },
+      { status: 409 }
+    );
+  }
+  if (code === "P2025") {
+    return NextResponse.json({ error: "Device not found" }, { status: 404 });
+  }
+  return null;
+}
+
 export async function GET(req: Request, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
   if (!session) {
@@ -70,8 +87,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         include: DEVICE_INCLUDE,
       });
       return NextResponse.json({ device });
-    } catch {
-      return NextResponse.json({ error: "Device not found" }, { status: 404 });
+    } catch (e) {
+      return updateErrorResponse(e) ?? NextResponse.json({ error: "Couldn't save this device." }, { status: 500 });
     }
   }
 
@@ -118,8 +135,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       include: DEVICE_INCLUDE,
     });
     return NextResponse.json({ device });
-  } catch {
-    return NextResponse.json({ error: "Device not found" }, { status: 404 });
+  } catch (e) {
+    return updateErrorResponse(e) ?? NextResponse.json({ error: "Couldn't save this device." }, { status: 500 });
   }
 }
 
