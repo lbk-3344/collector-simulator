@@ -359,10 +359,11 @@ svg { display: block; }
 .chip-info    { background: var(--info-tint);    color: var(--info);    border-color: var(--info-border); }
 .chip-danger  { background: var(--danger-tint);  color: var(--danger);  border-color: var(--danger-border); }
 .chip-warning { background: var(--warning-tint); color: var(--warning); border-color: var(--warning-border); }
-/* Bug #8 (2026-09-01): a stopped Workflow reads as solid red + dark text —
-   same red as the Devices list's "Problem" state (--device-problem ==
-   --danger) — instead of the tint-based warning-amber every other chip uses. */
-.chip-stopped { background: var(--danger); color: #0D1E2C; border-color: var(--danger); }
+/* Bug #8 (2026-09-01): a stopped Workflow reads as solid red — same red as
+   the Devices list's "Problem" state (--device-problem == --danger) —
+   instead of the tint-based warning-amber every other chip uses. Text and
+   the ::before dot are white for readability on the saturated red. */
+.chip-stopped { background: var(--danger); color: #fff; border-color: var(--danger); }
 .chip-brand   { background: var(--accent-brand-tint); color: var(--accent-brand-ink); }
 .chip-brand::before { display: none; }
 /* "Shared" read-only badge (BL-068) — padlock glyph, no status dot */
