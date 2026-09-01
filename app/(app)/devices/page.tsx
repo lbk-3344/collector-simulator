@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useDialog } from "@/components/AppDialog";
 import { PageHeader } from "@/components/PageHeader";
 import { SharedBadge } from "@/components/SharedBadge";
 import ReadPointIcon, { READ_POINT_LABELS, type ReadPointType } from "@/components/ui/ReadPointIcon";
 import { DeviceConfigModal } from "@/components/DeviceConfigModal";
 import { getDeviceState } from "@/lib/deviceState";
+import { useTableSort } from "@/lib/useTableSort";
 import type { DeviceRecord } from "@/lib/deviceConfig";
 import type { BartenderLocation } from "@/lib/bartenderLocations";
 
@@ -79,6 +80,7 @@ export default function DevicesPage() {
   const [warning, setWarning] = useState<string | null>(null);
   const [configModal, setConfigModal] = useState<{ device: DeviceRecord | null; readOnly?: boolean } | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [siteFilter, setSiteFilter] = useState<string>(""); // "" = all sites (BUG #15)
   const { confirm } = useDialog();
 
   const load = useCallback(async () => {
@@ -102,12 +104,41 @@ export default function DevicesPage() {
       .then((res) => (res.ok ? res.json() : { locations: [] }))
       .then((data) => setLocations(data.locations ?? []))
       .catch(() => {});
+    // Default the Site filter to whatever Overview is on (BUG #15).
+    fetch("/api/settings/selected-location")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => data?.locationCode && setSiteFilter(data.locationCode))
+      .catch(() => {});
   }, []);
 
   const siteOptions = locations.map((l) => ({ code: l.code, name: l.name }));
-  function siteName(code: string) {
-    return locations.find((l) => l.code === code)?.name ?? code;
-  }
+  const siteName = useCallback(
+    (code: string) => locations.find((l) => l.code === code)?.name ?? code,
+    [locations]
+  );
+
+  // Only sites that actually have a device, for the filter dropdown.
+  const filterSites = useMemo(() => {
+    const codes = Array.from(new Set((devices ?? []).map((d) => d.locationCode)));
+    return codes.map((c) => ({ code: c, name: siteName(c) })).sort((a, b) => a.name.localeCompare(b.name));
+  }, [devices, siteName]);
+
+  const visible = useMemo(
+    () => (devices ?? []).filter((d) => !siteFilter || d.locationCode === siteFilter),
+    [devices, siteFilter]
+  );
+
+  const { rows, headerProps } = useTableSort(
+    visible,
+    {
+      type: (d) => (READ_POINT_LABELS[d.type as ReadPointType] ?? d.type).toLowerCase(),
+      name: (d) => d.name.toLowerCase(),
+      site: (d) => siteName(d.locationCode).toLowerCase(),
+      state: (d) => getDeviceState(d),
+      workflow: (d) => d.task?.workflow?.name?.toLowerCase() ?? null,
+    },
+    { key: "name" }
+  );
 
   async function handleDelete(device: DeviceRecord) {
     const ok = await confirm({
@@ -182,25 +213,41 @@ export default function DevicesPage() {
       {error && <div className="snack snack-danger">{error}</div>}
       {warning && <div className="snack snack-warning">{warning}</div>}
 
+      {devices && devices.length > 0 && (
+        <div className="list-toolbar">
+          <label htmlFor="deviceSiteFilter">Site</label>
+          <select id="deviceSiteFilter" value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)}>
+            <option value="">All sites</option>
+            {filterSites.map((s) => (
+              <option key={s.code} value={s.code}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
       {!devices ? (
         <p className="note">Loading devices…</p>
       ) : devices.length === 0 ? (
         <p className="note">No devices yet.</p>
+      ) : rows.length === 0 ? (
+        <p className="note">No devices at {siteName(siteFilter)}.</p>
       ) : (
         <div className="panel table-scroll">
           <table className="users">
             <thead>
               <tr>
-                <th>Type</th>
-                <th>Name</th>
-                <th>Site</th>
-                <th>State</th>
-                <th>Workflow</th>
+                <th {...headerProps("type")}>Type</th>
+                <th {...headerProps("name")}>Name</th>
+                <th {...headerProps("site")}>Site</th>
+                <th {...headerProps("state")}>State</th>
+                <th {...headerProps("workflow")}>Workflow</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
-              {devices.map((device) => {
+              {rows.map((device) => {
                 const state = getDeviceState(device);
                 const isBusy = busyId === device.id;
                 // Visible only because it's shared → read-only (BL-068).

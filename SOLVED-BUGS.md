@@ -92,3 +92,30 @@ Please use the red color in background with text in black for the stop status of
 **Resolved:** 2026-09-01
 
 Change the color of actual Orange line buttons, into an Orange filled and Text in White
+
+---
+
+## #11 — Sorting in Device List
+
+**Reported:** 2026-09-01 by Luc Bellissard <lbellissard@seagullsoftware.com>
+**Resolved:** 2026-09-01
+
+I'd like to be able to sort the device list when clicking on the column header. Same thing with the Item feed list and workflow
+
+---
+
+## #12 — Display the Location of the Feed in feed list page
+
+**Reported:** 2026-09-01 by Luc Bellissard <lbellissard@seagullsoftware.com>
+**Resolved:** 2026-09-01
+
+I'd like to display the site the feed is attached to when there is one. For New feed or Fixed, we should display All Sites
+
+---
+
+## #15 — Filter by Site in the device list
+
+**Reported:** 2026-09-01 by Luc Bellissard <lbellissard@seagullsoftware.com>
+**Resolved:** 2026-09-01
+
+I want to be able to filter the device list (and also the feed list) by location. Default is all site, first choice is the site that is already selected in Overview

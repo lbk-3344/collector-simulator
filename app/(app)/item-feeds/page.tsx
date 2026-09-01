@@ -1,10 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useDialog } from "@/components/AppDialog";
 import { PageHeader } from "@/components/PageHeader";
 import { SharedBadge } from "@/components/SharedBadge";
+import { useTableSort } from "@/lib/useTableSort";
 import type { ItemFeedRecord } from "@/lib/itemFeed";
+import type { BartenderLocation } from "@/lib/bartenderLocations";
 import { ItemFeedModal } from "./ItemFeedModal";
 
 // Item Feed library (BL-058, CLAUDE-CONCEPT.md 16.1) — reusable batch-of-items
@@ -55,9 +57,15 @@ function summarize(f: ItemFeedRecord): string {
   return `${product} · qty ${qty}${where}`;
 }
 
+// A feed's site: PRESENT feeds are pinned to one site; NEW / FIXED apply
+// anywhere (BUG #12).
+const ALL_SITES = "All sites";
+
 export default function ItemFeedsPage() {
   const [feeds, setFeeds] = useState<ItemFeedRecord[] | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [locations, setLocations] = useState<BartenderLocation[]>([]);
+  const [siteFilter, setSiteFilter] = useState<string>(""); // "" = all (BUG #15)
   const [error, setError] = useState<string | null>(null);
   const [modal, setModal] = useState<{ feed: ItemFeedRecord | null; readOnly?: boolean } | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -78,6 +86,55 @@ export default function ItemFeedsPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    fetch("/api/locations")
+      .then((r) => (r.ok ? r.json() : { locations: [] }))
+      .then((d) => setLocations(d.locations ?? []))
+      .catch(() => {});
+    fetch("/api/settings/selected-location")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d?.locationCode && setSiteFilter(d.locationCode))
+      .catch(() => {});
+  }, []);
+
+  const siteName = useCallback(
+    (code: string) => locations.find((l) => l.code === code)?.name ?? code,
+    [locations]
+  );
+  // The site label shown per row.
+  const feedSiteLabel = useCallback(
+    (f: ItemFeedRecord) => (f.kind === "PRESENT" && f.locationCode ? siteName(f.locationCode) : ALL_SITES),
+    [siteName]
+  );
+
+  const filterSites = useMemo(() => {
+    const codes = Array.from(
+      new Set((feeds ?? []).filter((f) => f.kind === "PRESENT" && f.locationCode).map((f) => f.locationCode as string))
+    );
+    return codes.map((c) => ({ code: c, name: siteName(c) })).sort((a, b) => a.name.localeCompare(b.name));
+  }, [feeds, siteName]);
+
+  // A specific site shows its PRESENT feeds plus every NEW / FIXED feed
+  // (those apply to all sites).
+  const visible = useMemo(
+    () =>
+      (feeds ?? []).filter(
+        (f) => !siteFilter || f.kind !== "PRESENT" || f.locationCode === siteFilter
+      ),
+    [feeds, siteFilter]
+  );
+
+  const { rows, headerProps } = useTableSort(
+    visible,
+    {
+      name: (f) => f.name.toLowerCase(),
+      kind: (f) => KIND_LABEL[f.kind],
+      site: (f) => feedSiteLabel(f).toLowerCase(),
+      usage: (f) => f.usageCount ?? 0,
+    },
+    { key: "name" }
+  );
 
   async function handleDelete(feed: ItemFeedRecord) {
     const ok = await confirm({
@@ -129,6 +186,20 @@ export default function ItemFeedsPage() {
 
       {error && <div className="snack snack-danger">{error}</div>}
 
+      {feeds && feeds.length > 0 && filterSites.length > 0 && (
+        <div className="list-toolbar">
+          <label htmlFor="feedSiteFilter">Site</label>
+          <select id="feedSiteFilter" value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)}>
+            <option value="">All sites</option>
+            {filterSites.map((s) => (
+              <option key={s.code} value={s.code}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
       {!feeds ? (
         <p className="note">Loading item feeds…</p>
       ) : feeds.length === 0 ? (
@@ -136,20 +207,23 @@ export default function ItemFeedsPage() {
           No item feeds yet. An item feed is a reusable batch of items — new (minted), in stock (pulled from a zone), or a
           fixed list — that a workflow task fires on its channel.
         </p>
+      ) : rows.length === 0 ? (
+        <p className="note">No item feeds for {siteName(siteFilter)}.</p>
       ) : (
         <div className="panel table-scroll">
           <table className="users">
             <thead>
               <tr>
-                <th>Name</th>
-                <th>Kind</th>
+                <th {...headerProps("name")}>Name</th>
+                <th {...headerProps("kind")}>Kind</th>
+                <th {...headerProps("site")}>Site</th>
                 <th>Definition</th>
-                <th>Used by</th>
+                <th {...headerProps("usage")}>Used by</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
-              {feeds.map((feed) => {
+              {rows.map((feed) => {
                 const readOnly = currentUserId != null && feed.ownerId !== currentUserId;
                 return (
                 <tr key={feed.id}>
@@ -162,6 +236,7 @@ export default function ItemFeedsPage() {
                   <td>
                     <span className={`chip ${KIND_CHIP[feed.kind]}`}>{KIND_LABEL[feed.kind]}</span>
                   </td>
+                  <td className="u-meta">{feedSiteLabel(feed)}</td>
                   <td className="u-meta">{summarize(feed)}</td>
                   <td className="u-meta">{feed.usageCount ?? 0}</td>
                   <td>

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useDialog } from "@/components/AppDialog";
 import { PageHeader } from "@/components/PageHeader";
 import { SharedBadge } from "@/components/SharedBadge";
+import { useTableSort } from "@/lib/useTableSort";
 import { ActivityModal } from "./ActivityModal";
 
 const WORKFLOWS_INFO = (
@@ -80,6 +81,17 @@ export default function WorkflowsPage() {
   }, []);
 
   const mine = (wf: WorkflowRow) => currentUserId == null || wf.ownerId === currentUserId;
+
+  const { rows: sortedRows, headerProps } = useTableSort(
+    rows ?? [],
+    {
+      name: (w) => w.name.toLowerCase(),
+      status: (w) => w.status,
+      tasks: (w) => w.taskCount,
+      links: (w) => w.flowLinkCount,
+    },
+    { key: "name" }
+  );
 
   useEffect(() => {
     load();
@@ -192,15 +204,15 @@ export default function WorkflowsPage() {
           <table className="users">
             <thead>
               <tr>
-                <th>Name</th>
-                <th>Status</th>
-                <th>Tasks</th>
-                <th>Links</th>
+                <th {...headerProps("name")}>Name</th>
+                <th {...headerProps("status")}>Status</th>
+                <th {...headerProps("tasks")}>Tasks</th>
+                <th {...headerProps("links")}>Links</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((wf) => {
+              {sortedRows.map((wf) => {
                 const readOnly = !mine(wf);
                 return (
                 <tr key={wf.id} style={{ cursor: "pointer" }} onClick={() => router.push(`/workflows/${wf.id}`)}>
