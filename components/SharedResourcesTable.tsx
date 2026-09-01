@@ -14,6 +14,7 @@ type Row = {
   id: string;
   name: string;
   sub: string; // device type / feed kind / "" for workflows
+  collectorId: string | null; // devices only — tells apart same-named devices
   shared: boolean;
   owner: { id: string; name: string | null; email: string };
 };
@@ -48,6 +49,7 @@ export function SharedResourcesTable() {
         id: d.id as string,
         name: d.name as string,
         sub: (d.type as string) ?? "",
+        collectorId: (d.collectorId as string | null) ?? null,
         shared: Boolean(d.shared),
         owner: d.owner as Row["owner"],
       })),
@@ -56,6 +58,7 @@ export function SharedResourcesTable() {
         id: w.id as string,
         name: w.name as string,
         sub: "",
+        collectorId: null,
         shared: Boolean(w.shared),
         owner: w.owner as Row["owner"],
       })),
@@ -64,6 +67,7 @@ export function SharedResourcesTable() {
         id: f.id as string,
         name: f.name as string,
         sub: FEED_KIND_LABEL[f.kind as string] ?? (f.kind as string) ?? "",
+        collectorId: null,
         shared: Boolean(f.shared),
         owner: f.owner as Row["owner"],
       })),
@@ -122,6 +126,9 @@ export function SharedResourcesTable() {
                   <td>
                     <div className="u-name">{row.name}</div>
                     {row.sub && <div className="u-email">{row.sub}</div>}
+                    {row.kind === "device" && (
+                      <div className="u-meta">{row.collectorId ?? "no Collector ID yet"}</div>
+                    )}
                   </td>
                   <td>
                     <div className="u-name">{row.owner?.name ?? "—"}</div>
