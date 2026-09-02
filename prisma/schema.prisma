@@ -108,14 +108,36 @@ model User {
   // Overview site selector — see CLAUDE-CONCEPT.md section 14, BACKLOG.md BL-037.
   selectedLocationCode String?
 
-  accounts   Account[]
-  sessions   Session[]
-  bugReports BugReport[]
+  accounts      Account[]
+  sessions      Session[]
+  bugReports    BugReport[]
+  announcements Announcement[] // authored (BL-075)
 
   // Per-user workspace ownership (BL-067, CLAUDE-CONCEPT.md section 17).
   ownedDevices   Device[]   @relation("OwnedDevices")
   ownedWorkflows Workflow[] @relation("OwnedWorkflows")
   ownedItemFeeds ItemFeed[] @relation("OwnedItemFeeds")
+}
+
+// Admin-authored announcement (BL-075, CLAUDE-CONCEPT.md section 18). Draft
+// until published; publishing emails every USER/ADMIN exactly once (the
+// emailSentAt guard, same convention as BugReport's notify flow).
+model Announcement {
+  id        String  @id @default(cuid())
+  title     String
+  body      String // plain text, rendered with line breaks preserved — no rich-text editor anywhere in this app
+  imageData String? // data: URL (base64), capped at 2MB — no image hosting in this app yet (BL-008)
+
+  publishedAt DateTime? // null = draft, admin-tab only; set = live in every user's News feed
+  emailSentAt DateTime? // set once the publish email blast finishes — a later edit never re-sends
+
+  authorId String
+  author   User   @relation(fields: [authorId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([publishedAt])
 }
 
 // This app's own simulated read-point fixture — deliberately NOT the same

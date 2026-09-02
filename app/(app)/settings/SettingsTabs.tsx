@@ -4,22 +4,25 @@ import { useState } from "react";
 import { UsersTable } from "./UsersTable";
 import { BartenderConnectionTab } from "./BartenderConnectionTab";
 import { BugReportsTable } from "./BugReportsTable";
+import { AnnouncementsTab } from "./AnnouncementsTab";
 import { SharedResourcesTable } from "@/components/SharedResourcesTable";
 
-type Tab = "bartender" | "users" | "bugs" | "sharing";
+type Tab = "bartender" | "users" | "bugs" | "announcements" | "sharing";
 
-// Bartender Connection is open to every role; Users and Bug Reports only
-// render for ADMIN (hidden entirely, not just disabled — see
-// CLAUDE-CONCEPT.md section 4).
+// Bartender Connection is open to every role; Users, Bug Reports,
+// Announcements and Shared resources only render for ADMIN (hidden entirely,
+// not just disabled — see CLAUDE-CONCEPT.md section 4).
 export function SettingsTabs({
   isAdmin,
   pendingCount,
   openBugCount,
+  draftAnnouncementCount,
   currentUserId,
 }: {
   isAdmin: boolean;
   pendingCount: number;
   openBugCount: number;
+  draftAnnouncementCount: number;
   currentUserId: string;
 }) {
   const [tab, setTab] = useState<Tab>("bartender");
@@ -43,6 +46,15 @@ export function SettingsTabs({
           </button>
         )}
         {isAdmin && (
+          <button
+            className={`tab${tab === "announcements" ? " active" : ""}`}
+            onClick={() => setTab("announcements")}
+          >
+            Announcements
+            {draftAnnouncementCount > 0 && <span className="badge">{draftAnnouncementCount}</span>}
+          </button>
+        )}
+        {isAdmin && (
           <button className={`tab${tab === "sharing" ? " active" : ""}`} onClick={() => setTab("sharing")}>
             Shared resources
           </button>
@@ -52,6 +64,7 @@ export function SettingsTabs({
       {tab === "bartender" && <BartenderConnectionTab />}
       {tab === "users" && isAdmin && <UsersTable currentUserId={currentUserId} />}
       {tab === "bugs" && isAdmin && <BugReportsTable />}
+      {tab === "announcements" && isAdmin && <AnnouncementsTab />}
       {tab === "sharing" && isAdmin && <SharedResourcesTable />}
     </>
   );

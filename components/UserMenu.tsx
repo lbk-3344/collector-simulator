@@ -25,9 +25,10 @@ const ROLE_LABEL: Record<ShellUser["role"], string> = {
   PENDING: "Pending",
 };
 
-// Avatar button + dropdown: identity block, Settings, Report a bug (opens the
-// modal without navigating away), Sign out. See CLAUDE-CONCEPT.md section 4
-// "Navigation" — this menu is the only entry point to both Settings and bug reporting.
+// Avatar button + dropdown: identity block, Settings, News (published
+// announcements, BL-075), Report a bug (opens the modal without navigating
+// away), Sign out. See CLAUDE-CONCEPT.md section 4 "Navigation" — this menu is
+// the only entry point to Settings, News, and bug reporting.
 export function UserMenu({ user, onReportBug }: { user: ShellUser; onReportBug: () => void }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -94,6 +95,13 @@ export function UserMenu({ user, onReportBug }: { user: ShellUser; onReportBug: 
               <circle cx="13.5" cy="14" r="1.8" fill="var(--surface)" />
             </svg>
             Settings
+          </Link>
+          <Link href="/news" className="user-menu-item" onClick={() => setOpen(false)}>
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 8h3l6-4v12l-6-4H4z" />
+              <path d="M13 8.5a2.5 2.5 0 0 1 0 3" />
+            </svg>
+            News
           </Link>
           <button
             className="user-menu-item"

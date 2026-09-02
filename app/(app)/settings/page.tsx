@@ -13,6 +13,9 @@ export default async function SettingsPage() {
 
   const pendingCount = isAdmin ? await prisma.user.count({ where: { role: "PENDING" } }) : 0;
   const openBugCount = isAdmin ? await prisma.bugReport.count({ where: { status: "OPEN" } }) : 0;
+  const draftAnnouncementCount = isAdmin
+    ? await prisma.announcement.count({ where: { publishedAt: null } })
+    : 0;
 
   return (
     <section className="fade-in">
@@ -25,6 +28,7 @@ export default async function SettingsPage() {
         isAdmin={isAdmin}
         pendingCount={pendingCount}
         openBugCount={openBugCount}
+        draftAnnouncementCount={draftAnnouncementCount}
         currentUserId={session!.user.id}
       />
     </section>
