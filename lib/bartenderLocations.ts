@@ -103,39 +103,26 @@ export async function getUserBartenderCredentials(
   return { tenantUrl: user.bartenderTenantUrl, apiKey };
 }
 
-// Credentials for the unattended run engine (BL-061) — no session to read a
-// user from, so use the first user that has a full Bartender connection
-// configured (tenant URL + API key + Basic username/password). Single-tenant
-// in practice; revisit if the app ever needs per-Workflow ownership.
-export async function getServiceCredentials(): Promise<{
-  tenantUrl: string;
-  apiKey: string;
-  username: string;
-  password: string;
-} | null> {
-  const user = await prisma.user.findFirst({
-    where: {
-      bartenderTenantUrl: { not: null },
-      bartenderApiKeyCiphertext: { not: null },
-      bartenderUsername: { not: null },
-      bartenderPasswordCiphertext: { not: null },
-    },
-    select: {
-      bartenderTenantUrl: true,
-      bartenderApiKeyCiphertext: true,
-      bartenderUsername: true,
-      bartenderPasswordCiphertext: true,
-    },
-    orderBy: { createdAt: "asc" },
-  });
-  if (!user?.bartenderTenantUrl || !user.bartenderApiKeyCiphertext || !user.bartenderUsername || !user.bartenderPasswordCiphertext) {
-    return null;
-  }
-  return {
-    tenantUrl: user.bartenderTenantUrl,
-    apiKey: decrypt(user.bartenderApiKeyCiphertext),
-    username: user.bartenderUsername,
-    password: decrypt(user.bartenderPasswordCiphertext),
+export type RunCredentials = { tenantUrl: string; apiKey: string };
+
+// Per-owner credentials for the unattended cron ticks — the run engine
+// (BL-061) and the heartbeat tick (BL-072). There's no session to read a
+// user from, and the app is multi-tenant: each RUNNING Workflow / published
+// Device belongs to a user with their *own* Bartender tenant + API key, and
+// its reads / heartbeats must go there. **Revised 2026-09-02** — previously a
+// single global `getServiceCredentials()` (the oldest connected user) drove
+// every tick, so any resource owned by someone on a different tenant got
+// COLLECTOR_NOT_FOUND on heartbeat and empty batches from the run engine
+// (mint / stock hit the wrong tenant). Now each tick builds one of these
+// caches and resolves credentials per resource owner; the returned function
+// looks up any given owner at most once per tick.
+export function makeOwnerCredentialsCache(): (ownerId: string) => Promise<RunCredentials | null> {
+  const cache = new Map<string, RunCredentials | null>();
+  return async (ownerId: string) => {
+    if (!cache.has(ownerId)) {
+      cache.set(ownerId, await getUserBartenderCredentials(ownerId));
+    }
+    return cache.get(ownerId) ?? null;
   };
 }
 

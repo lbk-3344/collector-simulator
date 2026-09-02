@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { getServiceCredentials } from "@/lib/bartenderLocations";
+import { makeOwnerCredentialsCache } from "@/lib/bartenderLocations";
 import { sendHeartbeat } from "@/lib/bartenderDataCollector";
 import { getDeviceState } from "@/lib/deviceState";
 
@@ -26,12 +26,17 @@ export interface HeartbeatTickSummary {
 export async function runHeartbeatTick(): Promise<HeartbeatTickSummary> {
   const now = new Date();
   const summary: HeartbeatTickSummary = { checked: 0, sent: 0, online: 0, configPending: 0, failed: 0, notes: [] };
-  const creds = await getServiceCredentials();
+  // Per-owner credentials — a published Device is registered on its owner's
+  // Bartender tenant (publish uses that user's key), so its heartbeat must go
+  // to the same tenant, not to one global account (2026-09-02 fix — before
+  // this, every Device on a non-default tenant got COLLECTOR_NOT_FOUND).
+  const credsForOwner = makeOwnerCredentialsCache();
 
   const candidates = await prisma.device.findMany({
     where: { heartbeatEnabled: true, publishedAt: { not: null }, collectorId: { not: null } },
     select: {
       id: true,
+      ownerId: true,
       collectorId: true,
       heartbeatTimeoutSeconds: true,
       lastHeartbeatSentAt: true,
@@ -62,13 +67,14 @@ export async function runHeartbeatTick(): Promise<HeartbeatTickSummary> {
     });
     if (claim.count === 0) continue;
 
+    const creds = await credsForOwner(device.ownerId);
     if (!creds) {
       await prisma.device.update({
         where: { id: device.id },
-        data: { lastHeartbeatStatus: "FAILED", lastHeartbeatError: "no Bartender connection configured" },
+        data: { lastHeartbeatStatus: "FAILED", lastHeartbeatError: "the device owner has no Bartender connection configured" },
       });
       summary.failed++;
-      summary.notes.push(`heartbeat ${device.collectorId}: no Bartender connection configured`);
+      summary.notes.push(`heartbeat ${device.collectorId}: device owner has no Bartender connection`);
       continue;
     }
 

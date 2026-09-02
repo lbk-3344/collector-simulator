@@ -1,10 +1,12 @@
 import { prisma } from "@/lib/prisma";
-import { getServiceCredentials } from "@/lib/bartenderLocations";
+import { makeOwnerCredentialsCache, type RunCredentials } from "@/lib/bartenderLocations";
 import { mintSerializedItems, SerializationError, MAX_NEW_ITEMS_PER_FIRING } from "@/lib/bartenderSerialization";
 import { getStock } from "@/lib/bartenderInventory";
 import { sendReads } from "@/lib/bartenderDataCollector";
 
-type ServiceCreds = Awaited<ReturnType<typeof getServiceCredentials>>;
+// Credentials for one firing — the *owning* user's Bartender connection, or
+// null if they haven't configured one (2026-09-02, was a single global account).
+type RunCreds = RunCredentials | null;
 
 // Workflow run engine (BL-061, CLAUDE-CONCEPT.md 16.5). One `runTick()` does
 // firing + arrivals + auto-stop; it's called by the CRON_SECRET-guarded
@@ -50,7 +52,7 @@ function feedGtins(feed: any): string[] {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function resolveBatch(feed: any, creds: ServiceCreds): Promise<ResolvedBatch> {
+async function resolveBatch(feed: any, creds: RunCreds): Promise<ResolvedBatch> {
   if (feed.kind === "FIXED") {
     const items = Array.isArray(feed.fixedItems) ? (feed.fixedItems as string[]) : [];
     return { items, itemGtins: items.map(() => null) };
@@ -60,7 +62,7 @@ async function resolveBatch(feed: any, creds: ServiceCreds): Promise<ResolvedBat
   const gtins = feedGtins(feed);
 
   if (feed.kind === "NEW") {
-    if (!creds) return { items: [], itemGtins: [], note: "no Bartender connection configured for the run engine" };
+    if (!creds) return { items: [], itemGtins: [], note: "the workflow owner has no Bartender connection configured" };
     if (gtins.length === 0) return { items: [], itemGtins: [], note: "NEW feed has no GTIN" };
     try {
       // mintSerializedItems clamps the TOTAL to MAX_NEW_ITEMS_PER_FIRING and
@@ -83,7 +85,7 @@ async function resolveBatch(feed: any, creds: ServiceCreds): Promise<ResolvedBat
   // aggregate counts (no individual EPCs — 7.8), so pulled items are
   // placeholder ids (can't be pushed to the platform; local sim only). Their
   // GTIN is only known when a single-GTIN list narrowed the query.
-  if (!creds) return { items: [], itemGtins: [], note: "no Bartender connection configured for the run engine" };
+  if (!creds) return { items: [], itemGtins: [], note: "the workflow owner has no Bartender connection configured" };
   const useAll = feed.presentMatchMode === "ALL";
   const stock = await getStock(creds.tenantUrl, creds.apiKey, {
     groupBy: "zone",
@@ -119,7 +121,7 @@ async function emitReadAndScheduleHops(args: {
   items: string[];
   itemGtins: (string | null)[];
   at: Date;
-  creds: ServiceCreds;
+  creds: RunCreds;
   push: ReadPushStats;
   notes: string[];
 }) {
@@ -210,7 +212,10 @@ export async function runTick(): Promise<TickSummary> {
     readsFailed: 0,
     notes: [],
   };
-  const creds = await getServiceCredentials();
+  // Per-owner Bartender credentials — each RUNNING Workflow belongs to a user
+  // with their own tenant + API key; a firing's mint / stock / reads calls
+  // must go there, not to one global account (2026-09-02 fix).
+  const credsForOwner = makeOwnerCredentialsCache();
 
   // ── 1. Firing — one per due FeedLink (cadence lives on the FeedLink) ──
   const dueLinks = await prisma.feedLink.findMany({
@@ -220,6 +225,7 @@ export async function runTick(): Promise<TickSummary> {
     },
     include: {
       feedNode: { include: { itemFeed: true } },
+      workflow: { select: { ownerId: true } },
       targetTask: { select: { id: true, deviceId: true, workflowId: true, device: { select: { collectorId: true } } } },
     },
   });
@@ -237,6 +243,7 @@ export async function runTick(): Promise<TickSummary> {
     });
     if (claim.count === 0) continue;
 
+    const creds = await credsForOwner(link.workflow.ownerId);
     const batch = await resolveBatch(feed, creds);
     if (batch.note) summary.notes.push(`feed "${feed.name}": ${batch.note}`);
     if (feed.kind === "NEW") summary.itemsMinted += batch.items.length;
@@ -278,7 +285,7 @@ export async function runTick(): Promise<TickSummary> {
         deviceId: true,
         workflowId: true,
         device: { select: { collectorId: true } },
-        workflow: { select: { status: true } },
+        workflow: { select: { status: true, ownerId: true } },
       },
     });
     if (!task || task.workflow.status !== "RUNNING") continue; // stopped mid-flight → batch just fizzles
@@ -293,7 +300,7 @@ export async function runTick(): Promise<TickSummary> {
       items: (b.items as string[]) ?? [],
       itemGtins: (b.itemGtins as (string | null)[] | null) ?? [],
       at: now,
-      creds,
+      creds: await credsForOwner(task.workflow.ownerId),
       push,
       notes: summary.notes,
     });
