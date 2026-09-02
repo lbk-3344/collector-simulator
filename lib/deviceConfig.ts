@@ -43,6 +43,8 @@ export interface DeviceRecord {
   channels: DeviceChannel[] | null;
   configured: boolean;
   publishedAt: string | null;
+  // Manual OFFLINE toggle (BL-074) — null unless the owner turned it off.
+  offlineAt: string | null;
   // Platform sync-health (BL-053, CLAUDE-CONCEPT.md section 15.8).
   lastSyncedAt: string | null;
   lastSyncError: string | null;

@@ -100,6 +100,10 @@ export function LocationMapCard({ locationCode, devices, currentUserId, onDevice
   const [configModal, setConfigModal] = useState<ConfigModalState | null>(null);
   const [manualSendDevice, setManualSendDevice] = useState<DeviceRecord | null>(null);
   const [infoPanelDevice, setInfoPanelDevice] = useState<DeviceRecord | null>(null);
+  // BL-074 — the Ready/Offline modal's own inline error + in-flight flag
+  // (can't reuse `error` above, which swaps the whole card for a placeholder).
+  const [offlineError, setOfflineError] = useState<string | null>(null);
+  const [offlineBusy, setOfflineBusy] = useState(false);
 
   // Edit-mode right-click menu (BL-066). `deviceClipboard` is plain state,
   // same lifetime as `editMode` — gone on reload, survives repeated pastes.
@@ -255,6 +259,26 @@ export function LocationMapCard({ locationCode, devices, currentUserId, onDevice
 
   function updateDeviceInState(updated: DeviceRecord) {
     onDevicesChange((list) => list.map((d) => (d.id === updated.id ? updated : d)));
+  }
+
+  // Manual OFFLINE toggle from the Ready/Offline modal (BL-074).
+  async function handleOfflineToggle(device: DeviceRecord, offline: boolean) {
+    setOfflineBusy(true);
+    setOfflineError(null);
+    const res = await fetch(`/api/devices/${device.id}/offline`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ offline }),
+    });
+    setOfflineBusy(false);
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      setOfflineError(data?.error ?? "Couldn't change this device's status.");
+      return;
+    }
+    const data = await res.json();
+    updateDeviceInState(data.device as DeviceRecord);
+    setManualSendDevice(null);
   }
 
   // --- Edit mode: palette drag-to-create -----------------------------------
@@ -432,11 +456,13 @@ export function LocationMapCard({ locationCode, devices, currentUserId, onDevice
       return;
     }
     const state = getDeviceState(device);
-    if (state === "OFF") {
+    if (state === "PENDING") {
       setConfigModal({ device, lockTypeAndSite: true, deleteOnCancelIfUnsaved: false });
-    } else if (state === "ACTIVE") {
+    } else if (state === "READY" || state === "OFFLINE") {
+      // One modal for both — it branches on the live state inside (BL-074).
       setManualSendDevice(device);
     } else {
+      // ACTIVE only, now that PROBLEM is gone.
       setInfoPanelDevice(device);
     }
   }
@@ -642,33 +668,57 @@ export function LocationMapCard({ locationCode, devices, currentUserId, onDevice
         />
       )}
 
-      {manualSendDevice && (
-        <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && setManualSendDevice(null)}>
-          <div className="modal fade-in" role="dialog" aria-modal="true" aria-labelledby="manualSendTitle">
-            <div className="modal-head">
-              <h2 id="manualSendTitle">Manual data send</h2>
-              <button className="modal-close" aria-label="Close" onClick={() => setManualSendDevice(null)}>
-                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7">
-                  <line x1="5" y1="5" x2="15" y2="15" />
-                  <line x1="15" y1="5" x2="5" y2="15" />
-                </svg>
-              </button>
+      {manualSendDevice &&
+        (() => {
+          const isOffline = getDeviceState(manualSendDevice) === "OFFLINE";
+          const close = () => {
+            setManualSendDevice(null);
+            setOfflineError(null);
+          };
+          return (
+            <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && close()}>
+              <div className="modal fade-in" role="dialog" aria-modal="true" aria-labelledby="manualSendTitle">
+                <div className="modal-head">
+                  <h2 id="manualSendTitle">{isOffline ? "Device offline" : "Manual data send"}</h2>
+                  <button className="modal-close" aria-label="Close" onClick={close}>
+                    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7">
+                      <line x1="5" y1="5" x2="15" y2="15" />
+                      <line x1="15" y1="5" x2="5" y2="15" />
+                    </svg>
+                  </button>
+                </div>
+                <div className="modal-body">
+                  <p className="note" style={{ marginTop: 0 }}>
+                    {manualSendDevice.name}
+                    {manualSendDevice.collectorId ? ` · ${manualSendDevice.collectorId}` : ""}
+                  </p>
+                  <p style={{ margin: 0, fontSize: 13 }}>
+                    {isOffline
+                      ? "This device is offline — heartbeat and manual send are paused."
+                      : "Manual data send — coming soon."}
+                  </p>
+                  {offlineError && (
+                    <div className="snack snack-danger" style={{ marginTop: 12, marginBottom: 0 }}>
+                      {offlineError}
+                    </div>
+                  )}
+                </div>
+                <div className="modal-foot">
+                  <button className="btn btn-secondary" onClick={close}>
+                    Close
+                  </button>
+                  <button
+                    className="btn btn-primary"
+                    disabled={offlineBusy}
+                    onClick={() => handleOfflineToggle(manualSendDevice, !isOffline)}
+                  >
+                    {isOffline ? "Turn device on" : "Turn device offline"}
+                  </button>
+                </div>
+              </div>
             </div>
-            <div className="modal-body">
-              <p className="note" style={{ marginTop: 0 }}>
-                {manualSendDevice.name}
-                {manualSendDevice.collectorId ? ` · ${manualSendDevice.collectorId}` : ""}
-              </p>
-              <p style={{ margin: 0, fontSize: 13 }}>Manual data send — coming soon.</p>
-            </div>
-            <div className="modal-foot">
-              <button className="btn btn-secondary" onClick={() => setManualSendDevice(null)}>
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+          );
+        })()}
 
       {infoPanelDevice && (
         <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && setInfoPanelDevice(null)}>
@@ -693,7 +743,7 @@ export function LocationMapCard({ locationCode, devices, currentUserId, onDevice
               </div>
               <div className="info-row">
                 <span className="k">State</span>
-                <span className="v">{getDeviceState(infoPanelDevice)}</span>
+                <span className="v">Active</span>
               </div>
               <div className="info-row">
                 <span className="k">Workflow</span>
@@ -703,6 +753,9 @@ export function LocationMapCard({ locationCode, devices, currentUserId, onDevice
                     : "—"}
                 </span>
               </div>
+              <p className="note" style={{ marginBottom: 0 }}>
+                Stop the workflow to take this device offline.
+              </p>
             </div>
             <div className="modal-foot">
               <button className="btn btn-secondary" onClick={() => setInfoPanelDevice(null)}>

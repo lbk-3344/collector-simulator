@@ -16,10 +16,10 @@ interface AttrRow {
 }
 
 const STATE_LABELS: Record<string, string> = {
-  OFF: "Off",
+  PENDING: "Pending",
+  READY: "Ready",
   ACTIVE: "Active",
-  AUTOMATED: "Automated",
-  PROBLEM: "Problem",
+  OFFLINE: "Offline",
 };
 
 function attributesToRows(attrs: DeviceRecord["attributes"]): AttrRow[] {

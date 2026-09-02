@@ -118,10 +118,12 @@ export function OverviewClient({ initialSelectedLocationCode }: { initialSelecte
     }).catch(() => {});
   }
 
-  // "Devices online" counts Active + Automated (configured, regardless of
-  // workflow) — see CLAUDE-CONCEPT.md section 15.3, redefining BL-039's
-  // original ONLINE/OFFLINE-based count now that that field no longer exists.
-  const onlineCount = devices?.filter((d) => ["ACTIVE", "AUTOMATED"].includes(getDeviceState(d))).length ?? 0;
+  // "Devices online" counts every configured+published Device — Ready,
+  // Active, or (manually) Offline — out of the site total. See
+  // CLAUDE-CONCEPT.md §15.3; unchanged in spirit from BL-039's original
+  // "configured, regardless of workflow", just spanning the renamed states.
+  const onlineCount =
+    devices?.filter((d) => ["READY", "ACTIVE", "OFFLINE"].includes(getDeviceState(d))).length ?? 0;
   const totalCount = devices?.length ?? 0;
 
   return (

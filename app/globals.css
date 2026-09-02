@@ -33,11 +33,11 @@
   --danger:  #C41E3A; --danger-tint:  #FBE9EC; --danger-border:  #F5C2CB;
   --info:    #5B6B78; --info-tint:    #F0F3F5; --info-border:    #DCE2E6;
 
-  /* Device states (BL-042 to BL-047) — see CHARTE-GRAPHIQUE.md "Device states" */
-  --device-off:       #93A0A6;
-  --device-active:    #1E8E5A;
-  --device-automated: #63B88A;
-  --device-problem:   #C41E3A;
+  /* Device states (BL-042 to BL-047, renamed BL-074) — see CHARTE-GRAPHIQUE.md "Device states" */
+  --device-pending: #93A0A6; /* = --ink-3 */
+  --device-ready:   #1E8E5A; /* = --success */
+  --device-active:  #1E8E5A; /* = --success — same shade as Ready; live-ness shown via animation */
+  --device-offline: #C41E3A; /* = --danger — now "manually offline" only */
 
   --radius: 8px;
   --shell-shadow: 0 10px 30px rgba(13, 30, 44, 0.14);
@@ -57,10 +57,10 @@
     --warning: #F5B542; --warning-tint: rgba(245,181,66,0.12); --warning-border: rgba(245,181,66,0.35);
     --danger:  #FF6B7F; --danger-tint:  rgba(255,107,127,0.12); --danger-border: rgba(255,107,127,0.35);
     --info:    #93A5AF; --info-tint:    rgba(147,165,175,0.12); --info-border:   rgba(147,165,175,0.35);
-    --device-off:       #6A7880;
-    --device-active:    #4ADE94;
-    --device-automated: #8FE3B0;
-    --device-problem:   #FF6B7F;
+    --device-pending: #6A7880;
+    --device-ready:   #4ADE94;
+    --device-active:  #4ADE94;
+    --device-offline: #FF6B7F;
     --shell-shadow: 0 10px 30px rgba(0,0,0,0.5);
   }
 }
@@ -74,10 +74,10 @@
   --warning: #F5B542; --warning-tint: rgba(245,181,66,0.12); --warning-border: rgba(245,181,66,0.35);
   --danger:  #FF6B7F; --danger-tint:  rgba(255,107,127,0.12); --danger-border: rgba(255,107,127,0.35);
   --info:    #93A5AF; --info-tint:    rgba(147,165,175,0.12); --info-border:   rgba(147,165,175,0.35);
-  --device-off:       #6A7880;
-  --device-active:    #4ADE94;
-  --device-automated: #8FE3B0;
-  --device-problem:   #FF6B7F;
+  --device-pending: #6A7880;
+  --device-ready:   #4ADE94;
+  --device-active:  #4ADE94;
+  --device-offline: #FF6B7F;
   --shell-shadow: 0 10px 30px rgba(0,0,0,0.5);
 }
 
@@ -327,9 +327,6 @@ svg { display: block; }
   width: 36px; height: 36px; border-radius: 50%;
   color: #fff; box-shadow: var(--shell-shadow); cursor: pointer; border: none;
 }
-/* Automated state uses a light-green fill — a white icon washes out on it
-   (worst in dark mode), so its glyph goes near-black instead. */
-.map-marker-device[data-state="automated"] { color: #0D1E2C; }
 .map-marker-device.draggable { cursor: grab; }
 .map-marker-device.draggable:active { cursor: grabbing; }
 /* Not placed on this map yet (duplicated, or Site just changed) — staged
@@ -338,13 +335,40 @@ svg { display: block; }
 .map-marker-zone-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent-brand); border: 2px solid var(--surface); box-shadow: var(--shell-shadow); }
 .map-marker-label { font-size: 9.5px; font-weight: 600; background: var(--surface); color: var(--ink); padding: 1px 5px; border-radius: 4px; white-space: nowrap; box-shadow: var(--shell-shadow); }
 
-/* Device state badge (BL-043) — colored dot + label, driven by lib/deviceState.ts */
+/* Device state badge (BL-043, renamed BL-074) — colored dot + label, driven by lib/deviceState.ts */
 .device-state { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: var(--ink); }
-.device-state-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
-.device-state-off       { color: var(--device-off); }
-.device-state-active    { color: var(--device-active); }
-.device-state-automated { color: var(--device-automated); }
-.device-state-problem   { color: var(--device-problem); }
+.device-state-dot { position: relative; width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+.device-state-pending { color: var(--device-pending); }
+.device-state-ready   { color: var(--device-ready); }
+.device-state-active  { color: var(--device-active); }
+.device-state-offline { color: var(--device-offline); }
+
+/* "Active" (published + in a running workflow) keeps Ready's green — its
+   live-ness is shown by a pulsing ring behind the marker/dot, not a paler
+   colour (BL-074). The host element must be position:relative: the map
+   marker already is (inline style in LocationMapCard), .device-state-dot
+   gets it above. */
+@keyframes device-active-pulse {
+  0%   { transform: scale(1);   opacity: 0.55; }
+  100% { transform: scale(1.9); opacity: 0; }
+}
+.map-marker-device[data-state="active"]::after,
+.device-state-active .device-state-dot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--device-active);
+  animation: device-active-pulse 1.6s ease-out infinite;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .map-marker-device[data-state="active"]::after,
+  .device-state-active .device-state-dot::after {
+    animation: none;
+    display: none;
+  }
+}
 
 .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
 .panel-head { display: flex; align-items: center; justify-content: space-between; padding: 15px 18px; border-bottom: 1px solid var(--border); }
@@ -365,8 +389,7 @@ svg { display: block; }
 .chip-info    { background: var(--info-tint);    color: var(--info);    border-color: var(--info-border); }
 .chip-danger  { background: var(--danger-tint);  color: var(--danger);  border-color: var(--danger-border); }
 .chip-warning { background: var(--warning-tint); color: var(--warning); border-color: var(--warning-border); }
-/* Bug #8 (2026-09-01): a stopped Workflow reads as solid red — same red as
-   the Devices list's "Problem" state (--device-problem == --danger) —
+/* Bug #8 (2026-09-01): a stopped Workflow reads as solid red (= --danger)
    instead of the tint-based warning-amber every other chip uses. Text and
    the ::before dot are white for readability on the saturated red. */
 .chip-stopped { background: var(--danger); color: #fff; border-color: var(--danger); }

@@ -162,6 +162,13 @@ model Device {
   // first publish, and never cleared by a later failed resync.
   publishedAt DateTime?
 
+  // Manually set via PATCH /api/devices/[id]/offline (BL-074, 2026-09-02).
+  // Null = not manually offline. Only meaningful when configured+published;
+  // ignored entirely while the Device is Active (a running Workflow always
+  // wins — see lib/deviceState.ts's precedence comment). Not cleared when a
+  // Workflow start overrides it, so it's restored once that Workflow stops.
+  offlineAt DateTime?
+
   // Platform sync-health tracking (BL-053, CLAUDE-CONCEPT.md section 15.8).
   // Kept separate from the 4-state Device model (15.3) — a sync failure
   // shows as an in-modal banner, not a 5th colour.

@@ -44,12 +44,20 @@ function DuplicateIcon() {
     </svg>
   );
 }
+function PowerIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M10 3v7" />
+      <path d="M6.3 5.7a5.5 5.5 0 1 0 7.4 0" />
+    </svg>
+  );
+}
 
 const STATE_LABELS: Record<string, string> = {
-  OFF: "Off",
+  PENDING: "Pending",
+  READY: "Ready",
   ACTIVE: "Active",
-  AUTOMATED: "Automated",
-  PROBLEM: "Problem",
+  OFFLINE: "Offline",
 };
 
 const DEVICES_INFO = (
@@ -60,8 +68,8 @@ const DEVICES_INFO = (
     </p>
     <p>
       Configure a device, then <strong>publish</strong> it to register it for real on the Track &amp; Trace platform. Its
-      state (Off / Active / Automated / Problem) reflects whether it is configured, published, and attached to a running
-      workflow.
+      state (Pending / Ready / Active / Offline) reflects whether it is configured, published, attached to a running
+      workflow, or manually turned off.
     </p>
   </>
 );
@@ -183,6 +191,24 @@ export default function DevicesPage() {
     setBusyId(null);
   }
 
+  // Manual OFFLINE toggle (BL-074). Only reachable from Ready/Offline — the
+  // button is disabled otherwise, and the route re-checks server-side.
+  async function handleOffline(device: DeviceRecord, offline: boolean) {
+    setBusyId(device.id);
+    setError(null);
+    const res = await fetch(`/api/devices/${device.id}/offline`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ offline }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      setError(data?.error ?? "Couldn't change this device's status.");
+    }
+    await load();
+    setBusyId(null);
+  }
+
   // Clone via the shared POST /api/devices/[id]/duplicate (BL-065). No
   // position, no config modal — the clone is already as configured as its
   // source and always starts unpublished (see the route / §15.9).
@@ -252,6 +278,17 @@ export default function DevicesPage() {
                 const isBusy = busyId === device.id;
                 // Visible only because it's shared → read-only (BL-068).
                 const readOnly = currentUserId != null && device.ownerId !== currentUserId;
+                // Manual offline toggle (BL-074): only Ready ↔ Offline.
+                const canToggleOffline = state === "READY" || state === "OFFLINE";
+                const offlineTitle = readOnly
+                  ? "Shared with you — read-only"
+                  : state === "PENDING"
+                    ? "Publish this device first"
+                    : state === "ACTIVE"
+                      ? "Part of a running workflow — stop the workflow to take this offline"
+                      : state === "OFFLINE"
+                        ? "Turn on"
+                        : "Turn offline";
                 return (
                   <tr key={device.id}>
                     <td>
@@ -284,6 +321,15 @@ export default function DevicesPage() {
                           onClick={() => setConfigModal({ device, readOnly })}
                         >
                           {readOnly ? <EyeIcon /> : <EditIcon />}
+                        </button>
+                        <button
+                          className="row-icon-btn row-icon-btn-ghost"
+                          aria-label={state === "OFFLINE" ? "Turn device on" : "Turn device offline"}
+                          title={offlineTitle}
+                          disabled={isBusy || readOnly || !canToggleOffline}
+                          onClick={() => handleOffline(device, state !== "OFFLINE")}
+                        >
+                          <PowerIcon />
                         </button>
                         <button
                           className="row-icon-btn row-icon-btn-ghost"

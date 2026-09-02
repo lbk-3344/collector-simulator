@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { getServiceCredentials } from "@/lib/bartenderLocations";
 import { sendHeartbeat } from "@/lib/bartenderDataCollector";
+import { getDeviceState } from "@/lib/deviceState";
 
 // BL-072, CLAUDE-CONCEPT.md 15.10 — the DataCollector heartbeat tick. Modeled
 // on lib/workflowRun.ts's runTick(): one exported async function, called by a
@@ -27,15 +28,24 @@ export async function runHeartbeatTick(): Promise<HeartbeatTickSummary> {
   const summary: HeartbeatTickSummary = { checked: 0, sent: 0, online: 0, configPending: 0, failed: 0, notes: [] };
   const creds = await getServiceCredentials();
 
-  const devices = await prisma.device.findMany({
+  const candidates = await prisma.device.findMany({
     where: { heartbeatEnabled: true, publishedAt: { not: null }, collectorId: { not: null } },
     select: {
       id: true,
       collectorId: true,
       heartbeatTimeoutSeconds: true,
       lastHeartbeatSentAt: true,
+      // For the OFFLINE check below — a manually-offline Device stops being
+      // ticked (BL-074). getDeviceState is the single source of truth for
+      // the ACTIVE-overrides-OFFLINE precedence, so re-derive rather than
+      // re-encode it as a raw Prisma filter.
+      configured: true,
+      publishedAt: true,
+      offlineAt: true,
+      task: { select: { workflow: { select: { status: true } } } },
     },
   });
+  const devices = candidates.filter((d) => getDeviceState(d) !== "OFFLINE");
 
   for (const device of devices) {
     summary.checked++;
