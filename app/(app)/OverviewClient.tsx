@@ -47,18 +47,28 @@ export function OverviewClient({ initialSelectedLocationCode }: { initialSelecte
   useEffect(() => {
     let cancelled = false;
     async function load() {
-      const res = await fetch("/api/locations");
+      // Fetch the persisted site alongside the list. Client-side nav back to
+      // Overview re-mounts this component but may replay a *stale* server
+      // render (Next.js Router Cache), so `initialSelectedLocationCode` can
+      // predate a selection made earlier this session — the API route is
+      // force-dynamic and always current, so it wins.
+      const [locRes, selRes] = await Promise.all([
+        fetch("/api/locations"),
+        fetch("/api/settings/selected-location"),
+      ]);
       if (cancelled) return;
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
+      if (!locRes.ok) {
+        const data = await locRes.json().catch(() => null);
         setLocationsError(data?.error ?? "Couldn't load sites.");
         return;
       }
-      const data = await res.json();
-      const list: BartenderLocation[] = data.locations ?? [];
+      const list: BartenderLocation[] = (await locRes.json()).locations ?? [];
+      const saved = selRes.ok ? (await selRes.json().catch(() => null))?.locationCode : null;
       setLocations(list);
-      const preferred = initialSelectedLocationCode && list.find((l) => l.code === initialSelectedLocationCode);
-      setSelectedCode(preferred ? preferred.code : (list[0]?.code ?? null));
+      const inList = (code: string | null | undefined) => code && list.find((l) => l.code === code);
+      const preferred = inList(saved) || inList(initialSelectedLocationCode);
+      // Don't clobber a site the user picked while this was in flight.
+      setSelectedCode((prev) => prev ?? (preferred ? preferred.code : list[0]?.code ?? null));
     }
     load();
     return () => {
