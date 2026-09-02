@@ -110,34 +110,64 @@ Zone and Device markers are small icon badges positioned absolutely within the t
 
 No-floor-plan state: when the selected site has `hasMap: false`, the card shows a centered placeholder (reusing the existing `.placeholder` pattern) rather than attempting to render a missing image.
 
-### Device states — added 2026-08-28
+### Device states — added 2026-08-28, revised 2026-09-01 (BL-074)
 
-Four states, each driving the color of a Device's marker icon (Overview map) and its status badge (Devices list, `BACKLOG.md` BL-042 to BL-047). New dedicated tokens — not a direct inline reuse of `--success`/`--danger`, so they can be tuned independently later — add to `app/globals.css` alongside the existing semantic tokens.
+Four states, each driving the color of a Device's marker icon (Overview map) and its status badge (Devices list). Renamed and revised 2026-09-01 per Luc's direct request: `Active`→**Ready**, `Automated`→**Active** (matches how Luc actually talks about them), `Problem` retired (a stopped-workflow Device now just reads Ready), and a new manual **Offline** state added — see `CLAUDE-CONCEPT.md` §15.3 for the full precedence logic. New dedicated tokens — not a direct inline reuse of `--success`/`--danger`, so they can be tuned independently later — live in `app/globals.css` alongside the existing semantic tokens.
 
 Light mode:
 ```css
---device-off:       #93A0A6; /* = --ink-3 */
---device-active:    #1E8E5A; /* = --success */
---device-automated: #63B88A; /* lighter, less saturated green than --device-active */
---device-problem:   #C41E3A; /* = --danger */
+--device-pending: #93A0A6; /* = --ink-3, unchanged (was --device-off) */
+--device-ready:   #1E8E5A; /* = --success, unchanged (was --device-active) */
+--device-active:  #1E8E5A; /* = --success — same shade as Ready now, was the lighter --device-automated */
+--device-offline: #C41E3A; /* = --danger — was --device-problem's "workflow stopped" meaning, now "manually offline" */
 ```
 
 Dark mode (both the `@media (prefers-color-scheme: dark)` block and `:root[data-theme="dark"]`):
 ```css
---device-off:       #6A7880; /* = --ink-3 dark */
---device-active:    #4ADE94; /* = --success dark */
---device-automated: #8FE3B0; /* lighter than --device-active dark */
---device-problem:   #FF6B7F; /* = --danger dark */
+--device-pending: #6A7880;
+--device-ready:   #4ADE94;
+--device-active:  #4ADE94;
+--device-offline: #FF6B7F;
 ```
 
 | State | Meaning | Color |
 |---|---|---|
-| Off | Not configured yet | `--device-off` (dark gray) |
-| Active | Configured, ready, not in a workflow | `--device-active` (green) |
-| Automated | Configured, sending data through a running workflow | `--device-automated` (lighter green) |
-| Problem | Configured, in a workflow, but that workflow is stopped/has a problem | `--device-problem` (red) |
+| Pending | Not configured yet | `--device-pending` (dark gray) |
+| Ready | Configured, published, not currently in a running workflow (whether unattached or attached to a stopped one) | `--device-ready` (green) |
+| Active | Configured, published, sending data through a **running** workflow | `--device-active` — same green as Ready, distinguished by a **pulsing animation** (see below), not a lighter shade |
+| Offline | Manually turned off from Ready (new toggle) — heartbeat paused, no manual send | `--device-offline` (red) — red no longer means "workflow stopped" |
 
-Applied as the marker icon's `color` on the map (`ReadPointIcon` already renders with `currentColor`, so wrapping it in an element with the state color as `color` is enough — no icon-level change needed) and as a small colored dot + label on the Devices list table.
+Applied as the marker icon's background/`color` on the map and as a small colored dot + label on the Devices list table, exactly as before — only the token names and the Active state's treatment changed.
+
+**Active pulse animation** — a looping ring behind the marker/dot, not a static color, to read as "live":
+
+```css
+@keyframes device-active-pulse {
+  0%   { transform: scale(1);   opacity: 0.55; }
+  100% { transform: scale(1.9); opacity: 0; }
+}
+
+.map-marker-device[data-state="active"]::after,
+.device-state-active .device-state-dot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--device-active);
+  animation: device-active-pulse 1.6s ease-out infinite;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .map-marker-device[data-state="active"]::after,
+  .device-state-active .device-state-dot::after {
+    animation: none;
+    display: none;
+  }
+}
+```
+
+Both host elements need `position: relative` for the `::after` ring to anchor correctly — the map marker already has it inline; the Devices list's `.device-state-dot` needs it added if not already present.
 
 ### Device type palette (Edit mode) — added 2026-08-28
 
