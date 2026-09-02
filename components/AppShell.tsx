@@ -24,17 +24,14 @@ const NAV_ITEMS = [
   {
     href: "/devices",
     label: "Devices",
+    // The simulator mark (BL-077 geometry) as the Devices icon, monochrome —
+    // filled notch triangle + double signal arc, inherits currentColor so it
+    // flips white on the active row like the other nav icons.
     icon: (
-      <svg viewBox="0 0 20 20" fill="none" strokeWidth="1.6">
-        <rect x="5" y="5" width="10" height="10" rx="1.6" />
-        <line x1="5" y1="8.2" x2="2.3" y2="8.2" />
-        <line x1="5" y1="11.8" x2="2.3" y2="11.8" />
-        <line x1="15" y1="8.2" x2="17.7" y2="8.2" />
-        <line x1="15" y1="11.8" x2="17.7" y2="11.8" />
-        <line x1="8.2" y1="5" x2="8.2" y2="2.3" />
-        <line x1="11.8" y1="5" x2="11.8" y2="2.3" />
-        <line x1="8.2" y1="15" x2="8.2" y2="17.7" />
-        <line x1="11.8" y1="15" x2="11.8" y2="17.7" />
+      <svg viewBox="24 24 464 464" fill="none">
+        <path d="M64 448 64 216 296 448Z" fill="currentColor" />
+        <path d="M335.99 273.68A96 96 0 0 0 238.32 176.01" stroke="currentColor" strokeWidth="48" strokeLinecap="round" />
+        <path d="M431.97 275.35A192 192 0 0 0 236.65 80.03" stroke="currentColor" strokeWidth="48" strokeLinecap="round" />
       </svg>
     ),
   },
@@ -98,9 +95,10 @@ export function AppShell({
     <div className="app">
       <header className="topbar">
         <div className="side-brand">
-          {/* App mark (BL-077) — an original design, not the BarTender logo. See
-              CHARTE-GRAPHIQUE.md "App icon / favicon" for why. */}
-          <Image src="/brand/app-icon.png" alt="" width={22} height={22} style={{ objectFit: "contain" }} priority />
+          {/* Topbar keeps the BarTender logo (reverted from BL-077's app mark,
+              per Luc). The simulator mark lives on the favicon and the
+              Devices nav item instead. */}
+          <Image src="/brand/bartender-logo.png" alt="BarTender" width={26} height={21} style={{ objectFit: "contain" }} priority />
           <div className="side-brand-text">
             <span className="side-brand-word">
               BarTender<span>.</span>
