@@ -2,6 +2,7 @@ import "dotenv/config";
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { PrismaClient } from "@prisma/client";
+import { emailMarkHtml } from "../lib/email";
 
 // Shared helpers for the bug-handling scripts (CLAUDE.md "Bug handling",
 // BL-009/010/011). Everything here targets the PRODUCTION database — bug
@@ -143,6 +144,7 @@ export function startEmail(b: BugRow): { subject: string; html: string } {
   return {
     subject: `Bug #${b.number} is being worked on — ${b.title}`,
     html:
+      emailMarkHtml() +
       `<p>Hi,</p>` +
       `<p>Your bug report <strong>#${b.number} — ${escapeHtml(b.title)}</strong> is now being worked on.</p>` +
       `<blockquote style="border-left:3px solid #ccc;margin:0;padding:0 0 0 12px;color:#555">${escapeHtml(
@@ -157,6 +159,7 @@ export function resolvedEmail(b: BugRow): { subject: string; html: string } {
   return {
     subject: `Bug #${b.number} is fixed — ${b.title}`,
     html:
+      emailMarkHtml() +
       `<p>Hi,</p>` +
       `<p>Your bug report <strong>#${b.number} — ${escapeHtml(b.title)}</strong> has been fixed and the change is live in production.</p>` +
       `<blockquote style="border-left:3px solid #ccc;margin:0;padding:0 0 0 12px;color:#555">${escapeHtml(

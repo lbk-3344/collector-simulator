@@ -15,14 +15,18 @@ import "./globals.css";
 // Favicon/PWA icon set added BL-077 (CHARTE-GRAPHIQUE.md "App icon / favicon"):
 // an original mark (diagonal notch triangle + signal arcs), not the BarTender
 // logo — see that section for why. Source SVGs + full size set live under
-// public/icons/app/.
+// public/icons/app/. **BL-077a**: the browser-tab favicon uses the
+// white-on-orange squircle treatment (`icon-squircle.svg` + favicon-*.png) —
+// the vector entry must be the squircle too, since browsers prefer an
+// image/svg+xml icon over the PNG/ICO fallbacks and would otherwise show the
+// orange-on-transparent inline-UI mark in the tab instead.
 export const metadata: Metadata = {
   title: "Bartender Track and Trace Simulator",
   description:
     "Simulates Track & Trace infrastructure — Devices, Workflows, and Serialized Items — against the Bartender Track & Trace platform.",
   icons: {
     icon: [
-      { url: "/icons/app/icon.svg", type: "image/svg+xml" },
+      { url: "/icons/app/icon-squircle.svg", type: "image/svg+xml" },
       { url: "/icons/app/favicon-32.png", sizes: "32x32", type: "image/png" },
       { url: "/icons/app/favicon-16.png", sizes: "16x16", type: "image/png" },
     ],
