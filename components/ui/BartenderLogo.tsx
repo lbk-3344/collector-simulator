@@ -1,7 +1,14 @@
 import Image from "next/image";
 
-// Mirrors Supplier Connect's BartenderLogo.tsx pattern: the official mark
-// (unaltered) plus a real-text wordmark, not baked into the image.
+// Mirrors Supplier Connect's BartenderLogo.tsx pattern: a mark plus a
+// real-text wordmark, not baked into the image. Not currently used anywhere
+// (AppShell.tsx/login/pending pages render their own inline version) — kept
+// in case a reusable component is wanted later.
+//
+// BL-077: the mark is now this app's own original design (diagonal notch
+// triangle + signal arcs), not the BarTender logo — see CLAUDE-CONCEPT.md
+// "App icon / favicon" for why. Component name kept as-is to avoid a
+// pointless rename of dead code; update if this ever gets wired in for real.
 // See CHARTE-GRAPHIQUE.md "Logo".
 interface BartenderLogoProps {
   size?: "sm" | "md" | "lg";
@@ -20,7 +27,7 @@ export function BartenderLogo({ size = "md", showWordmark = true, showTag = fals
 
   return (
     <div className="side-brand" style={{ padding: 0 }}>
-      <Image src="/brand/bartender-logo.png" alt="BarTender" width={w} height={h} style={{ objectFit: "contain" }} priority />
+      <Image src="/brand/app-icon.png" alt="" width={w} height={h} style={{ objectFit: "contain" }} priority />
       {showWordmark && (
         <div className="side-brand-text">
           <span className="side-brand-word" style={{ fontSize: wordSize }}>

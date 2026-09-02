@@ -24,7 +24,8 @@ function LoginCard() {
   return (
     <div className="auth-card fade-in">
       <div className="auth-logo">
-        <Image src="/brand/bartender-logo.png" alt="BarTender" width={34} height={27} style={{ objectFit: "contain" }} priority />
+        {/* App mark (BL-077) — an original design, not the BarTender logo. */}
+        <Image src="/brand/app-icon.png" alt="" width={30} height={30} style={{ objectFit: "contain" }} priority />
         <span className="auth-logo-word">
           BarTender<span>.</span>
         </span>

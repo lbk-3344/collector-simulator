@@ -10,9 +10,20 @@ Name, palette, typography, and logo usage decided (typography and background rev
 
 **Bartender Track and Trace Simulator** — decided 2026-08-24 (see `BACKLOG.md` BL-000). Repo `collector-simulator` remains the technical identifier only, same pattern as ChefCellar's repo `winecellar`.
 
-## Logo
+## Logo — superseded 2026-09-02 (BL-077), see "App icon / favicon" below
 
-Reuses the official **BarTender** mark **verbatim, unaltered** — same asset as Supplier Connect (`supplier-portal/public/bartender-logo.png`), copied into this repo at `public/brand/bartender-logo.png`. It's a trademarked mark; only the surrounding design changes, never the icon itself. Usage mirrors Supplier Connect's `BartenderLogo.tsx` pattern: icon + separate "BarTender" wordmark in real text (not baked into the image), plus a small condensed tag reading "Track & Trace Simulator" next to it — see the style guide header mockup.
+~~Reuses the official **BarTender** mark **verbatim, unaltered**~~ — this app no longer does this. It originally copied the official mark in at `public/brand/bartender-logo.png` (same asset as Supplier Connect), on the reasoning that "it's a trademarked mark; only the surrounding design changes, never the icon itself." Luc decided 2026-09-02 to replace it everywhere with an original mark instead (see below) rather than keep reusing BarTender's own trademarked artwork as this app's own icon. The layout pattern this section originally described — icon + a separate "BarTender" wordmark in real text, plus a small condensed "Track & Trace Simulator" tag — is unchanged; only the icon image itself changed.
+
+## App icon / favicon — added 2026-09-02 (BL-077)
+
+An original mark, not the BarTender logo: a solid diagonal notch triangle with a double signal arc continuing the same 45° axis — "direction 1d" from a set of candidates worked through in a Claude Design session (after several rougher sketches tried a more literal reuse of BarTender's own nested-bracket geometry, which read as too busy at favicon size; this direction kept only the triangular notch shape and paired it with the signal-wave motif). No BarTender artwork is traced or reproduced in it.
+
+- **Brand orange** `#E8472A`, single-color mark. Two treatments:
+  - **Orange on transparent** (`public/icons/app/icon.svg`) — used inline throughout the app (topbar, login, pending-approval screen) at small sizes (22–30px), and as the favicon.
+  - **White on solid-orange squircle** (`public/icons/app/icon-squircle.svg`, 22% corner radius) — used for the PWA home-screen icon, where a transparent PNG looks broken on most launchers.
+- **Files**: `public/icons/app/` holds the two source SVGs plus rasterized `favicon-16/32/48.png`, `favicon.ico` (also mirrored to `public/favicon.ico` for the legacy root-path fallback browsers still probe for), `apple-touch-icon.png` (180), and `icon-192.png`/`icon-512.png` for `public/site.webmanifest`. `public/brand/app-icon.png` is a flattened PNG of the transparent-orange treatment, used by `next/image` in the three inline UI spots (SVG isn't wired through this app's image loader).
+- **Legibility floor**: the mark was deliberately simplified until it survived a real 16×16 favicon render — that was the hard constraint through every round of iteration, since a busier composition (a fuller echo of BarTender's own two-band bracket shape) blurred into a blob at that size.
+- Wired into `app/layout.tsx` (`metadata.icons`, `metadata.manifest`, a `viewport.themeColor` of `#0D1E2C`) and swapped into the three places the old `bartender-logo.png` was inlined: `components/AppShell.tsx`'s topbar, `app/(auth)/login/page.tsx`, `app/(auth)/auth/pending/PendingPage.tsx`. The "BarTender." text wordmark next to it is unchanged — only the graphic mark was replaced.
 
 ## Color palette
 

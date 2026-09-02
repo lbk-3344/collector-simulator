@@ -1,0 +1,12 @@
+{
+  "name": "Bartender Track & Trace Simulator",
+  "short_name": "T&T Sim",
+  "icons": [
+    { "src": "/icons/app/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/app/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icons/app/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "theme_color": "#0D1E2C",
+  "background_color": "#0D1E2C",
+  "display": "standalone"
+}

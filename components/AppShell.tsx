@@ -98,7 +98,9 @@ export function AppShell({
     <div className="app">
       <header className="topbar">
         <div className="side-brand">
-          <Image src="/brand/bartender-logo.png" alt="BarTender" width={26} height={21} style={{ objectFit: "contain" }} priority />
+          {/* App mark (BL-077) — an original design, not the BarTender logo. See
+              CHARTE-GRAPHIQUE.md "App icon / favicon" for why. */}
+          <Image src="/brand/app-icon.png" alt="" width={22} height={22} style={{ objectFit: "contain" }} priority />
           <div className="side-brand-text">
             <span className="side-brand-word">
               BarTender<span>.</span>
