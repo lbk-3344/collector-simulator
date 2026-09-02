@@ -65,6 +65,17 @@ const NAV_ITEMS = [
       </svg>
     ),
   },
+  {
+    href: "/history",
+    label: "History",
+    icon: (
+      <svg viewBox="0 0 20 20" fill="none" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3.5 10a6.5 6.5 0 1 0 1.9-4.6" />
+        <polyline points="3.2,3.2 3.2,6 6,6" />
+        <polyline points="10,6.5 10,10 12.8,11.7" />
+      </svg>
+    ),
+  },
 ];
 
 export function AppShell({

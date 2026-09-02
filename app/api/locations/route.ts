@@ -18,7 +18,7 @@ export async function GET() {
     return NextResponse.json({ error: "No Bartender connection configured yet — set one up in Settings." }, { status: 400 });
   }
 
-  const result = await listLocations(credentials.tenantUrl, credentials.apiKey);
+  const result = await listLocations(session.user.id, credentials.tenantUrl, credentials.apiKey);
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: 502 });
   }

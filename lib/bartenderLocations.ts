@@ -1,5 +1,16 @@
 import { prisma } from "@/lib/prisma";
 import { decrypt } from "@/lib/crypto";
+import { loggedFetch } from "@/lib/apiCallLog";
+
+// Human-readable label for a location-api-v2 call, keyed off the path
+// (BL-076). Sources: "List Locations" / "List Zones" are the spec's own
+// `listLocations` / `listZones` summaries; "Get a Location Floor Plan" is
+// inferred from sibling operations, NOT verbatim-confirmed.
+function locationApiLabel(path: string): string {
+  if (path.endsWith("/zones")) return "List Zones";
+  if (path.endsWith("/map")) return "Get a Location Floor Plan";
+  return "List Locations";
+}
 
 // Client for Bartender's location-api-v2 — see CLAUDE-CONCEPT.md section 7.3.
 // Corrected 2026-08-27 (Luc): the second gateway is "sandbox", not "staging" —
@@ -64,12 +75,20 @@ export type GatewayResult<T> = { ok: true; data: T } | { ok: false; error: strin
 // Same two error modes as section 7.2's client (app/api/settings/bartender/test/route.ts):
 // HTTP error status vs. network/DNS failure. Response shape here is unconfirmed,
 // so parse defensively — try JSON, fall back to raw text — rather than assuming one format.
-async function callGateway<T>(tenantUrl: string, apiKey: string, path: string): Promise<GatewayResult<T>> {
+async function callGateway<T>(
+  userId: string,
+  tenantUrl: string,
+  apiKey: string,
+  path: string
+): Promise<GatewayResult<T>> {
   const url = `${resolveGatewayUrl(tenantUrl)}${path}`;
 
   let response: Response;
   try {
-    response = await fetch(url, { headers: { apikey: apiKey }, cache: "no-store" });
+    response = await loggedFetch(userId, locationApiLabel(path), url, {
+      headers: { apikey: apiKey },
+      cache: "no-store",
+    });
   } catch {
     return { ok: false, error: "Could not reach the location-api-v2 gateway." };
   }
@@ -143,8 +162,12 @@ export async function getUserBartenderBasicAuthCredentials(
 // GET /locations returns a paginated envelope ({ page, total, pageSize,
 // locations: [...] }), not a bare array — unwrap it here so callers just get
 // the list.
-export async function listLocations(tenantUrl: string, apiKey: string): Promise<GatewayResult<BartenderLocation[]>> {
-  const result = await callGateway<{ locations: BartenderLocation[] }>(tenantUrl, apiKey, "/locations");
+export async function listLocations(
+  userId: string,
+  tenantUrl: string,
+  apiKey: string
+): Promise<GatewayResult<BartenderLocation[]>> {
+  const result = await callGateway<{ locations: BartenderLocation[] }>(userId, tenantUrl, apiKey, "/locations");
   if (!result.ok) return result;
   return { ok: true, data: result.data.locations };
 }
@@ -153,6 +176,7 @@ export async function listLocations(tenantUrl: string, apiKey: string): Promise<
 // type locations "may not have a map or zones" per the spec) — a 404 here is
 // treated as { ok: true, data: null }, not an error.
 export async function getLocationMap(
+  userId: string,
   tenantUrl: string,
   apiKey: string,
   code: string
@@ -161,7 +185,10 @@ export async function getLocationMap(
 
   let response: Response;
   try {
-    response = await fetch(url, { headers: { apikey: apiKey }, cache: "no-store" });
+    response = await loggedFetch(userId, "Get a Location Floor Plan", url, {
+      headers: { apikey: apiKey },
+      cache: "no-store",
+    });
   } catch {
     return { ok: false, error: "Could not reach the location-api-v2 gateway." };
   }
@@ -209,12 +236,19 @@ export interface LegacyFloorMapImage {
 // Shared fetch/error-handling for tenant-URL-direct (statemachine-api-configuration)
 // calls — same two error modes as callGateway (HTTP error vs. network/DNS
 // failure), just against the tenant's own subdomain instead of a gateway host.
-async function callTenantApi<T>(tenantUrl: string, apiKey: string, path: string): Promise<GatewayResult<T>> {
+async function callTenantApi<T>(
+  userId: string,
+  tenantUrl: string,
+  apiKey: string,
+  path: string
+): Promise<GatewayResult<T>> {
   const url = `${tenantUrl.replace(/\/+$/, "")}${path}`;
+  // Hand-written labels — statemachine-api-configuration has no spec doc here.
+  const label = path.includes("level=floor") ? "List floors (legacy)" : "List premises (legacy)";
 
   let response: Response;
   try {
-    response = await fetch(url, { headers: { apikey: apiKey }, cache: "no-store" });
+    response = await loggedFetch(userId, label, url, { headers: { apikey: apiKey }, cache: "no-store" });
   } catch {
     return { ok: false, error: "Could not reach that tenant URL — check it's correct." };
   }
@@ -229,11 +263,13 @@ async function callTenantApi<T>(tenantUrl: string, apiKey: string, path: string)
 }
 
 async function listLegacyLocations(
+  userId: string,
   tenantUrl: string,
   apiKey: string,
   level: "premise" | "floor"
 ): Promise<GatewayResult<LegacyLocation[]>> {
   const result = await callTenantApi<unknown>(
+    userId,
     tenantUrl,
     apiKey,
     `/statemachine-api-configuration/rest/configuration/locations?level=${level}`
@@ -245,8 +281,12 @@ async function listLegacyLocations(
 
 // GET {tenantUrl}/statemachine-api-configuration/rest/configuration/locations?level=floor
 // header apikey — same auth as the already-working premise-level call.
-export function listFloorLocations(tenantUrl: string, apiKey: string): Promise<GatewayResult<LegacyLocation[]>> {
-  return listLegacyLocations(tenantUrl, apiKey, "floor");
+export function listFloorLocations(
+  userId: string,
+  tenantUrl: string,
+  apiKey: string
+): Promise<GatewayResult<LegacyLocation[]>> {
+  return listLegacyLocations(userId, tenantUrl, apiKey, "floor");
 }
 
 // Finds the floor sub-location for a given premise (site) code. CORRECTED
@@ -257,16 +297,17 @@ export function listFloorLocations(tenantUrl: string, apiKey: string): Promise<G
 // link is structural: a floor's `parent` field holds its premise's `id`.
 // Returns null if no premise or floor is found (not an error).
 export async function findFloorForPremiseCode(
+  userId: string,
   tenantUrl: string,
   apiKey: string,
   premiseCode: string
 ): Promise<GatewayResult<LegacyLocation | null>> {
-  const premisesResult = await listLegacyLocations(tenantUrl, apiKey, "premise");
+  const premisesResult = await listLegacyLocations(userId, tenantUrl, apiKey, "premise");
   if (!premisesResult.ok) return premisesResult;
   const premise = premisesResult.data.find((p) => p.code === premiseCode);
   if (!premise) return { ok: true, data: null };
 
-  const floorsResult = await listLegacyLocations(tenantUrl, apiKey, "floor");
+  const floorsResult = await listLegacyLocations(userId, tenantUrl, apiKey, "floor");
   if (!floorsResult.ok) return floorsResult;
   const floor = floorsResult.data.find((f) => f.parent === premise.id) ?? null;
   return { ok: true, data: floor };
@@ -278,6 +319,7 @@ export async function findFloorForPremiseCode(
 // RAW image bytes directly (Content-Type: image/png), not JSON metadata —
 // callers must stream this server-side rather than expose a mapUrl.
 export async function getLegacyFloorMap(
+  userId: string,
   tenantUrl: string,
   username: string,
   password: string,
@@ -288,7 +330,15 @@ export async function getLegacyFloorMap(
 
   let response: Response;
   try {
-    response = await fetch(url, { headers: { Authorization: authHeader }, cache: "no-store" });
+    // Hand-written label (no spec doc); binaryResponse so the image bytes
+    // are never read into a log row.
+    response = await loggedFetch(
+      userId,
+      "Get floor plan (legacy)",
+      url,
+      { headers: { Authorization: authHeader }, cache: "no-store" },
+      { binaryResponse: true }
+    );
   } catch {
     return { ok: false, error: "Could not reach the Track & Trace tenant for the legacy map endpoint." };
   }
@@ -310,11 +360,17 @@ export async function getLegacyFloorMap(
 }
 
 export async function getLocationZones(
+  userId: string,
   tenantUrl: string,
   apiKey: string,
   code: string
 ): Promise<GatewayResult<LocationZone[]>> {
-  const result = await callGateway<{ zones: RawZone[] }>(tenantUrl, apiKey, `/locations/${encodeURIComponent(code)}/zones`);
+  const result = await callGateway<{ zones: RawZone[] }>(
+    userId,
+    tenantUrl,
+    apiKey,
+    `/locations/${encodeURIComponent(code)}/zones`
+  );
   if (!result.ok) return result;
   return {
     ok: true,

@@ -34,6 +34,7 @@ export async function buildPlatformSyncData(
   }
 
   const result = await registerCollector(
+    userId,
     creds.tenantUrl,
     creds.apiKey,
     buildCollectorRegistrationPayload(device)

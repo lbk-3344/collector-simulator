@@ -1,6 +1,7 @@
 import { decrypt } from "@/lib/crypto";
 import { prisma } from "@/lib/prisma";
 import type { GatewayResult } from "@/lib/bartenderLocations";
+import { loggedFetch } from "@/lib/apiCallLog";
 
 // Client for Bartender's LEGACY Product API (`product-api`) — see
 // CLAUDE-CONCEPT.md section 7.7. Temporary stand-in until `master-data-api`
@@ -68,6 +69,7 @@ export async function resolveProductApi(
 }
 
 async function callProductApi<T>(
+  userId: string,
   tenantUrl: string,
   username: string,
   password: string,
@@ -79,7 +81,7 @@ async function callProductApi<T>(
 
   let res: Response;
   try {
-    res = await fetch(url, {
+    res = await loggedFetch(userId, path.startsWith("/categories") ? "List categories" : "List products", url, {
       headers: { Authorization: auth, "Accept-version": acceptVersion },
       cache: "no-store",
     });
@@ -103,22 +105,25 @@ async function callProductApi<T>(
 // pagination (confirmed 2026-08-30: ?page/?search are ignored). Callers fetch
 // once and filter client-side; ~197 products on the sandbox today.
 export function listProducts(
+  userId: string,
   tenantUrl: string,
   username: string,
   password: string
 ): Promise<GatewayResult<BartenderProduct[]>> {
-  return callProductApi<BartenderProduct[]>(tenantUrl, username, password, "/products?showAttributes=true", "v3.6");
+  return callProductApi<BartenderProduct[]>(userId, tenantUrl, username, password, "/products?showAttributes=true", "v3.6");
 }
 
 // GET /products/{gtin} — Accept-version v3.5 (deliberately different from the
 // list call). Returns the same object minus inScopeTraceability/attributes.
 export function getProduct(
+  userId: string,
   tenantUrl: string,
   username: string,
   password: string,
   gtin: string
 ): Promise<GatewayResult<BartenderProduct>> {
   return callProductApi<BartenderProduct>(
+    userId,
     tenantUrl,
     username,
     password,
@@ -129,9 +134,10 @@ export function getProduct(
 
 // GET /categories?show_level=true — plain array, category tree via categoryParent.
 export function listCategories(
+  userId: string,
   tenantUrl: string,
   username: string,
   password: string
 ): Promise<GatewayResult<BartenderCategory[]>> {
-  return callProductApi<BartenderCategory[]>(tenantUrl, username, password, "/categories?show_level=true", "v3.6");
+  return callProductApi<BartenderCategory[]>(userId, tenantUrl, username, password, "/categories?show_level=true", "v3.6");
 }

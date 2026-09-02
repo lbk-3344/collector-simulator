@@ -14,7 +14,7 @@ export async function GET() {
   const creds = await resolveProductApi(session.user.id);
   if (!creds.ok) return NextResponse.json({ error: creds.error }, { status: creds.status });
 
-  const result = await listProducts(creds.tenantUrl, creds.username, creds.password);
+  const result = await listProducts(session.user.id, creds.tenantUrl, creds.username, creds.password);
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status ?? 502 });
 
   return NextResponse.json({ products: result.data });

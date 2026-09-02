@@ -112,11 +112,39 @@ model User {
   sessions      Session[]
   bugReports    BugReport[]
   announcements Announcement[] // authored (BL-075)
+  apiCallLogs   ApiCallLog[] // outgoing Bartender calls attributed to this user (BL-076)
 
   // Per-user workspace ownership (BL-067, CLAUDE-CONCEPT.md section 17).
   ownedDevices   Device[]   @relation("OwnedDevices")
   ownedWorkflows Workflow[] @relation("OwnedWorkflows")
   ownedItemFeeds ItemFeed[] @relation("OwnedItemFeeds")
+}
+
+// One outgoing Bartender API call, logged for the History page (BL-076,
+// CLAUDE-CONCEPT.md section 19). `apikey`/`authorization` header values are
+// redacted to a placeholder BEFORE the row is written — a raw secret is
+// never persisted. Retained 500 rows/user (pruned inline), last 100 shown.
+model ApiCallLog {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  operation String // human-readable label, stored (not recomputed) so old rows stay readable if labels change
+
+  method String
+  url    String // full request URL incl. query string — Bartender auth is header-only, never in the URL
+
+  requestHeaders Json? // redacted: apikey/authorization -> "***redacted***"
+  requestBody    String? // truncated ~20KB
+
+  responseStatus Int?
+  responseBody   String? // truncated ~20KB; binary responses -> "[binary, N bytes, not logged]"
+  errorMessage   String? // set instead of a response when the fetch itself threw
+
+  durationMs Int?
+  createdAt  DateTime @default(now())
+
+  @@index([userId, createdAt])
 }
 
 // Admin-authored announcement (BL-075, CLAUDE-CONCEPT.md section 18). Draft

@@ -51,7 +51,7 @@ async function main() {
     console.log(`apiKey (last 4) : ${apiKey.slice(-4)}\n`);
 
     // 1. list locations
-    const locRes = await listLocations(tenantUrl, apiKey);
+    const locRes = await listLocations("", tenantUrl, apiKey);
     if (!locRes.ok) {
       console.error(`✗ listLocations failed: ${locRes.error}`);
       process.exit(1);
@@ -104,7 +104,7 @@ async function main() {
       }
 
       // 4. unfiltered stock grouped by zone
-      const stock = await getStock(tenantUrl, apiKey, { groupBy: "zone", locationCode: code });
+      const stock = await getStock("", tenantUrl, apiKey, { groupBy: "zone", locationCode: code });
       if (!stock.ok) {
         console.log(`  stock: ✗ ${stock.errorMessage}`);
         continue;

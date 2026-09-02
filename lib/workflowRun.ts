@@ -52,7 +52,7 @@ function feedGtins(feed: any): string[] {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function resolveBatch(feed: any, creds: RunCreds): Promise<ResolvedBatch> {
+async function resolveBatch(ownerId: string, feed: any, creds: RunCreds): Promise<ResolvedBatch> {
   if (feed.kind === "FIXED") {
     const items = Array.isArray(feed.fixedItems) ? (feed.fixedItems as string[]) : [];
     return { items, itemGtins: items.map(() => null) };
@@ -68,6 +68,7 @@ async function resolveBatch(feed: any, creds: RunCreds): Promise<ResolvedBatch> 
       // mintSerializedItems clamps the TOTAL to MAX_NEW_ITEMS_PER_FIRING and
       // splits it randomly across the feed's GTINs.
       const minted = await mintSerializedItems(
+        ownerId,
         creds.tenantUrl,
         creds.apiKey,
         gtins,
@@ -87,7 +88,7 @@ async function resolveBatch(feed: any, creds: RunCreds): Promise<ResolvedBatch> 
   // GTIN is only known when a single-GTIN list narrowed the query.
   if (!creds) return { items: [], itemGtins: [], note: "the workflow owner has no Bartender connection configured" };
   const useAll = feed.presentMatchMode === "ALL";
-  const stock = await getStock(creds.tenantUrl, creds.apiKey, {
+  const stock = await getStock(ownerId, creds.tenantUrl, creds.apiKey, {
     groupBy: "zone",
     locationCode: feed.locationCode ?? undefined,
     zoneCode: feed.zoneCode ?? undefined,
@@ -113,6 +114,7 @@ interface ReadPushStats {
 // Flow Links — a copy per matching edge, or the `else` edge for anything
 // unmatched — scheduling each as an InFlightBatch.
 async function emitReadAndScheduleHops(args: {
+  ownerId: string;
   workflowId: string;
   taskId: string;
   deviceId: string;
@@ -125,7 +127,7 @@ async function emitReadAndScheduleHops(args: {
   push: ReadPushStats;
   notes: string[];
 }) {
-  const { workflowId, taskId, deviceId, collectorId, channelId, items, itemGtins, at, creds, push, notes } = args;
+  const { ownerId, workflowId, taskId, deviceId, collectorId, channelId, items, itemGtins, at, creds, push, notes } = args;
   const gtin = soleGtin(itemGtins);
 
   await prisma.simulatedRead.create({
@@ -135,7 +137,7 @@ async function emitReadAndScheduleHops(args: {
   // Real platform read. Skipped silently when there's nothing submittable
   // (e.g. PRESENT-feed placeholder ids — see 7.5/16.5) or no collectorId.
   if (creds && collectorId && items.length > 0) {
-    const res = await sendReads(creds.tenantUrl, creds.apiKey, collectorId, channelId, items, at);
+    const res = await sendReads(ownerId, creds.tenantUrl, creds.apiKey, collectorId, channelId, items, at);
     if (res.ok) {
       if (res.readStatus === "NOTPROCESSED") {
         push.notProcessed++;
@@ -244,12 +246,13 @@ export async function runTick(): Promise<TickSummary> {
     if (claim.count === 0) continue;
 
     const creds = await credsForOwner(link.workflow.ownerId);
-    const batch = await resolveBatch(feed, creds);
+    const batch = await resolveBatch(link.workflow.ownerId, feed, creds);
     if (batch.note) summary.notes.push(`feed "${feed.name}": ${batch.note}`);
     if (feed.kind === "NEW") summary.itemsMinted += batch.items.length;
     summary.firedInputs++;
 
     await emitReadAndScheduleHops({
+      ownerId: link.workflow.ownerId,
       workflowId: link.targetTask.workflowId,
       taskId: link.targetTask.id,
       deviceId: link.targetTask.deviceId,
@@ -292,6 +295,7 @@ export async function runTick(): Promise<TickSummary> {
 
     summary.arrivalsProcessed++;
     await emitReadAndScheduleHops({
+      ownerId: task.workflow.ownerId,
       workflowId: task.workflowId,
       taskId: b.taskId,
       deviceId: task.deviceId,

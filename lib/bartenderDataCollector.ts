@@ -1,5 +1,6 @@
 import { resolveGatewayUrl } from "@/lib/bartenderLocations";
 import type { DeviceChannel } from "@/lib/deviceConfig";
+import { loggedFetch } from "@/lib/apiCallLog";
 
 // Client for Bartender's datacollector-api-v3 — POST /collectors/register,
 // DELETE /collectors/{collectorId}, POST /reads, and PUT
@@ -87,6 +88,7 @@ export interface RegisterResult {
 // time, 200 UPDATED on every resync — idempotent on collectorId, replaces the
 // whole channel list). Network/DNS failure is a distinct, softer message.
 export async function registerCollector(
+  userId: string,
   tenantUrl: string,
   apiKey: string,
   payload: Record<string, unknown>
@@ -95,7 +97,7 @@ export async function registerCollector(
 
   let res: Response;
   try {
-    res = await fetch(url, {
+    res = await loggedFetch(userId, "Register or update a DataCollector", url, {
       method: "POST",
       headers: { apikey: apiKey, "content-type": "application/json" },
       body: JSON.stringify(payload),
@@ -126,6 +128,7 @@ export async function registerCollector(
 // DELETE {gateway}/collectors/{collectorId}. A 404 COLLECTOR_NOT_FOUND counts
 // as success — "already gone" is a fine outcome for a deregister.
 export async function deregisterCollector(
+  userId: string,
   tenantUrl: string,
   apiKey: string,
   collectorId: string
@@ -134,7 +137,7 @@ export async function deregisterCollector(
 
   let res: Response;
   try {
-    res = await fetch(url, { method: "DELETE", headers: { apikey: apiKey }, cache: "no-store" });
+    res = await loggedFetch(userId, "Deregister a DataCollector", url, { method: "DELETE", headers: { apikey: apiKey }, cache: "no-store" });
   } catch {
     return { ok: false, errorMessage: "Could not reach the Bartender platform — check the tenant URL." };
   }
@@ -183,6 +186,7 @@ export interface SendReadsResult {
 // placeholders) are dropped; an all-dropped batch returns ok:false without a
 // network call.
 export async function sendReads(
+  userId: string,
   tenantUrl: string,
   apiKey: string,
   collectorId: string,
@@ -198,7 +202,7 @@ export async function sendReads(
   const url = `${resolveDataCollectorGatewayUrl(tenantUrl)}/reads`;
   let res: Response;
   try {
-    res = await fetch(url, {
+    res = await loggedFetch(userId, "Submit tag reads", url, {
       method: "POST",
       headers: { apikey: apiKey, "content-type": "application/json" },
       body: JSON.stringify({ collectorId, channelId, readTime: readTime.toISOString(), tags }),
@@ -247,6 +251,7 @@ export interface SendHeartbeatResult {
 // (lib/deviceHeartbeat.ts) calls this every heartbeatTimeoutSeconds/2 for
 // each published, heartbeat-enabled Device.
 export async function sendHeartbeat(
+  userId: string,
   tenantUrl: string,
   apiKey: string,
   collectorId: string
@@ -256,7 +261,7 @@ export async function sendHeartbeat(
 
   let res: Response;
   try {
-    res = await fetch(url, {
+    res = await loggedFetch(userId, "Send a DataCollector heartbeat", url, {
       method: "PUT",
       headers: { apikey: apiKey, "content-type": "application/json" },
       body: JSON.stringify(payload),

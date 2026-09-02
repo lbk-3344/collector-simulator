@@ -33,7 +33,7 @@ export async function GET(req: Request, { params }: { params: { code: string } }
     );
   }
 
-  const floorResult = await findFloorForPremiseCode(credentials.tenantUrl, credentials.apiKey, params.code);
+  const floorResult = await findFloorForPremiseCode(session.user.id, credentials.tenantUrl, credentials.apiKey, params.code);
   if (!floorResult.ok) {
     return NextResponse.json({ error: floorResult.error }, { status: 502 });
   }
@@ -44,7 +44,7 @@ export async function GET(req: Request, { params }: { params: { code: string } }
     );
   }
 
-  const imageResult = await getLegacyFloorMap(credentials.tenantUrl, basicAuth.username, basicAuth.password, floorResult.data.id);
+  const imageResult = await getLegacyFloorMap(session.user.id, credentials.tenantUrl, basicAuth.username, basicAuth.password, floorResult.data.id);
   if (!imageResult.ok) {
     return NextResponse.json({ error: imageResult.error }, { status: 502 });
   }

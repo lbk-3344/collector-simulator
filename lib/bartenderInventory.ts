@@ -1,4 +1,5 @@
 import { resolveGatewayUrl } from "@/lib/bartenderLocations";
+import { loggedFetch } from "@/lib/apiCallLog";
 
 // Client for Bartender's Inventory API (`inventory-public-api`) — see
 // CLAUDE-CONCEPT.md section 7.8. Feeds the Item Feed `PRESENT` kind (Part 2's
@@ -51,7 +52,12 @@ export interface StockQuery {
 // the sandbox was observed to IGNORE the locationCode/zoneCode/pid filter
 // params server-side, so we also filter `results` client-side as a safety
 // net (see 7.8) — harmless if the real API does filter properly.
-export async function getStock(tenantUrl: string, apiKey: string, query: StockQuery): Promise<StockResult> {
+export async function getStock(
+  userId: string,
+  tenantUrl: string,
+  apiKey: string,
+  query: StockQuery
+): Promise<StockResult> {
   const pids = (query.pids ?? []).map((p) => String(p).trim()).filter(Boolean);
   const params = new URLSearchParams();
   params.set("groupBy", query.groupBy ?? "zone");
@@ -66,7 +72,10 @@ export async function getStock(tenantUrl: string, apiKey: string, query: StockQu
 
   let res: Response;
   try {
-    res = await fetch(url, { headers: { apikey: apiKey }, cache: "no-store" });
+    res = await loggedFetch(userId, "Get current stock snapshot", url, {
+      headers: { apikey: apiKey },
+      cache: "no-store",
+    });
   } catch {
     return { ok: false, results: [], errorMessage: "Could not reach the Inventory API — check the tenant URL." };
   }

@@ -78,7 +78,7 @@ export async function runHeartbeatTick(): Promise<HeartbeatTickSummary> {
       continue;
     }
 
-    const res = await sendHeartbeat(creds.tenantUrl, creds.apiKey, device.collectorId);
+    const res = await sendHeartbeat(device.ownerId, creds.tenantUrl, creds.apiKey, device.collectorId);
     summary.sent++;
     if (res.ok) {
       const status = res.heartbeatStatus === "CONFIG_PENDING" ? "CONFIG_PENDING" : "ONLINE";

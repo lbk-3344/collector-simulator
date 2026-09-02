@@ -170,7 +170,7 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
         if (!creds) {
           platformDeregisterError = "No Bartender connection configured.";
         } else {
-          const result = await deregisterCollector(creds.tenantUrl, creds.apiKey, device.collectorId);
+          const result = await deregisterCollector(session.user.id, creds.tenantUrl, creds.apiKey, device.collectorId);
           if (!result.ok) {
             platformDeregisterError = result.errorMessage ?? "The deregister call failed.";
           }

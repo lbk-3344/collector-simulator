@@ -1,4 +1,5 @@
 import { resolveGatewayUrl } from "@/lib/bartenderLocations";
+import { loggedFetch } from "@/lib/apiCallLog";
 
 // Client for Bartender's Serialization API v3 (`serialization-api-v3-updated`)
 // — see CLAUDE-CONCEPT.md section 7.6. Migrated from the legacy
@@ -57,6 +58,7 @@ interface Gs1GeneratedSerial {
 // format this app stores / pushes to the platform (POST /reads' `hexa` field,
 // §7.5 / BL-063).
 async function generateGs1(
+  userId: string,
   tenantUrl: string,
   apiKey: string,
   standard: Gs1Standard,
@@ -67,7 +69,7 @@ async function generateGs1(
 
   let res: Response;
   try {
-    res = await fetch(url, {
+    res = await loggedFetch(userId, "Generate GS1 identifiers", url, {
       method: "POST",
       headers: { apikey: apiKey, "Accept-Version": "v2", "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -112,6 +114,7 @@ async function generateGs1(
 // which GTIN. Throws SerializationError on any failure so the caller can't
 // mistake it for "zero items".
 export async function mintSerializedItems(
+  userId: string,
   tenantUrl: string,
   apiKey: string,
   gtins: string[],
@@ -138,7 +141,7 @@ export async function mintSerializedItems(
 
   const out: { gtin: string; epc: string }[] = [];
   for (const [gtin, count] of perGtin) {
-    const epcs = await generateGs1(tenantUrl, apiKey, standard, gtin, count);
+    const epcs = await generateGs1(userId, tenantUrl, apiKey, standard, gtin, count);
     for (const epc of epcs) out.push({ gtin, epc });
   }
   return out;
