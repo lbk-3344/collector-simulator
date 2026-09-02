@@ -6,13 +6,30 @@ Luc's direct request: "I would like to add a history page and a left menu item. 
 
 1. **Endpoint calls tab — buildable now (BL-076).** Every outgoing call this app makes to Bartender is already funneled through a small number of library functions (enumerated in Phase 3), and BL-074b (`makeOwnerCredentialsCache()`, `lib/bartenderLocations.ts` / `lib/workflowRun.ts` / `lib/deviceHeartbeat.ts`) already resolves a real owning `User` for every one of them — interactive or background — so "for the specific user" has a clean answer: the signed-in caller for interactive requests, the resolved owner for cron-driven ones (workflow firings, heartbeats).
 
-2. **EPCIS events tab — structurally built, functionally blocked (BL-076a).** Per `CLAUDE.md`'s own house rule ("Luc will provide the API specs incrementally... do not assume the shape of an endpoint that hasn't been provided yet"), and Luc's own words here ("I'll will share the EPCIS endpoint to be called"), **do not guess the EPCIS query contract.** Build the full tab UI (location filter, reload button, event list, detail modal, copy button) wired to a stub API route that returns an explicit "not configured yet" response. Wire the real query the moment Luc shares the spec — don't block the rest of this item on it.
+2. **EPCIS events tab — unblocked, build the real thing (BL-076a).** Luc has now shared the real endpoint (two worked `curl` examples — one unfiltered, one filtered by `premise`):
+   ```
+   curl --location 'https://demotrackandtrace.sandbox.bartender-tt.com/epcis-core/rest/events/searches' \
+   --header 'Content-Type: application/json' \
+   --header 'Authorization: Basic <tenant Basic-Auth creds>' \
+   --data '{
+       "filters": [
+           { "property": "type", "operator": "WD", "values": ["*Event"] },
+           { "property": "premise", "operator": "EQ", "values": ["TTMBASE"] }
+       ],
+       "order": { "property": "eventTime", "direction": "DESC" },
+       "pagination": { "documents": 100, "page": 0 }
+   }'
+   ```
+   (the second example is identical minus the `premise` filter — for "All Locations"). Full contract, judgment calls, and the one thing still genuinely unknown (the response shape — only the request was provided) are in Phase 6 below and `CLAUDE-CONCEPT.md` §7.9. Do not hardcode the `Authorization` value shown above anywhere — it's Luc's own ad hoc test credential, not something this app stores; reuse the already-stored Track & Trace username/password (§7.4) exactly like the legacy Product API (§7.7) already does.
 
 **Judgment calls made here, flagged rather than asked as blocking questions** (consistent with how BL-073/074/075 handled analogous calls):
 - **Security — never persist secrets in the log.** The Bartender API key and Basic-Auth password are already treated as sensitive everywhere else in this app (AES-256-GCM at rest via `lib/crypto.ts`, masked to last-4 in Settings). The new `ApiCallLog` table must never store a raw `apikey` or `Authorization` header value — redact both (case-insensitive) to a fixed placeholder before the row is written, not after. The "copy as curl" button substitutes the same placeholder — it can never surface a real secret pulled back out of a log row, only out of the live in-memory request it's copying *while building it in Phase 5's modal, which itself only ever holds the already-redacted stored value*.
 - **Retention: keep the last 500 rows per user, display the last 100.** Luc asked for "the last 100" shown; storing a bit more than that (500/user) gives cheap headroom without the row ever growing unbounded, and avoids a separate scheduled job — the prune runs inline, best-effort, right after each insert.
 - **Body truncation: ~20KB per request/response body.** Large binary responses (the legacy floor-map image fetch, in particular) get stored as `[binary, N bytes, not logged]` rather than a giant base64 blob — flag this explicitly in Phase 2, it's the one call site that needs a body special-case.
 - **Human-readable titles, sourced from the real spec docs where one exists, hand-written where none does.** Verified against the project's own OpenAPI docs (exact `summary` text) for every call this app actually makes; the legacy Basic-Auth APIs (`product-api`, `statemachine-api-configuration`) have **no spec doc in this project at all** — their labels below are hand-written, and Phase 3 says so inline at each site so nobody mistakes them for spec-sourced text later.
+- **EPCIS: live-probe the response before writing the parser.** Luc's message gave the request shape only — no sample response. Phase 6 requires one real authenticated call against the sandbox tenant first, to record the actual JSON (event type field name, `bizStep`, whatever carries the item count, an id field) before any TypeScript type or UI-binding code is written against it. Don't extrapolate the response shape from the request beyond what's noted as a hint in Phase 6.
+- **EPCIS: `premise` filter value — a strong inference, not a confirmed fact.** Luc's example uses `TTMBASE` for `premise`; the likely match is this app's own `Location.code` (from `location-api-v2`, already used internally as a site's "premise" — see `findFloorForPremiseCode`, §7.4), but this project has been burned before by same-looking Bartender codes not lining up across different APIs (BL-070). Phase 6 requires a one-call live check (fetch a small unfiltered page, compare a real event's `premise` value against a known site's `code`) before wiring the Location dropdown's filter through on faith.
+- **EPCIS: `pagination.documents` set to 20, not Luc's example value of 100.** Luc's own ask was "the last 20 EPCIS events"; his `curl` examples just happen to demonstrate with 100. Use `20` as a small named constant (`EPCIS_EVENTS_LIMIT`), trivial to raise later if he wants more.
 
 ### Human-readable operation labels (use exactly these; sources noted)
 
@@ -196,10 +213,62 @@ New `/history` page, tab 1. Table: one row per call — `operation` label, relat
 
 Since no copy-to-clipboard pattern exists anywhere in this app yet (confirmed by grep), introduce one small shared helper (`navigator.clipboard.writeText`, with a brief "Copied" inline confirmation state on the button — no toast system exists either, keep it local to the button) and reuse it for both buttons here.
 
-### Phase 6 — EPCIS-events tab UI (BL-076a — structurally complete, functionally stubbed)
+### Phase 6 — EPCIS-events tab, real implementation (`lib/bartenderEpcis.ts`)
 
-- **`app/api/history/epcis/route.ts`** — `GET`, accepts `?location=<code>|all`. For now, always returns `{ events: [], notConfigured: true, message: "EPCIS event history isn't wired up yet — pending the EPCIS endpoint spec." }`. Do not guess a contract, do not call any real Bartender endpoint here — that's the whole point of the split.
-- Tab 2 UI: header row with a **Location** dropdown (All Locations + each of the caller's locations — reuse whatever this app already uses elsewhere, e.g. Workflows' or Devices' existing location selector, for the option list) and a **Reload** button (re-fetches the tab's data — for now, the stub route; wire it for real the moment BL-076a is unblocked, no UI change needed then). Below: an event list (empty, since the stub always returns `[]`) with a clear empty-state message surfacing `message` from the stub response ("EPCIS event history isn't wired up yet..." — not a bare "No events" that would look like a real empty result). Still build the row/detail-modal/copy-button components against the eventual shape (`{ eventType, bizStep, itemCount, occurredAt, raw }` — a reasonable EPCIS-shaped guess for the *UI props only*, not a claim about the real API contract) so wiring the real fetch later is a one-file change in the stub route, not a UI rewrite.
+**Step 0 — live-probe the response shape before writing any type or parser.** Luc's message gave the request `curl`s only, never a sample response. Using the already-stored Track & Trace username/password (§7.4/7.7's `getBasicAuthCreds`-style credentials — add an equivalent resolver here, or reuse/export the existing one from `lib/bartenderProducts.ts` if it's a clean fit), make one real call:
+
+```
+POST {bartenderTenantUrl}/epcis-core/rest/events/searches
+Authorization: Basic <base64 of the stored username:password>
+Content-Type: application/json
+
+{ "filters": [{ "property": "type", "operator": "WD", "values": ["*Event"] }],
+  "order": { "property": "eventTime", "direction": "DESC" },
+  "pagination": { "documents": 5, "page": 0 } }
+```
+
+Inspect the real JSON returned — top-level envelope (`documents`? `events`? something else — the request's own `pagination.documents` key is a hint, not a guarantee), each event's type field, its `bizStep`, whichever field(s) carry the item count (`epcList` and/or `quantityList` — EPCIS events can carry either depending on event/product type), an event id, and `eventTime`. **Record the real shape as a comment in `lib/bartenderEpcis.ts` and update `CLAUDE-CONCEPT.md` §7.9 with what was actually found** before proceeding — this is the same "verify the live shape before trusting the written spec" discipline this project has followed for every other Bartender API (e.g. §7.3/7.5's gateway-and-header corrections).
+
+**`lib/bartenderEpcis.ts`**:
+
+```typescript
+const EPCIS_EVENTS_LIMIT = 20; // Luc's literal "last 20 EPCIS events" ask — his own curl examples show 100, that's just his test value
+
+export async function searchEpcisEvents(
+  tenantUrl: string,
+  username: string,
+  password: string,
+  opts: { locationCode?: string } = {}
+): Promise<GatewayResult<EpcisEvent[]>> {
+  const filters: Array<{ property: string; operator: string; values: string[] }> = [
+    { property: "type", operator: "WD", values: ["*Event"] },
+  ];
+  if (opts.locationCode) {
+    filters.push({ property: "premise", operator: "EQ", values: [opts.locationCode] });
+  }
+
+  const url = `${tenantUrl.replace(/\/+$/, "")}/epcis-core/rest/events/searches`;
+  const auth = `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`;
+
+  // route through loggedFetch (Phase 2) once that exists, same as every other call site
+  const res = await loggedFetch(userId, "Search EPCIS events", url, {
+    method: "POST",
+    headers: { Authorization: auth, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      filters,
+      order: { property: "eventTime", direction: "DESC" },
+      pagination: { documents: EPCIS_EVENTS_LIMIT, page: 0 },
+    }),
+  });
+
+  // ...parse per whatever Step 0's live probe actually found — don't guess further than that.
+}
+```
+
+**Location-code correspondence — verify, don't assume.** Before wiring the Location dropdown's value straight through as `locationCode` above, confirm with the same Step 0 probe (or a second one) that a real event's `premise` value actually equals one of this app's own `Location.code` values (from `location-api-v2`, §7.3 — the same field `findFloorForPremiseCode` already calls a site's "premise" internally, §7.4). If it doesn't match, stop and flag it back rather than silently filtering on the wrong field — this project has been burned by exactly this kind of code mismatch before (BL-070, §13).
+
+- **`app/api/history/epcis/route.ts`** — `GET`, accepts `?location=<code>|all`, session-gated. Resolves the caller's stored Track & Trace credentials (400 with a "set your credentials in Settings" message if missing, same pattern as `resolveProductApi`), calls `searchEpcisEvents(tenantUrl, username, password, { locationCode: location === "all" ? undefined : location })`, returns the parsed events (or the real Bartender error, same error-shape-passthrough convention as `lib/bartenderLocations.ts`'s other routes).
+- Tab 2 UI: header row with a **Location** dropdown ("All Locations" + each of the caller's locations, from the same source the Overview site selector uses, §14) and a **Reload** button that re-fetches `/api/history/epcis?location=...`. Event list: one row per event — `<type>` + formatted `bizStep` (last path segment of the URN, e.g. "ObjectEvent — shipping"; no existing bizStep-formatting helper in this app, write a small new one) and the item count. Row click opens a detail modal showing the full raw event JSON, pretty-printed, with a "Copy" button (reuse Phase 5's clipboard helper). Empty state ("No EPCIS events found for this selection") only when the real call legitimately returns zero — a real Bartender error (bad credentials, network failure, unexpected shape) gets its own distinct error state, never silently rendered as "no events."
 
 ### Phase 7 — page + nav
 
@@ -212,8 +281,8 @@ Since no copy-to-clipboard pattern exists anywhere in this app yet (confirmed by
 
 ### Phase 8 — docs
 
-- `CLAUDE-CONCEPT.md`: new `## 19. History — API call log + EPCIS events, added 2026-09-02` section covering the `ApiCallLog` model, the redaction rule (never store a raw secret, ever), the 500-row-per-user retention / 100-row display split, the per-owner attribution model (interactive caller vs. BL-074b-resolved cron owner), the human-readable label table above (spec-sourced vs. hand-written, clearly marked), and the EPCIS tab's stub-now/real-later split as BL-076a. Add a dated §13 decision-log entry recording this as Luc's direct request plus the four judgment calls flagged in this prompt's Task section.
-- `BACKLOG.md`: new **BL-076** entry (endpoint call history — buildable now, check off on completion) and **BL-076a** entry (EPCIS events — blocked, explicitly waiting on Luc to share the EPCIS endpoint spec per his own message, not started).
+- `CLAUDE-CONCEPT.md`: new `## 19. History — API call log + EPCIS events, added 2026-09-02` section covering the `ApiCallLog` model, the redaction rule (never store a raw secret, ever), the 500-row-per-user retention / 100-row display split, the per-owner attribution model (interactive caller vs. BL-074b-resolved cron owner), the human-readable label table above (spec-sourced vs. hand-written, clearly marked), and the EPCIS tab's real contract. New `§7.9 EPCIS Core API` section recording the real request contract (already drafted, see `CLAUDE-CONCEPT.md`) — **update it with the real response shape found in Phase 6's Step 0 probe**, since that part is still genuinely unknown as of this prompt. Add a dated §13 decision-log entry recording this as Luc's direct request plus the judgment calls flagged in this prompt's Task section, including whatever Step 0 actually found.
+- `BACKLOG.md`: **BL-076** (endpoint call history) and **BL-076a** (EPCIS events, real implementation) — check off both on completion, noting in BL-076a's completion line what the real response shape turned out to be and whether the `premise`/`Location.code` correspondence held.
 
 ### Verify
 
@@ -222,11 +291,12 @@ Since no copy-to-clipboard pattern exists anywhere in this app yet (confirmed by
 - Confirm retention: seed >500 rows for one test user, trigger one more call, confirm the row count settles back to 500 (oldest pruned).
 - Confirm cross-user isolation: `GET /api/history/calls/[id]` for another user's row returns 404, not the data.
 - Re-verify (existing E2E suite green, plus a live sandbox smoke-test if convenient) after each of the 9 remaining call-site refactors individually — this item touches every live Bartender integration path in the app, a mistake in one file shouldn't be discovered only after all nine are done.
-- `History` appears in the left nav for every signed-in, approved role; the Endpoint-calls tab shows real data with working detail modal + both copy buttons; the EPCIS tab shows the "not configured yet" empty state, and its Location dropdown + Reload button are both wired (Reload visibly re-hits the stub route — confirm via network tab or a log line, even though the response never changes yet).
+- `History` appears in the left nav for every signed-in, approved role; the Endpoint-calls tab shows real data with working detail modal + both copy buttons.
+- EPCIS tab: confirm the unfiltered call returns real events (matching Luc's second `curl` example's filter set exactly, minus `premise`); confirm selecting a specific Location adds the `premise` filter and the `premise` value genuinely narrows the results (not just "returns fewer by coincidence" — cross-check against a known event's actual `premise` value from Step 0's probe); confirm the Reload button re-fires the query; confirm a real Bartender error (e.g. temporarily wrong credentials) surfaces as a distinct error state, not a false "no events" empty state. As a nice end-to-end sanity check, fire a workflow (BL-063 already pushes real reads) and confirm the resulting event shows up in this tab shortly after.
 - Existing E2E suite still green.
 
 ### Conventions
 
 - Branch `staging`.
-- New backlog item, no letter suffix → `npm version minor --no-git-tag-version` (covers both BL-076 and the BL-076a stub in the same bump).
-- Check off `BACKLOG.md` BL-076 with a short completion note (which call sites were live-verified, which fell back to a structural/log-inspection check only). Leave BL-076a unchecked, with its note pointing back at this same file for what's already scaffolded.
+- New backlog item, no letter suffix → `npm version minor --no-git-tag-version` (covers both BL-076 and BL-076a in the same bump).
+- Check off `BACKLOG.md` BL-076 and BL-076a with short completion notes each (BL-076a's should record the real response shape found and whether the `premise` correspondence held, since both were open questions at prompt-writing time).
