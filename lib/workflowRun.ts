@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { makeOwnerCredentialsCache, type RunCredentials } from "@/lib/bartenderLocations";
 import { mintSerializedItems, SerializationError, MAX_NEW_ITEMS_PER_FIRING } from "@/lib/bartenderSerialization";
-import { getStock } from "@/lib/bartenderInventory";
+import { getStockHexa, getConfiguredInStockWindowDays } from "@/lib/bartenderInventory";
 import { sendReads } from "@/lib/bartenderDataCollector";
 
 // Credentials for one firing — the *owning* user's Bartender connection, or
@@ -36,7 +36,7 @@ interface ResolvedBatch {
   items: string[];
   // Per-item GTIN, parallel to `items` — so a mixed-GTIN batch can be split
   // across outgoing Flow Links whose GTIN filters differ. `null` when the
-  // item's GTIN isn't known (FIXED, or PRESENT placeholders).
+  // item's GTIN isn't known (FIXED items).
   itemGtins: (string | null)[];
   note?: string;
 }
@@ -52,7 +52,12 @@ function feedGtins(feed: any): string[] {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function resolveBatch(ownerId: string, feed: any, creds: RunCreds): Promise<ResolvedBatch> {
+async function resolveBatch(
+  ownerId: string,
+  feed: any,
+  creds: RunCreds,
+  inStockWindowDays: number | null
+): Promise<ResolvedBatch> {
   if (feed.kind === "FIXED") {
     const items = Array.isArray(feed.fixedItems) ? (feed.fixedItems as string[]) : [];
     return { items, itemGtins: items.map(() => null) };
@@ -82,24 +87,30 @@ async function resolveBatch(ownerId: string, feed: any, creds: RunCreds): Promis
     }
   }
 
-  // PRESENT — query real stock in the zone. The Inventory API returns
-  // aggregate counts (no individual EPCs — 7.8), so pulled items are
-  // placeholder ids (can't be pushed to the platform; local sim only). Their
-  // GTIN is only known when a single-GTIN list narrowed the query.
+  // PRESENT — pull the REAL EPCs in the zone via POST /inventory/stock/analytics
+  // (dimensions ["hexa","product.pid"], §7.8, live-verified 2026-09-02). Each
+  // `hexa` is a genuine 24-char SGTIN-96, so unlike the pre-2026-09-02
+  // placeholder ids these push for real through sendReads(). GTIN_LIST mode
+  // narrows by product.pid; ALL mode takes whatever's present.
   if (!creds) return { items: [], itemGtins: [], note: "the workflow owner has no Bartender connection configured" };
+  if (!feed.locationCode || !feed.zoneCode) {
+    return { items: [], itemGtins: [], note: "PRESENT feed has no site + zone set" };
+  }
   const useAll = feed.presentMatchMode === "ALL";
-  const stock = await getStock(ownerId, creds.tenantUrl, creds.apiKey, {
-    groupBy: "zone",
-    locationCode: feed.locationCode ?? undefined,
-    zoneCode: feed.zoneCode ?? undefined,
+  const stock = await getStockHexa(ownerId, creds.tenantUrl, creds.apiKey, {
+    locationCode: feed.locationCode,
+    zoneCode: feed.zoneCode,
     pids: useAll ? undefined : gtins,
+    inStockWindowDays,
   });
   if (!stock.ok) return { items: [], itemGtins: [], note: stock.errorMessage };
-  const available = stock.results.reduce((sum, r) => sum + (r.qty ?? 0), 0);
-  const pull = Math.min(available, quantity);
-  const items = Array.from({ length: pull }, (_, i) => `present:${feed.zoneCode ?? "zone"}:${Date.now()}:${i}`);
-  const g = !useAll && gtins.length === 1 ? gtins[0] : null;
-  return { items, itemGtins: items.map(() => g) };
+  if (stock.rows.length === 0) {
+    return { items: [], itemGtins: [], note: "nothing in stock in that zone right now" };
+  }
+  // Sample up to `quantity` of what's there — a presence reader catches a
+  // subset each pass, not always the same first N.
+  const picked = [...stock.rows].sort(() => Math.random() - 0.5).slice(0, quantity);
+  return { items: picked.map((r) => r.hexa), itemGtins: picked.map((r) => r.pid ?? null) };
 }
 
 interface ReadPushStats {
@@ -134,8 +145,9 @@ async function emitReadAndScheduleHops(args: {
     data: { workflowId, taskId, deviceId, channelId, items, itemGtins, gtin, occurredAt: at },
   });
 
-  // Real platform read. Skipped silently when there's nothing submittable
-  // (e.g. PRESENT-feed placeholder ids — see 7.5/16.5) or no collectorId.
+  // Real platform read — POST /reads with the real hexa/EPC tags. Skipped
+  // only when there's nothing submittable or no collectorId (PRESENT feeds
+  // now yield real EPCs via stock/analytics, §7.8, so they push like NEW).
   if (creds && collectorId && items.length > 0) {
     const res = await sendReads(ownerId, creds.tenantUrl, creds.apiKey, collectorId, channelId, items, at);
     if (res.ok) {
@@ -219,6 +231,17 @@ export async function runTick(): Promise<TickSummary> {
   // must go there, not to one global account (2026-09-02 fix).
   const credsForOwner = makeOwnerCredentialsCache();
 
+  // Per-tenant in-stock look-back window for PRESENT feeds — read off the
+  // tenant config once per tick (keyed by API key).
+  const windowByKey = new Map<string, number | null>();
+  async function windowForOwner(ownerId: string, c: RunCreds): Promise<number | null> {
+    if (!c) return null;
+    if (!windowByKey.has(c.apiKey)) {
+      windowByKey.set(c.apiKey, await getConfiguredInStockWindowDays(ownerId, c.tenantUrl, c.apiKey));
+    }
+    return windowByKey.get(c.apiKey) ?? null;
+  }
+
   // ── 1. Firing — one per due FeedLink (cadence lives on the FeedLink) ──
   const dueLinks = await prisma.feedLink.findMany({
     where: {
@@ -246,7 +269,8 @@ export async function runTick(): Promise<TickSummary> {
     if (claim.count === 0) continue;
 
     const creds = await credsForOwner(link.workflow.ownerId);
-    const batch = await resolveBatch(link.workflow.ownerId, feed, creds);
+    const window = feed.kind === "PRESENT" ? await windowForOwner(link.workflow.ownerId, creds) : null;
+    const batch = await resolveBatch(link.workflow.ownerId, feed, creds, window);
     if (batch.note) summary.notes.push(`feed "${feed.name}": ${batch.note}`);
     if (feed.kind === "NEW") summary.itemsMinted += batch.items.length;
     summary.firedInputs++;

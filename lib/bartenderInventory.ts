@@ -117,3 +117,104 @@ export async function getStock(
     inStockWindowDays: b?.inStockWindowDays,
   };
 }
+
+// The tenant's configured in-stock look-back window. There's no settings
+// endpoint (§7.8 — /settings, /inventory/config etc. all 404), but GET /stock
+// echoes the tenant default in its response envelope when the param is
+// omitted. A cheap 1-row page. Returns null if it can't be read.
+export async function getConfiguredInStockWindowDays(
+  userId: string,
+  tenantUrl: string,
+  apiKey: string
+): Promise<number | null> {
+  const url = `${resolveInventoryGatewayUrl(tenantUrl)}/stock?groupBy=zone&pageSize=1`;
+  try {
+    const res = await loggedFetch(userId, "Get current stock snapshot", url, {
+      headers: { apikey: apiKey },
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const b = (await res.json().catch(() => null)) as { inStockWindowDays?: number } | null;
+    return typeof b?.inStockWindowDays === "number" ? b.inStockWindowDays : null;
+  } catch {
+    return null;
+  }
+}
+
+export interface StockHexaRow {
+  hexa: string;
+  pid?: string | null; // = GTIN, present because we group by "hexa","product.pid"
+  qty?: number;
+}
+
+export interface StockHexaResult {
+  ok: boolean;
+  rows: StockHexaRow[];
+  total?: number;
+  inStockWindowDays?: number;
+  errorMessage?: string;
+}
+
+// POST {gateway}/inventory/stock/analytics with dimensions ["hexa",
+// "product.pid"] — the EPC-level stock list (§7.8, live-probed 2026-09-02).
+// This is what makes a PRESENT feed push REAL reads: each `hexa` is a
+// 24-char SGTIN-96 that drops straight into POST /reads. `pids` (empty =
+// ALL match mode) becomes a `product.pid` EQ filter. Server-side pagination
+// is ignored (always pageSize:100) so callers slice client-side.
+export async function getStockHexa(
+  userId: string,
+  tenantUrl: string,
+  apiKey: string,
+  opts: { locationCode?: string; zoneCode?: string; pids?: string[]; inStockWindowDays?: number | null }
+): Promise<StockHexaResult> {
+  const pids = (opts.pids ?? []).map((p) => String(p).trim()).filter(Boolean);
+  const filters: Array<{ field: string; operator: string; values: string[] }> = [];
+  if (opts.locationCode) filters.push({ field: "location.code", operator: "eq", values: [opts.locationCode] });
+  if (opts.zoneCode) filters.push({ field: "zone.code", operator: "eq", values: [opts.zoneCode] });
+  if (pids.length > 0) filters.push({ field: "product.pid", operator: "eq", values: pids });
+
+  const body: Record<string, unknown> = {
+    filters,
+    dimensions: ["hexa", "product.pid"],
+    metrics: ["itemsQty"],
+    sortBy: { itemsQty: "DESC" },
+  };
+  if (typeof opts.inStockWindowDays === "number") body.inStockWindowDays = opts.inStockWindowDays;
+
+  const url = `${resolveInventoryGatewayUrl(tenantUrl)}/stock/analytics`;
+  let res: Response;
+  try {
+    res = await loggedFetch(userId, "Get stock EPC list", url, {
+      method: "POST",
+      headers: { apikey: apiKey, "content-type": "application/json" },
+      body: JSON.stringify(body),
+      cache: "no-store",
+    });
+  } catch {
+    return { ok: false, rows: [], errorMessage: "Could not reach the Inventory API — check the tenant URL." };
+  }
+
+  const raw = await res.text().catch(() => "");
+  let parsed: unknown = null;
+  try {
+    parsed = raw ? JSON.parse(raw) : null;
+  } catch {
+    /* keep raw */
+  }
+  if (!res.ok) {
+    const message = (parsed as { message?: string } | null)?.message ?? `The Inventory API returned HTTP ${res.status}.`;
+    return { ok: false, rows: [], errorMessage: message };
+  }
+
+  const pb = parsed as { results?: Array<{ hexa?: string; pid?: string; qty?: number }>; total?: number; inStockWindowDays?: number } | null;
+  let rows: StockHexaRow[] = Array.isArray(pb?.results)
+    ? pb!.results
+        .filter((r): r is { hexa: string; pid?: string; qty?: number } => typeof r.hexa === "string" && r.hexa.length > 0)
+        .map((r) => ({ hexa: r.hexa, pid: r.pid ?? null, qty: r.qty }))
+    : [];
+  // Safety net (same as getStock) — re-filter client-side in case the
+  // sandbox ignored a server-side filter.
+  if (pids.length > 0) rows = rows.filter((r) => r.pid != null && pids.includes(r.pid));
+
+  return { ok: true, rows, total: pb?.total, inStockWindowDays: pb?.inStockWindowDays };
+}

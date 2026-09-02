@@ -182,8 +182,8 @@ export interface SendReadsResult {
 // for one Channel in one read cycle (datacollector-api-v3, CLAUDE-CONCEPT.md
 // 7.5). 200 = COMMITTED (EPCIS event written) or NOTPROCESSED (channel has no
 // active Zone mapping — observations discarded, not an error); 207 = partial.
-// Items that don't resolve to a valid tag identifier (e.g. PRESENT-feed
-// placeholders) are dropped; an all-dropped batch returns ok:false without a
+// Items that don't resolve to a valid tag identifier are dropped; an
+// all-dropped batch returns ok:false without a
 // network call.
 export async function sendReads(
   userId: string,
