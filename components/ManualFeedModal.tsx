@@ -160,18 +160,21 @@ export function ManualFeedModal({ device, onClose }: { device: DeviceRecord; onC
               </p>
               <p style={{ margin: "0 0 12px", fontSize: 13 }}>
                 Fire an Item Feed once through this device, now. It won&apos;t run the device&apos;s workflow or route
-                items onward — just a single read on the channel you pick.
+                items onward — just a single read on the channel below.
               </p>
 
               {error && <div className="snack snack-danger">{error}</div>}
 
-              {channels.length > 1 && (
-                <div className="field-block">
-                  <label htmlFor="manualFeedChannel">Channel</label>
+              <div className="field-block">
+                <label htmlFor="manualFeedChannel">Channel</label>
+                {channels.length === 0 ? (
+                  <p className="note" style={{ margin: 0 }}>This device has no channels configured.</p>
+                ) : (
                   <select
                     id="manualFeedChannel"
                     value={channelId}
                     onChange={(e) => setChannelId(e.target.value)}
+                    disabled={channels.length === 1}
                   >
                     {channels.map((c) => (
                       <option key={c.id} value={c.id}>
@@ -179,8 +182,8 @@ export function ManualFeedModal({ device, onClose }: { device: DeviceRecord; onC
                       </option>
                     ))}
                   </select>
-                </div>
-              )}
+                )}
+              </div>
 
               <div className="field-block">
                 <label>Item feed</label>
