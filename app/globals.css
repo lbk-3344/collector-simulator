@@ -754,7 +754,7 @@ select.role-select:disabled { opacity: .5; cursor: not-allowed; }
 }
 .wf-channel-btn:hover { background: var(--surface-2); }
 .wf-channel-id { font-family: var(--font-mono); font-size: 10.5px; color: var(--ink-2); }
-.wf-channel-meta { font-size: 10.5px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wf-channel-meta { flex: 1; min-width: 0; text-align: right; font-size: 10.5px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .wf-handle { width: 9px !important; height: 9px !important; background: var(--border-strong) !important; border: 1.5px solid var(--surface) !important; }
 .wf-handle.active { background: var(--accent-primary) !important; }
 .wf-handle.dim { opacity: .3; }

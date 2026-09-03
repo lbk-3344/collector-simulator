@@ -40,10 +40,23 @@ export function TaskNode({ data }: NodeProps) {
           return (
             <div key={ch.id} className="wf-channel-row">
               <Handle type="target" position={Position.Left} id={ch.id} className={`wf-handle${fedCount > 0 ? " active" : ""}`} />
-              <div className="wf-channel-btn" style={{ cursor: "default" }}>
+              {/* Prefer the Channel's name for display (same as the manual-feed
+                  popup); the code + full name + input count always live in the
+                  tooltip in case the name is truncated. */}
+              <div
+                className="wf-channel-btn"
+                style={{ cursor: "default" }}
+                title={`${ch.id}${ch.name ? ` — ${ch.name}` : ""}${
+                  fedCount > 0 ? ` · ${fedCount} input${fedCount === 1 ? "" : "s"}` : ""
+                }`}
+              >
                 <span className="wf-channel-id">{ch.id}</span>
                 <span className="wf-channel-meta">
-                  {fedCount > 0 ? `⇐ ${fedCount} input${fedCount === 1 ? "" : "s"}` : ch.name || ch.type.toLowerCase()}
+                  {ch.name
+                    ? ch.name
+                    : fedCount > 0
+                      ? `⇐ ${fedCount} input${fedCount === 1 ? "" : "s"}`
+                      : ch.type.toLowerCase()}
                 </span>
               </div>
               <Handle type="source" position={Position.Right} id={ch.id} className="wf-handle" />

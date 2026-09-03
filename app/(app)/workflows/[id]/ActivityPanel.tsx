@@ -6,6 +6,7 @@ interface ReadRow {
   id: string;
   taskName: string;
   channelId: string;
+  channelName: string | null;
   itemCount: number;
   gtin: string | null;
   occurredAt: string;
@@ -54,8 +55,11 @@ export function ActivityPanel({ workflowId, onClose }: { workflowId: string; onC
                 <tr key={r.id}>
                   <td className="wf-activity-time">{new Date(r.occurredAt).toLocaleTimeString()}</td>
                   <td>
-                    <div className="wf-activity-task">
-                      {r.taskName} · {r.channelId}
+                    <div
+                      className="wf-activity-task"
+                      title={`${r.taskName} · ${r.channelId}${r.channelName ? ` — ${r.channelName}` : ""}`}
+                    >
+                      {r.taskName} · {r.channelName || r.channelId}
                     </div>
                     <div className="wf-activity-meta">
                       {r.itemCount} item{r.itemCount === 1 ? "" : "s"}
