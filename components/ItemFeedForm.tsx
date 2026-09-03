@@ -52,6 +52,7 @@ export function ItemFeedForm({
   const [gtins, setGtins] = useState<string[]>([]);
   const [categoryCode, setCategoryCode] = useState<string | null>(null);
   const [presentMatchMode, setPresentMatchMode] = useState<PresentMatchMode>("GTIN_LIST");
+  const [presentTakeAll, setPresentTakeAll] = useState(true);
   const [quantityMin, setQuantityMin] = useState(1);
   const [quantityMax, setQuantityMax] = useState(1);
   const [gs1Standard, setGs1Standard] = useState("sgtin-96"); // NEW only (BL-073)
@@ -70,6 +71,7 @@ export function ItemFeedForm({
     setGtins(feed?.gtins ?? []);
     setCategoryCode(feed?.categoryCode ?? null);
     setPresentMatchMode(feed?.presentMatchMode ?? "GTIN_LIST");
+    setPresentTakeAll(feed?.presentTakeAll ?? true);
     setQuantityMin(feed?.quantityMin ?? 1);
     setQuantityMax(feed?.quantityMax ?? feed?.quantityMin ?? 1);
     setGs1Standard(feed?.gs1Standard || "sgtin-96");
@@ -116,11 +118,15 @@ export function ItemFeedForm({
     } else {
       body.gtins = gtins;
       body.categoryCode = categoryCode;
-      body.quantityMin = quantityMin;
-      body.quantityMax = quantityMax;
-      if (kind === "NEW") body.gs1Standard = gs1Standard;
+      if (kind === "NEW") {
+        body.gs1Standard = gs1Standard;
+        body.quantityMin = quantityMin;
+        body.quantityMax = quantityMax;
+      }
       if (kind === "PRESENT") {
         body.presentMatchMode = presentMatchMode;
+        body.presentTakeAll = presentTakeAll;
+        if (!presentTakeAll) body.quantityMax = quantityMax;
         body.locationCode = locationCode;
         body.zoneCode = zoneCode;
       }
@@ -223,7 +229,7 @@ export function ItemFeedForm({
           />
         )}
 
-        {kind !== "FIXED" && (
+        {kind === "NEW" && (
           <div className="field-row">
             <div className="field-block">
               <label htmlFor="qMin">Quantity min</label>
@@ -249,6 +255,49 @@ export function ItemFeedForm({
         )}
         {kind === "NEW" && quantityMax > 10 && (
           <div className="snack snack-warning">New feeds are capped at 10 minted items per firing (total across all GTINs).</div>
+        )}
+
+        {kind === "PRESENT" && (
+          <div className="field-block">
+            <label>How many each firing</label>
+            <div className="icon-toggle" role="group" aria-label="Present quantity mode">
+              <button
+                type="button"
+                className={`icon-toggle-btn${presentTakeAll ? " selected" : ""}`}
+                style={{ width: "auto", padding: "6px 12px", fontSize: 12.5, fontWeight: 600 }}
+                onClick={() => setPresentTakeAll(true)}
+              >
+                All items in stock
+              </button>
+              <button
+                type="button"
+                className={`icon-toggle-btn${!presentTakeAll ? " selected" : ""}`}
+                style={{ width: "auto", padding: "6px 12px", fontSize: 12.5, fontWeight: 600 }}
+                onClick={() => setPresentTakeAll(false)}
+              >
+                Up to a maximum
+              </button>
+            </div>
+            {presentTakeAll ? (
+              <p className="note" style={{ marginTop: 6 }}>
+                Every firing pushes everything currently in stock in that zone.
+              </p>
+            ) : (
+              <div className="field-block" style={{ marginTop: 8, maxWidth: 160 }}>
+                <label htmlFor="qMax">Maximum</label>
+                <input
+                  id="qMax"
+                  type="number"
+                  min={1}
+                  value={quantityMax}
+                  onChange={(e) => setQuantityMax(Math.max(1, Number(e.target.value) || 1))}
+                />
+                <span className="note" style={{ marginTop: 4 }}>
+                  A random subset of that size, or fewer if the zone holds less.
+                </span>
+              </div>
+            )}
+          </div>
         )}
 
         {kind === "NEW" && (

@@ -449,9 +449,16 @@ model ItemFeed {
   // zone" — `gtins` is ignored.
   presentMatchMode PresentMatchMode?
 
-  // NEW/PRESENT only. Equal min/max = a fixed count each firing.
+  // NEW: min/max range, equal min/max = a fixed count each firing.
+  // PRESENT: quantityMin is unused; quantityMax is the per-firing cap and
+  // only applies when presentTakeAll = false (BL-070b, 2026-09-03).
   quantityMin Int?
   quantityMax Int?
+
+  // PRESENT only. true (default) = every firing pushes the entire current
+  // stock in the zone; false = cap the firing at quantityMax. Ignored for
+  // NEW / FIXED. "Most of the time we want the full stock" — Luc, 2026-09-03.
+  presentTakeAll Boolean @default(true)
 
   // PRESENT only — a specific site+zone (zones aren't globally unique).
   locationCode String?

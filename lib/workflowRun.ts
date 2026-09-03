@@ -63,6 +63,9 @@ async function resolveBatch(
     return { items, itemGtins: items.map(() => null) };
   }
 
+  // NEW: a random count in the feed's min/max range. PRESENT ignores this —
+  // it either takes the whole zone stock (presentTakeAll) or caps at
+  // quantityMax (BL-070b).
   const quantity = randInt(feed.quantityMin ?? 1, feed.quantityMax ?? feed.quantityMin ?? 1);
   const gtins = feedGtins(feed);
 
@@ -107,9 +110,16 @@ async function resolveBatch(
   if (stock.rows.length === 0) {
     return { items: [], itemGtins: [], note: "nothing in stock in that zone right now" };
   }
-  // Sample up to `quantity` of what's there — a presence reader catches a
-  // subset each pass, not always the same first N.
-  const picked = [...stock.rows].sort(() => Math.random() - 0.5).slice(0, quantity);
+  // Default: push the entire current stock in the zone ("most of the time we
+  // want the full stock" — Luc). `getStockHexa` returns up to 100 rows (the
+  // analytics API's fixed page size, §7.8) — a firing over that ceiling is
+  // rare here and not worth paging for. `presentTakeAll: false` caps the
+  // firing at quantityMax, sampling a random subset so a presence reader
+  // isn't always catching the same first N.
+  const takeAll = feed.presentTakeAll !== false;
+  const picked = takeAll
+    ? stock.rows
+    : [...stock.rows].sort(() => Math.random() - 0.5).slice(0, Math.max(1, feed.quantityMax ?? 1));
   return { items: picked.map((r) => r.hexa), itemGtins: picked.map((r) => r.pid ?? null) };
 }
 

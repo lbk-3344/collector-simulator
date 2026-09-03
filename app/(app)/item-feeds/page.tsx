@@ -52,7 +52,14 @@ function summarize(f: ItemFeedRecord): string {
         : n > 1
           ? `${n} GTINs`
           : "no product";
-  const qty = f.quantityMin === f.quantityMax ? `${f.quantityMin}` : `${f.quantityMin}–${f.quantityMax}`;
+  const qty =
+    f.kind === "PRESENT"
+      ? f.presentTakeAll
+        ? "all in stock"
+        : `up to ${f.quantityMax}`
+      : f.quantityMin === f.quantityMax
+        ? `${f.quantityMin}`
+        : `${f.quantityMin}–${f.quantityMax}`;
   const where = f.kind === "PRESENT" ? ` · ${f.locationCode}/${f.zoneCode}` : "";
   return `${product} · qty ${qty}${where}`;
 }

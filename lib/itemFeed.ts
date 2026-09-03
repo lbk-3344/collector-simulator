@@ -19,6 +19,9 @@ export interface ItemFeedRecord {
   // NEW only — "sgtin-96" (default; null means the same) or "sgtin-198" (BL-073).
   gs1Standard: string | null;
   presentMatchMode: PresentMatchMode | null;
+  // PRESENT only. true = each firing pushes the whole zone stock; false =
+  // cap at quantityMax (BL-070b).
+  presentTakeAll: boolean;
   quantityMin: number | null;
   quantityMax: number | null;
   locationCode: string | null;
@@ -56,6 +59,8 @@ export function buildItemFeedData(body: any): { error: string } | { data: Record
   const fixedItems = strArr(body.fixedItems);
   const presentMatchMode: PresentMatchMode =
     body.presentMatchMode === "ALL" ? "ALL" : "GTIN_LIST";
+  // PRESENT only. Missing / not-false = take-all (the common case, Luc 2026-09-03).
+  const presentTakeAll = body.presentTakeAll !== false;
   let quantityMin = nonNegInt(body.quantityMin);
   let quantityMax = nonNegInt(body.quantityMax);
 
@@ -65,23 +70,30 @@ export function buildItemFeedData(body: any): { error: string } | { data: Record
     }
     quantityMin = null;
     quantityMax = null;
-  } else {
-    // NEW / PRESENT — quantity range
+  } else if (kind === "NEW") {
+    // NEW — quantity range
     if (quantityMin === null) quantityMin = 1;
     if (quantityMax === null) quantityMax = quantityMin;
     if (quantityMax < quantityMin) {
       return { error: "quantityMax must be greater than or equal to quantityMin." };
     }
-    if (kind === "NEW" && gtins.length === 0) {
+    if (gtins.length === 0) {
       return { error: "A NEW item feed needs at least one GTIN." };
     }
-    if (kind === "PRESENT") {
-      if (!locationCode || !zoneCode) {
-        return { error: "A PRESENT item feed needs both a site and a zone." };
-      }
-      if (presentMatchMode === "GTIN_LIST" && gtins.length === 0) {
-        return { error: "A PRESENT feed in GTIN-list mode needs at least one GTIN." };
-      }
+  } else {
+    // PRESENT — no minimum; quantityMax is a per-firing cap, used only when
+    // not taking the whole stock (BL-070b).
+    quantityMin = null;
+    if (presentTakeAll) {
+      quantityMax = null;
+    } else if (quantityMax === null || quantityMax < 1) {
+      return { error: 'Set a maximum of at least 1, or turn on "All items in stock".' };
+    }
+    if (!locationCode || !zoneCode) {
+      return { error: "A PRESENT item feed needs both a site and a zone." };
+    }
+    if (presentMatchMode === "GTIN_LIST" && gtins.length === 0) {
+      return { error: "A PRESENT feed in GTIN-list mode needs at least one GTIN." };
     }
   }
 
@@ -93,6 +105,7 @@ export function buildItemFeedData(body: any): { error: string } | { data: Record
       categoryCode: kind === "FIXED" ? null : categoryCode,
       gs1Standard: kind === "NEW" ? gs1Standard : null,
       presentMatchMode: kind === "PRESENT" ? presentMatchMode : null,
+      presentTakeAll: kind === "PRESENT" ? presentTakeAll : true,
       quantityMin,
       quantityMax,
       locationCode: kind === "PRESENT" ? locationCode : null,
