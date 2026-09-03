@@ -785,6 +785,29 @@ select.role-select:disabled { opacity: .5; cursor: not-allowed; }
 .wf-feed-node-kind { font-size: 10px; opacity: 0.72; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .wf-handle-feed { background: #fff !important; }
 
+/* Manual-feed popup (BL-078) — the feed picker reuses the canvas Feed Node
+   card style (.wf-feed-node) so the two presentations match. */
+.manual-feed-list { display: flex; flex-direction: column; gap: 8px; }
+.manual-feed-card {
+  width: 100%; min-width: 0; cursor: pointer;
+  transition: box-shadow .12s ease, transform .12s ease;
+}
+.manual-feed-card .wf-feed-node-text { flex: 1; }
+.manual-feed-card:hover { transform: translateY(-1px); }
+.manual-feed-card:focus-visible { outline: 2px solid var(--accent-brand); outline-offset: 2px; }
+.manual-feed-card.selected {
+  box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--accent-brand);
+}
+.manual-feed-card-dup {
+  flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; border-radius: 6px; background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.35); color: var(--accent-primary-contrast);
+  cursor: pointer; transition: background .12s ease;
+}
+.manual-feed-card-dup:hover { background: rgba(255, 255, 255, 0.16); }
+.manual-feed-card-dup:disabled { opacity: 0.5; cursor: default; }
+.manual-feed-card-dup svg { width: 15px; height: 15px; }
+
 .wf-activity {
   width: 300px; flex-shrink: 0; background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--radius); display: flex; flex-direction: column; overflow: hidden;

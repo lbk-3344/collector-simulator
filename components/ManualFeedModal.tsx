@@ -20,22 +20,18 @@ function DuplicateIcon() {
   );
 }
 
-const KIND_LABEL: Record<string, string> = { NEW: "New", PRESENT: "In stock", FIXED: "Fixed" };
+// Same card presentation as a Feed Node on the workflow canvas
+// (FeedNodeComponent.tsx) — navy card, kind glyph, name, "KIND · detail".
+const KIND_ICON: Record<string, string> = { NEW: "✦", PRESENT: "◧", FIXED: "≡" };
+const KIND_LABEL: Record<string, string> = { NEW: "NEW", PRESENT: "IN STOCK", FIXED: "FIXED" };
 
-function feedLine(f: ItemFeedRecord): string {
-  if (f.kind === "FIXED") {
-    const n = f.fixedItems?.length ?? 0;
-    return `${n} fixed item${n === 1 ? "" : "s"}`;
-  }
+// Mirrors feedDetail() in app/(app)/workflows/[id]/WorkflowEditor.tsx so the
+// two card presentations don't drift.
+function feedDetail(f: ItemFeedRecord): string {
+  if (f.kind === "FIXED") return "fixed list";
+  if (f.kind === "PRESENT" && f.presentMatchMode === "ALL") return "any GTIN in zone";
   const n = f.gtins?.length ?? 0;
-  if (f.kind === "NEW") {
-    const range = f.quantityMin === f.quantityMax ? `${f.quantityMin}` : `${f.quantityMin}–${f.quantityMax}`;
-    return `${n} GTIN${n === 1 ? "" : "s"} · qty ${range}`;
-  }
-  // PRESENT
-  const match = f.presentMatchMode === "ALL" ? "any GTIN" : `${n} GTIN${n === 1 ? "" : "s"}`;
-  const qty = f.presentTakeAll ? "all in stock" : `up to ${f.quantityMax}`;
-  return `${f.locationCode}/${f.zoneCode} · ${match} · ${qty}`;
+  return n === 1 ? `GTIN ${f.gtins![0]}` : n > 1 ? `${n} GTINs` : "no GTIN";
 }
 
 export function ManualFeedModal({ device, onClose }: { device: DeviceRecord; onClose: () => void }) {
@@ -193,49 +189,49 @@ export function ManualFeedModal({ device, onClose }: { device: DeviceRecord; onC
                 ) : feeds.length === 0 ? (
                   <p className="note">You have no item feeds yet — create one below.</p>
                 ) : (
-                  <div className="panel" style={{ padding: 0, overflow: "hidden" }}>
-                    {feeds.map((f) => (
-                      <label
-                        key={f.id}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 10,
-                          padding: "10px 12px",
-                          borderTop: "1px solid var(--border)",
-                          cursor: "pointer",
-                        }}
-                      >
-                        <input
-                          type="radio"
-                          name="manualFeedPick"
-                          checked={selectedFeedId === f.id}
-                          onChange={() => setSelectedFeedId(f.id)}
-                        />
-                        <span style={{ flex: 1, minWidth: 0 }}>
-                          <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <span className="chip chip-brand">{KIND_LABEL[f.kind] ?? f.kind}</span>
-                            <span style={{ fontWeight: 600 }}>{f.name}</span>
-                          </span>
-                          <span className="u-email" style={{ display: "block", marginTop: 2 }}>
-                            {feedLine(f)}
-                          </span>
-                        </span>
-                        <button
-                          type="button"
-                          className="row-icon-btn row-icon-btn-ghost"
-                          aria-label="Duplicate this feed"
-                          title="Duplicate"
-                          disabled={dupBusyId === f.id}
-                          onClick={(e) => {
-                            e.preventDefault();
-                            handleDuplicate(f.id);
+                  <div className="manual-feed-list" role="radiogroup" aria-label="Item feed">
+                    {feeds.map((f) => {
+                      const selected = selectedFeedId === f.id;
+                      return (
+                        <div
+                          key={f.id}
+                          className={`wf-feed-node manual-feed-card${selected ? " selected" : ""}`}
+                          role="radio"
+                          aria-checked={selected}
+                          tabIndex={0}
+                          onClick={() => setSelectedFeedId(f.id)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              setSelectedFeedId(f.id);
+                            }
                           }}
                         >
-                          <DuplicateIcon />
-                        </button>
-                      </label>
-                    ))}
+                          <div className="wf-feed-node-icon" aria-hidden="true">
+                            {KIND_ICON[f.kind] ?? "✦"}
+                          </div>
+                          <div className="wf-feed-node-text">
+                            <span className="wf-feed-node-name">{f.name}</span>
+                            <span className="wf-feed-node-kind">
+                              {KIND_LABEL[f.kind] ?? f.kind} · {feedDetail(f)}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            className="manual-feed-card-dup"
+                            aria-label="Duplicate this feed"
+                            title="Duplicate"
+                            disabled={dupBusyId === f.id}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDuplicate(f.id);
+                            }}
+                          >
+                            <DuplicateIcon />
+                          </button>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
                 <button type="button" className="attr-add-link" onClick={() => setView("new")}>
