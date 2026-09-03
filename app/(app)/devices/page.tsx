@@ -133,9 +133,21 @@ export default function DevicesPage() {
     return codes.map((c) => ({ code: c, name: siteName(c) })).sort((a, b) => a.name.localeCompare(b.name));
   }, [devices, siteName]);
 
+  // BUG #18: the site filter defaults to the Overview's selected location.
+  // If that location has no devices, its code isn't among the dropdown's
+  // options, so the <select> visually reads "All sites" while the filter is
+  // still pinned to an empty site — showing nothing. Fall back to "all"
+  // whenever the current filter matches no device (the initial persisted
+  // case, or the last device at a site being removed). A site the user
+  // actively picks always has devices, so this never fights a real choice.
+  const effectiveSiteFilter = useMemo(
+    () => (siteFilter && (devices ?? []).some((d) => d.locationCode === siteFilter) ? siteFilter : ""),
+    [siteFilter, devices]
+  );
+
   const visible = useMemo(
-    () => (devices ?? []).filter((d) => !siteFilter || d.locationCode === siteFilter),
-    [devices, siteFilter]
+    () => (devices ?? []).filter((d) => !effectiveSiteFilter || d.locationCode === effectiveSiteFilter),
+    [devices, effectiveSiteFilter]
   );
 
   const { rows, headerProps } = useTableSort(
@@ -256,7 +268,11 @@ export default function DevicesPage() {
       {devices && devices.length > 0 && (
         <div className="list-toolbar">
           <label htmlFor="deviceSiteFilter">Site</label>
-          <select id="deviceSiteFilter" value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)}>
+          <select
+            id="deviceSiteFilter"
+            value={effectiveSiteFilter}
+            onChange={(e) => setSiteFilter(e.target.value)}
+          >
             <option value="">All sites</option>
             {filterSites.map((s) => (
               <option key={s.code} value={s.code}>
@@ -272,7 +288,7 @@ export default function DevicesPage() {
       ) : devices.length === 0 ? (
         <p className="note">No devices yet.</p>
       ) : rows.length === 0 ? (
-        <p className="note">No devices at {siteName(siteFilter)}.</p>
+        <p className="note">No devices at {siteName(effectiveSiteFilter)}.</p>
       ) : (
         <div className="panel table-scroll">
           <table className="users">

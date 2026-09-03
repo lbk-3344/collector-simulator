@@ -28,7 +28,7 @@ function fmt(iso: string): string {
 
 // Admin-only announcement authoring (BL-075, CLAUDE-CONCEPT.md section 18).
 // Create/edit a draft, then Publish (which emails every USER/ADMIN once).
-export function AnnouncementsTab() {
+export function AnnouncementsTab({ onChanged }: { onChanged?: () => void }) {
   const { confirm } = useDialog();
   const [list, setList] = useState<Announcement[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -46,13 +46,15 @@ export function AnnouncementsTab() {
 
   const load = useCallback(async () => {
     setError(null);
-    const res = await fetch("/api/announcements");
+    const res = await fetch("/api/announcements", { cache: "no-store" });
     if (!res.ok) {
       setError("Couldn't load announcements.");
       return;
     }
     setList((await res.json()).announcements ?? []);
-  }, []);
+    // Keep the Settings "Announcements" tab badge (draft count) live (BUG #16).
+    onChanged?.();
+  }, [onChanged]);
 
   useEffect(() => {
     load();

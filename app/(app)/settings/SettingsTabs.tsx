@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { UsersTable } from "./UsersTable";
 import { BartenderConnectionTab } from "./BartenderConnectionTab";
 import { BugReportsTable } from "./BugReportsTable";
@@ -9,9 +9,16 @@ import { SharedResourcesTable } from "@/components/SharedResourcesTable";
 
 type Tab = "bartender" | "users" | "bugs" | "announcements" | "sharing";
 
+const BADGE_POLL_MS = 8000;
+
 // Bartender Connection is open to every role; Users, Bug Reports,
 // Announcements and Shared resources only render for ADMIN (hidden entirely,
 // not just disabled — see CLAUDE-CONCEPT.md section 4).
+//
+// The tab badge counts are seeded from SSR props, then kept live (BUG #16):
+// SettingsTabs polls /api/settings/badges, and each admin table calls
+// `refreshBadges` right after a mutation so a circle clears immediately
+// rather than on the next navigation.
 export function SettingsTabs({
   isAdmin,
   pendingCount,
@@ -26,6 +33,23 @@ export function SettingsTabs({
   currentUserId: string;
 }) {
   const [tab, setTab] = useState<Tab>("bartender");
+  const [counts, setCounts] = useState({ pendingCount, openBugCount, draftAnnouncementCount });
+
+  const refreshBadges = useCallback(async () => {
+    if (!isAdmin) return;
+    try {
+      const res = await fetch("/api/settings/badges", { cache: "no-store" });
+      if (res.ok) setCounts(await res.json());
+    } catch {
+      /* keep the last known counts */
+    }
+  }, [isAdmin]);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    const t = setInterval(refreshBadges, BADGE_POLL_MS);
+    return () => clearInterval(t);
+  }, [isAdmin, refreshBadges]);
 
   return (
     <>
@@ -36,13 +60,13 @@ export function SettingsTabs({
         {isAdmin && (
           <button className={`tab${tab === "users" ? " active" : ""}`} onClick={() => setTab("users")}>
             Users
-            {pendingCount > 0 && <span className="badge">{pendingCount}</span>}
+            {counts.pendingCount > 0 && <span className="badge">{counts.pendingCount}</span>}
           </button>
         )}
         {isAdmin && (
           <button className={`tab${tab === "bugs" ? " active" : ""}`} onClick={() => setTab("bugs")}>
             Bug Reports
-            {openBugCount > 0 && <span className="badge">{openBugCount}</span>}
+            {counts.openBugCount > 0 && <span className="badge">{counts.openBugCount}</span>}
           </button>
         )}
         {isAdmin && (
@@ -51,7 +75,7 @@ export function SettingsTabs({
             onClick={() => setTab("announcements")}
           >
             Announcements
-            {draftAnnouncementCount > 0 && <span className="badge">{draftAnnouncementCount}</span>}
+            {counts.draftAnnouncementCount > 0 && <span className="badge">{counts.draftAnnouncementCount}</span>}
           </button>
         )}
         {isAdmin && (
@@ -62,9 +86,9 @@ export function SettingsTabs({
       </div>
 
       {tab === "bartender" && <BartenderConnectionTab />}
-      {tab === "users" && isAdmin && <UsersTable currentUserId={currentUserId} />}
-      {tab === "bugs" && isAdmin && <BugReportsTable />}
-      {tab === "announcements" && isAdmin && <AnnouncementsTab />}
+      {tab === "users" && isAdmin && <UsersTable currentUserId={currentUserId} onChanged={refreshBadges} />}
+      {tab === "bugs" && isAdmin && <BugReportsTable onChanged={refreshBadges} />}
+      {tab === "announcements" && isAdmin && <AnnouncementsTab onChanged={refreshBadges} />}
       {tab === "sharing" && isAdmin && <SharedResourcesTable />}
     </>
   );

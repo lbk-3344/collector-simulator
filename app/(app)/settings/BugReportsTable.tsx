@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type ApiBug = {
   id: string;
@@ -22,27 +22,37 @@ function formatReported(iso: string): string {
   });
 }
 
+const LIST_POLL_MS = 8000;
+
 // Admin-only, read-only list of currently OPEN bug reports — not part of the
 // resolve/notify workflow (see CLAUDE.md "Bug handling"), just a way to
-// actually see what's outstanding without running bugs:export.
-export function BugReportsTable() {
+// actually see what's outstanding without running bugs:export. Polls so a
+// bug filed while this tab is open shows up without a refresh (BUG #21), and
+// nudges the parent to re-sync its tab badge whenever the count moves.
+export function BugReportsTable({ onChanged }: { onChanged?: () => void }) {
   const [bugs, setBugs] = useState<ApiBug[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<ApiBug | null>(null);
+  const lastCount = useRef<number | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
-    const res = await fetch("/api/bugs");
+    const res = await fetch("/api/bugs", { cache: "no-store" });
     if (!res.ok) {
       setError("Couldn't load bug reports.");
       return;
     }
     const data = await res.json();
-    setBugs(data.bugs ?? []);
-  }, []);
+    const list: ApiBug[] = data.bugs ?? [];
+    setBugs(list);
+    if (lastCount.current !== null && lastCount.current !== list.length) onChanged?.();
+    lastCount.current = list.length;
+  }, [onChanged]);
 
   useEffect(() => {
     load();
+    const t = setInterval(load, LIST_POLL_MS);
+    return () => clearInterval(t);
   }, [load]);
 
   useEffect(() => {

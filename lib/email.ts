@@ -61,6 +61,29 @@ export function announcementEmailHtml(announcement: {
   `;
 }
 
+// New-bug notification to admins (BUG #20) — so an admin knows a report
+// came in without having to open the app. Plain, mark-headed, links nowhere
+// (the app has no per-bug deep link); the Bug Reports tab is where they go.
+export function bugReportedAdminEmailHtml(bug: {
+  number: number;
+  title: string;
+  description: string;
+  reporter: string;
+}): string {
+  return (
+    `<div style="font-family:sans-serif;max-width:560px;margin:0 auto;">` +
+    emailMarkHtml() +
+    `<h1 style="font-size:18px;margin:0 0 8px;">New bug report #${bug.number}</h1>` +
+    `<p style="margin:0 0 4px;font-weight:600;">${escapeHtml(bug.title)}</p>` +
+    `<p style="margin:0 0 12px;color:#888;font-size:12px;">Reported by ${escapeHtml(bug.reporter)}</p>` +
+    `<blockquote style="border-left:3px solid #ccc;margin:0 0 16px;padding:0 0 0 12px;color:#555;white-space:pre-wrap;">${escapeHtml(
+      bug.description.slice(0, 800)
+    )}</blockquote>` +
+    `<p style="color:#888;font-size:12px;">Open Settings → Bug Reports in the BarTender T&amp;T Simulator to see it.</p>` +
+    `</div>`
+  );
+}
+
 export async function sendEmail(
   to: string,
   subject: string,

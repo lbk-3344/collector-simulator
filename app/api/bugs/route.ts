@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { sendEmail, bugReportedAdminEmailHtml } from "@/lib/email";
 
 // See CLAUDE-CONCEPT.md section 3 — bug reporting, built P0. Screenshot upload
 // (Cloudinary) is a later backlog item (BL-008); screenshotUrl is accepted here
@@ -30,6 +31,22 @@ export async function POST(req: NextRequest) {
       screenshotUrl: typeof body?.screenshotUrl === "string" ? body.screenshotUrl : null,
     },
   });
+
+  // Notify every admin by email (BUG #20) — best-effort, never blocks the
+  // report. Mirrors the announcement blast's "a failure surfaces, never
+  // blocks" posture; RESEND_API_KEY unset ⇒ sendEmail just skips.
+  try {
+    const admins = await prisma.user.findMany({ where: { role: "ADMIN" }, select: { email: true } });
+    if (admins.length > 0) {
+      const reporter = session.user.name || session.user.email || "a user";
+      const html = bugReportedAdminEmailHtml({ number: bug.number, title, description, reporter });
+      await Promise.allSettled(
+        admins.map((a) => sendEmail(a.email, `New bug #${bug.number} — ${title}`, html))
+      );
+    }
+  } catch (e) {
+    console.error("[bugs] admin notification failed:", e);
+  }
 
   return NextResponse.json({ bug }, { status: 201 });
 }

@@ -27,7 +27,13 @@ function formatJoined(iso: string): string {
 // PENDING users, Delete with confirmation. The last remaining ADMIN can't be
 // demoted or deleted, by anyone — enforced here (disabled + tooltip) and again
 // server-side in the API routes. See CLAUDE-CONCEPT.md section 4.
-export function UsersTable({ currentUserId }: { currentUserId: string }) {
+export function UsersTable({
+  currentUserId,
+  onChanged,
+}: {
+  currentUserId: string;
+  onChanged?: () => void;
+}) {
   const [users, setUsers] = useState<ApiUser[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -35,14 +41,16 @@ export function UsersTable({ currentUserId }: { currentUserId: string }) {
 
   const load = useCallback(async () => {
     setError(null);
-    const res = await fetch("/api/users");
+    const res = await fetch("/api/users", { cache: "no-store" });
     if (!res.ok) {
       setError("Couldn't load users.");
       return;
     }
     const data = await res.json();
     setUsers(data.users ?? []);
-  }, []);
+    // Keep the Settings "Users" tab badge (pending count) live (BUG #16).
+    onChanged?.();
+  }, [onChanged]);
 
   useEffect(() => {
     load();

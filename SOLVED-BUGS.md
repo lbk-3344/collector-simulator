@@ -146,3 +146,69 @@ I'd like to be able to reposition source or destination of link to another corre
 **Resolved:** 2026-09-01
 
 I'd like to be bale to delete device or link by right clicking. I'd like also to cut, copy and paste link (not device) through that contextual menu.
+
+---
+
+## #16 — Live Update of new items in the Admin tabs
+
+**Reported:** 2026-09-02 by Luc Bellissard <lbellissard@seagullsoftware.com>
+**Resolved:** 2026-09-03
+
+When new users are waiting, or new annoucement have been created or new bugs, there is an red circle showing how many of them are waiting. When announceents, or Users or Bugs are processed, this circle stays and is udate on next update. I'd like it disappear live when all users are validated, when all annoucements are published or when all bugs are processed.
+
+**Fix (v0.31.4):** the three Settings tab badges are no longer frozen SSR props. New `GET /api/settings/badges` (admin) returns the live pending-user / open-bug / draft-announcement counts; `SettingsTabs` seeds from the SSR values then polls it every 8s, and `UsersTable` / `AnnouncementsTab` call a `refreshBadges` callback right after any mutation so a circle clears immediately, not on the next navigation.
+
+---
+
+## #17 — REQ: Favicon
+
+**Reported:** 2026-09-02 by Ian Cummings <icummings@seagullsoftware.com>
+**Resolved:** 2026-09-03
+
+Give the BarTender T&T Simulator a suitable favicon.  Maybe an aeroplane, to distinguish it, rather than the usual orange BT logo.
+
+**Fix:** already delivered by BL-077/BL-077a (v0.29.x) — the favicon is now a custom simulator mark (diagonal-notch triangle + signal arcs, white-on-orange), distinct from the plain BarTender logo. Resolved as done per Luc; the aeroplane motif specifically was not adopted.
+
+---
+
+## #18 — Display All devices when All Sites is selected
+
+**Reported:** 2026-09-02 by Luc Bellissard <lbellissard@seagullsoftware.com>
+**Resolved:** 2026-09-03
+
+When navigating to the device page with a selected location that does not have devices, then All Site is selected in the list page. However, no devices are displayed where all should be displayed.
+
+**Fix (v0.31.4):** the Devices list seeds its site filter from the Overview's selected location. When that location has no devices its code isn't among the dropdown options, so the `<select>` read "All sites" while the filter was still pinned to an empty site. Added a derived `effectiveSiteFilter` that falls back to "all" whenever the current filter matches no device — used for both the `<select value>` and the row filtering, so the two can't disagree. A site the user actively picks always has devices, so a real choice is never overridden.
+
+---
+
+## #19 — History page Title has different face than the titles of the other page.
+
+**Reported:** 2026-09-02 by Luc Bellissard <lbellissard@seagullsoftware.com>
+**Resolved:** 2026-09-03
+
+Make them all consistent, History must be like the other Titles.
+
+**Fix (v0.31.4):** the History page rendered its heading with the Settings-style `.settings-head h1` (no explicit weight/letter-spacing) instead of the shared `PageHeader` (`.page-title`, 700 / -0.005em) that Devices, Workflows and Item Feeds use. Switched History to `<PageHeader>`, so the title now matches the other left-nav pages exactly; its description moved into the same collapsible ⓘ panel as those pages.
+
+---
+
+## #20 — Email to notify of new bugs
+
+**Reported:** 2026-09-03 by Luc Bellissard <lbellissard@seagullsoftware.com>
+**Resolved:** 2026-09-03
+
+A new email notifying of new bugs should be send to the Admin users for them to be aware without connecting.
+
+**Fix (v0.31.4):** `POST /api/bugs` now emails every `ADMIN` user after creating the report — new `bugReportedAdminEmailHtml()` in `lib/email.ts` (mark-headed, bug number + title + reporter + a description excerpt, points at Settings → Bug Reports). Best-effort via `Promise.allSettled`, wrapped so a mail failure never blocks the submission; `RESEND_API_KEY` unset ⇒ skipped, same as every other send in the app.
+
+---
+
+## #21 — Update Bug report list
+
+**Reported:** 2026-09-03 by Luc Bellissard <lbellissard@seagullsoftware.com>
+**Resolved:** 2026-09-03
+
+If I am on the bug report page, and a new bug just came in, I don't see it until I refresh (like the number in the red circle). Could it be live?
+
+**Fix (v0.31.4):** `BugReportsTable` now re-fetches `/api/bugs` every 8s while the tab is open, so a report filed in the meantime appears on its own; when the row count moves it also nudges the parent to re-sync the tab badge, so list and circle stay together. Pairs with the #16 badge-polling fix.
