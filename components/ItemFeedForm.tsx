@@ -13,7 +13,7 @@ interface ZoneOption {
   name: string;
 }
 
-const KINDS: { value: ItemFeedKind; label: string; info: string }[] = [
+export const KINDS: { value: ItemFeedKind; label: string; info: string }[] = [
   {
     value: "NEW",
     label: "New",

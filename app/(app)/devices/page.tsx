@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { SharedBadge } from "@/components/SharedBadge";
 import ReadPointIcon, { READ_POINT_LABELS, type ReadPointType } from "@/components/ui/ReadPointIcon";
 import { DeviceConfigModal } from "@/components/DeviceConfigModal";
+import { ManualFeedModal } from "@/components/ManualFeedModal";
 import { getDeviceState } from "@/lib/deviceState";
 import { useTableSort } from "@/lib/useTableSort";
 import type { DeviceRecord } from "@/lib/deviceConfig";
@@ -87,6 +88,7 @@ export default function DevicesPage() {
   const [error, setError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
   const [configModal, setConfigModal] = useState<{ device: DeviceRecord | null; readOnly?: boolean } | null>(null);
+  const [manualFeedDevice, setManualFeedDevice] = useState<DeviceRecord | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [siteFilter, setSiteFilter] = useState<string>(""); // "" = all sites (BUG #15)
   const { confirm } = useDialog();
@@ -224,6 +226,18 @@ export default function DevicesPage() {
     setBusyId(null);
   }
 
+  // Row click routes by state, mirroring the Overview map's per-marker
+  // routing (BL-078, §15.11). Ready → the manual-feed popup; everything else
+  // opens a view/edit modal so no row is a dead click. Offline is view-only
+  // here (the row's power icon still does the actual toggle) — a bare
+  // row-click shouldn't mutate device state without confirmation.
+  function handleRowClick(device: DeviceRecord, state: string, readOnly: boolean) {
+    if (readOnly) return setConfigModal({ device, readOnly: true });
+    if (state === "READY") return setManualFeedDevice(device);
+    if (state === "PENDING") return setConfigModal({ device });
+    setConfigModal({ device, readOnly: true }); // ACTIVE / OFFLINE → view
+  }
+
   return (
     <section className="fade-in">
       <PageHeader
@@ -290,7 +304,11 @@ export default function DevicesPage() {
                         ? "Turn on"
                         : "Turn offline";
                 return (
-                  <tr key={device.id}>
+                  <tr
+                    key={device.id}
+                    onClick={() => handleRowClick(device, state, readOnly)}
+                    style={{ cursor: "pointer" }}
+                  >
                     <td>
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                         <ReadPointIcon type={device.type} size={28} />
@@ -318,7 +336,10 @@ export default function DevicesPage() {
                           className="row-icon-btn row-icon-btn-edit"
                           aria-label={readOnly ? "View" : "Edit"}
                           title={readOnly ? "View (shared — read-only)" : "Edit"}
-                          onClick={() => setConfigModal({ device, readOnly })}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setConfigModal({ device, readOnly });
+                          }}
                         >
                           {readOnly ? <EyeIcon /> : <EditIcon />}
                         </button>
@@ -327,7 +348,10 @@ export default function DevicesPage() {
                           aria-label={state === "OFFLINE" ? "Turn device on" : "Turn device offline"}
                           title={offlineTitle}
                           disabled={isBusy || readOnly || !canToggleOffline}
-                          onClick={() => handleOffline(device, state !== "OFFLINE")}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOffline(device, state !== "OFFLINE");
+                          }}
                         >
                           <PowerIcon />
                         </button>
@@ -336,7 +360,10 @@ export default function DevicesPage() {
                           aria-label="Duplicate"
                           title={readOnly ? "Shared with you — read-only" : "Duplicate"}
                           disabled={isBusy || readOnly}
-                          onClick={() => handleDuplicate(device)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDuplicate(device);
+                          }}
                         >
                           <DuplicateIcon />
                         </button>
@@ -345,7 +372,10 @@ export default function DevicesPage() {
                           aria-label="Delete"
                           title={readOnly ? "Shared with you — read-only" : "Delete"}
                           disabled={isBusy || readOnly}
-                          onClick={() => handleDelete(device)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDelete(device);
+                          }}
                         >
                           <TrashIcon />
                         </button>
@@ -376,6 +406,10 @@ export default function DevicesPage() {
           load();
         }}
       />
+
+      {manualFeedDevice && (
+        <ManualFeedModal device={manualFeedDevice} onClose={() => setManualFeedDevice(null)} />
+      )}
     </section>
   );
 }

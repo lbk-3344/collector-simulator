@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import ReadPointIcon, { READ_POINT_TYPES, READ_POINT_LABELS } from "@/components/ui/ReadPointIcon";
 import { DeviceConfigModal } from "@/components/DeviceConfigModal";
+import { ManualFeedModal } from "@/components/ManualFeedModal";
 import { ContextMenu } from "@/components/ContextMenu";
 import { PadlockIcon } from "@/components/SharedBadge";
 import { getDeviceState } from "@/lib/deviceState";
@@ -675,6 +676,11 @@ export function LocationMapCard({ locationCode, devices, currentUserId, onDevice
             setManualSendDevice(null);
             setOfflineError(null);
           };
+          // Ready → the real manual-feed popup (BL-078). Offline keeps its own
+          // "heartbeat and manual send are paused" modal below, untouched.
+          if (!isOffline) {
+            return <ManualFeedModal device={manualSendDevice} onClose={close} />;
+          }
           return (
             <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && close()}>
               <div className="modal fade-in" role="dialog" aria-modal="true" aria-labelledby="manualSendTitle">

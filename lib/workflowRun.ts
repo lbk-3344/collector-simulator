@@ -51,8 +51,11 @@ function feedGtins(feed: any): string[] {
   return Array.isArray(feed.gtins) ? feed.gtins.map((g: unknown) => String(g).trim()).filter(Boolean) : [];
 }
 
+// Exported for the manual-feed route (BL-078) — a one-off send from a Ready
+// Device reuses the exact NEW-mint / PRESENT-stock-query / FIXED-list logic,
+// nothing reinvented. The automated run engine is the only other caller.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function resolveBatch(
+export async function resolveBatch(
   ownerId: string,
   feed: any,
   creds: RunCreds,
@@ -129,6 +132,40 @@ interface ReadPushStats {
   failed: number;
 }
 
+// The "push one read to the real platform" half of emitReadAndScheduleHops,
+// pulled out so the manual-feed route (BL-078) shares one implementation
+// instead of duplicating the sendReads call + status handling. A no-op that
+// returns { pushed: false, notProcessed: false } when there's nothing
+// submittable (no creds / no collectorId / empty batch) — same as before.
+export async function pushReadToPlatform(args: {
+  ownerId: string;
+  creds: RunCreds;
+  collectorId: string | null;
+  channelId: string;
+  items: string[];
+  at: Date;
+}): Promise<{ pushed: boolean; notProcessed: boolean; note?: string }> {
+  const { ownerId, creds, collectorId, channelId, items, at } = args;
+  if (!creds || !collectorId || items.length === 0) {
+    return { pushed: false, notProcessed: false };
+  }
+  const res = await sendReads(ownerId, creds.tenantUrl, creds.apiKey, collectorId, channelId, items, at);
+  if (res.ok) {
+    if (res.readStatus === "NOTPROCESSED") {
+      return {
+        pushed: false,
+        notProcessed: true,
+        note: `reads ${collectorId}/${channelId}: NOTPROCESSED (channel has no active zone mapping)`,
+      };
+    }
+    return { pushed: true, notProcessed: false };
+  }
+  if (res.status !== 0 || res.errorMessage?.includes("reach")) {
+    return { pushed: false, notProcessed: false, note: `reads ${collectorId}/${channelId}: ${res.errorMessage ?? "failed"}` };
+  }
+  return { pushed: false, notProcessed: false };
+}
+
 // Write the read event for (taskId, channelId), push it to the real Track &
 // Trace platform (POST /reads — every read, entry firing and every hop, per
 // Luc 2026-08-31), then fan the batch out along this Task/Channel's outgoing
@@ -155,22 +192,18 @@ async function emitReadAndScheduleHops(args: {
     data: { workflowId, taskId, deviceId, channelId, items, itemGtins, gtin, occurredAt: at },
   });
 
-  // Real platform read — POST /reads with the real hexa/EPC tags. Skipped
-  // only when there's nothing submittable or no collectorId (PRESENT feeds
-  // now yield real EPCs via stock/analytics, §7.8, so they push like NEW).
-  if (creds && collectorId && items.length > 0) {
-    const res = await sendReads(ownerId, creds.tenantUrl, creds.apiKey, collectorId, channelId, items, at);
-    if (res.ok) {
-      if (res.readStatus === "NOTPROCESSED") {
-        push.notProcessed++;
-        notes.push(`reads ${collectorId}/${channelId}: NOTPROCESSED (channel has no active zone mapping)`);
-      } else {
-        push.pushed++;
-      }
-    } else if (res.status !== 0 || res.errorMessage?.includes("reach")) {
-      push.failed++;
-      notes.push(`reads ${collectorId}/${channelId}: ${res.errorMessage ?? "failed"}`);
-    }
+  // Real platform read — POST /reads with the real hexa/EPC tags (shared
+  // helper, also used by the manual-feed route). PRESENT feeds now yield real
+  // EPCs via stock/analytics (§7.8), so they push like NEW.
+  const pushRes = await pushReadToPlatform({ ownerId, creds, collectorId, channelId, items, at });
+  if (pushRes.pushed) {
+    push.pushed++;
+  } else if (pushRes.notProcessed) {
+    push.notProcessed++;
+    if (pushRes.note) notes.push(pushRes.note);
+  } else if (pushRes.note) {
+    push.failed++;
+    notes.push(pushRes.note);
   }
 
   const links = await prisma.flowLink.findMany({ where: { sourceTaskId: taskId, sourceChannelId: channelId } });

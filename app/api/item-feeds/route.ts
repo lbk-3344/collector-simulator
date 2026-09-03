@@ -10,12 +10,17 @@ import { visibilityWhere } from "@/lib/ownership";
 // Item Feed library (BL-058, CLAUDE-CONCEPT.md 16.1) — reusable batch-of-items
 // definitions, not scoped to one Workflow.
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  // ?mine=1 → the caller's own feeds only (not owned-or-shared). Used by the
+  // manual-feed popup (BL-078, §15.11) — a shared-to-you feed must be
+  // duplicated into your own library first, same rule as the Workflow canvas.
+  const mineOnly = req.nextUrl.searchParams.get("mine") === "1";
+
   const feeds = await prisma.itemFeed.findMany({
-    where: visibilityWhere(session.user.id),
+    where: mineOnly ? { ownerId: session.user.id } : visibilityWhere(session.user.id),
     orderBy: { name: "asc" },
     include: { _count: { select: { feedNodes: true } } },
   });
