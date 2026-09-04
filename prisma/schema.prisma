@@ -118,6 +118,12 @@ model User {
   ownedDevices   Device[]   @relation("OwnedDevices")
   ownedWorkflows Workflow[] @relation("OwnedWorkflows")
   ownedItemFeeds ItemFeed[] @relation("OwnedItemFeeds")
+
+  // Shared resources this user has removed from their own view (BL-079,
+  // §17.7). Personal, sticky, reversible from Settings → Hidden items.
+  hiddenDevices   HiddenDevice[]
+  hiddenWorkflows HiddenWorkflow[]
+  hiddenItemFeeds HiddenItemFeed[]
 }
 
 // One outgoing Bartender API call, logged for the History page (BL-076,
@@ -246,6 +252,10 @@ model Device {
   owner   User    @relation("OwnedDevices", fields: [ownerId], references: [id], onDelete: Cascade)
   shared  Boolean @default(false)
 
+  // Per-user "removed from my view" rows (BL-079, §17.7) — read by
+  // visibilityWhere's shared branch.
+  hiddenBy HiddenDevice[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -283,6 +293,9 @@ model Workflow {
   flowLinks      FlowLink[]
   inFlightBatches InFlightBatch[]
   simulatedReads SimulatedRead[]
+
+  // Per-user "removed from my view" rows (BL-079, §17.7).
+  hiddenBy HiddenWorkflow[]
 
   @@index([ownerId])
 }
@@ -474,10 +487,55 @@ model ItemFeed {
   owner   User    @relation("OwnedItemFeeds", fields: [ownerId], references: [id], onDelete: Cascade)
   shared  Boolean @default(false)
 
+  // Per-user "removed from my view" rows (BL-079, §17.7).
+  hiddenBy HiddenItemFeed[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([ownerId])
+}
+
+// ─── Per-user hidden shared resources (BL-079, CLAUDE-CONCEPT.md §17.7) ─────
+// A user removing a shared-not-owned Device / Workflow / Item Feed from their
+// own view. Sticky across sessions; never touches the resource's `shared`
+// flag or any other user's view; reversible from Settings → Hidden items.
+// onDelete: Cascade on both FKs means these self-clean if the user or the
+// resource is deleted — no orphan cleanup job.
+model HiddenDevice {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deviceId  String
+  device    Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, deviceId])
+  @@index([deviceId])
+}
+
+model HiddenWorkflow {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workflowId String
+  workflow   Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([userId, workflowId])
+  @@index([workflowId])
+}
+
+model HiddenItemFeed {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  itemFeedId String
+  itemFeed   ItemFeed @relation(fields: [itemFeedId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([userId, itemFeedId])
+  @@index([itemFeedId])
 }
 
 // See CLAUDE-CONCEPT.md section 3 and CLAUDE.md "Bug handling" for the full

@@ -7,6 +7,7 @@ import { SharedBadge } from "@/components/SharedBadge";
 import ReadPointIcon, { READ_POINT_LABELS, type ReadPointType } from "@/components/ui/ReadPointIcon";
 import { DeviceConfigModal } from "@/components/DeviceConfigModal";
 import { ManualFeedModal } from "@/components/ManualFeedModal";
+import { HideFromViewButton } from "@/components/HideFromViewButton";
 import { getDeviceState } from "@/lib/deviceState";
 import { useTableSort } from "@/lib/useTableSort";
 import type { DeviceRecord } from "@/lib/deviceConfig";
@@ -383,18 +384,28 @@ export default function DevicesPage() {
                         >
                           <DuplicateIcon />
                         </button>
-                        <button
-                          className="row-icon-btn row-icon-btn-delete"
-                          aria-label="Delete"
-                          title={readOnly ? "Shared with you — read-only" : "Delete"}
-                          disabled={isBusy || readOnly}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDelete(device);
-                          }}
-                        >
-                          <TrashIcon />
-                        </button>
+                        {readOnly ? (
+                          <HideFromViewButton
+                            kind="device"
+                            id={device.id}
+                            name={device.name}
+                            onHidden={() => setDevices((ds) => ds?.filter((d) => d.id !== device.id) ?? ds)}
+                            onError={setError}
+                          />
+                        ) : (
+                          <button
+                            className="row-icon-btn row-icon-btn-delete"
+                            aria-label="Delete"
+                            title="Delete"
+                            disabled={isBusy}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDelete(device);
+                            }}
+                          >
+                            <TrashIcon />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

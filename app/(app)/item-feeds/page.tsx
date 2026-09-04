@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useDialog } from "@/components/AppDialog";
 import { PageHeader } from "@/components/PageHeader";
 import { SharedBadge } from "@/components/SharedBadge";
+import { HideFromViewButton } from "@/components/HideFromViewButton";
 import { useTableSort } from "@/lib/useTableSort";
 import type { ItemFeedRecord } from "@/lib/itemFeed";
 import type { BartenderLocation } from "@/lib/bartenderLocations";
@@ -274,17 +275,27 @@ export default function ItemFeedsPage() {
                       >
                         <DuplicateIcon />
                       </button>
-                      <button
-                        className="row-icon-btn row-icon-btn-delete"
-                        aria-label="Delete"
-                        title={readOnly ? "Shared with you — read-only" : "Delete"}
-                        disabled={busyId === feed.id || readOnly}
-                        onClick={() => handleDelete(feed)}
-                      >
-                        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M4 6h12M8 6V4.5a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1V6M5.5 6 6.2 16a1 1 0 0 0 1 .9h5.6a1 1 0 0 0 1-.9L14.5 6M8.3 9v5M11.7 9v5" />
-                        </svg>
-                      </button>
+                      {readOnly ? (
+                        <HideFromViewButton
+                          kind="itemFeed"
+                          id={feed.id}
+                          name={feed.name}
+                          onHidden={() => setFeeds((fs) => fs?.filter((f) => f.id !== feed.id) ?? fs)}
+                          onError={setError}
+                        />
+                      ) : (
+                        <button
+                          className="row-icon-btn row-icon-btn-delete"
+                          aria-label="Delete"
+                          title="Delete"
+                          disabled={busyId === feed.id}
+                          onClick={() => handleDelete(feed)}
+                        >
+                          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M4 6h12M8 6V4.5a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1V6M5.5 6 6.2 16a1 1 0 0 0 1 .9h5.6a1 1 0 0 0 1-.9L14.5 6M8.3 9v5M11.7 9v5" />
+                          </svg>
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
