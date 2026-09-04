@@ -3,22 +3,15 @@ export const maxDuration = 60;
 
 import { NextRequest, NextResponse } from "next/server";
 import { runTick } from "@/lib/workflowRun";
+import { isAuthorizedCronRequest } from "@/lib/cronAuth";
 
 // The run engine's heartbeat (BL-061, CLAUDE-CONCEPT.md 16.5). Called by an
 // external every-minute scheduler (Vercel Hobby cron is daily-only — Phase 0)
-// with a shared secret. Accepts either `x-cron-secret: <CRON_SECRET>` or
-// `Authorization: Bearer <CRON_SECRET>` (Vercel Cron's own convention), so
-// swapping to native Vercel Cron later needs no code change.
-function authorized(req: NextRequest): boolean {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return false;
-  const header = req.headers.get("x-cron-secret");
-  const bearer = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
-  return header === secret || bearer === secret;
-}
+// with a shared secret — see lib/cronAuth.ts for the accepted header forms
+// and the constant-time comparison.
 
 async function handle(req: NextRequest) {
-  if (!authorized(req)) {
+  if (!isAuthorizedCronRequest(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   try {

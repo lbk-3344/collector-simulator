@@ -10,6 +10,15 @@ import { parseEnvList } from "@/lib/permissions";
 //   1. email in INITIAL_ADMIN_EMAILS  -> ADMIN (bootstrap, so someone can reach Settings -> Users at all)
 //   2. email domain in AUTO_APPROVED_SSO_DOMAINS -> USER (no wait)
 //   3. otherwise -> PENDING (stays PENDING, caller does nothing further)
+// How often the `jwt` callback re-checks the DB for a role change (below).
+// Was every single request — one extra prisma.user.findUnique per
+// authenticated page load / API call, app-wide. Throttled rather than
+// dropped (performance review 2026-09-04): kept comfortably under the
+// /auth/pending page's own 30s poll interval, so a Pending→User approval or
+// an admin role change still shows up within a request or two, not
+// instantly but not "next login" either.
+const ROLE_RECHECK_MS = 15_000;
+
 function resolveAutoRole(email: string): Role | null {
   const normalized = email.toLowerCase();
   const domain = normalized.split("@")[1] ?? "";
@@ -62,18 +71,23 @@ export const authOptions: NextAuthOptions = {
         }
 
         token.role = role;
+        token.roleCheckedAt = Date.now();
       } else if (token.id) {
-        // Re-check the DB on every subsequent request so a role change made by an
-        // admin (validate / change role) takes effect immediately — no re-login
-        // required, and this is also what makes the /auth/pending 30s poll work.
-        try {
-          const dbUser = await prisma.user.findUnique({
-            where: { id: token.id as string },
-            select: { role: true },
-          });
-          if (dbUser) token.role = dbUser.role;
-        } catch {
-          // non-fatal — keep whatever role the token already carried
+        // Re-check the DB so a role change made by an admin (validate /
+        // change role) takes effect without a re-login — throttled to
+        // ROLE_RECHECK_MS rather than every single request.
+        const lastChecked = token.roleCheckedAt ?? 0;
+        if (Date.now() - lastChecked >= ROLE_RECHECK_MS) {
+          try {
+            const dbUser = await prisma.user.findUnique({
+              where: { id: token.id as string },
+              select: { role: true },
+            });
+            if (dbUser) token.role = dbUser.role;
+          } catch {
+            // non-fatal — keep whatever role the token already carried
+          }
+          token.roleCheckedAt = Date.now();
         }
       }
       return token;

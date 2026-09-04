@@ -3,22 +3,16 @@ export const maxDuration = 60;
 
 import { NextRequest, NextResponse } from "next/server";
 import { runHeartbeatTick } from "@/lib/deviceHeartbeat";
+import { isAuthorizedCronRequest } from "@/lib/cronAuth";
 
 // Real DataCollector heartbeats (BL-072, CLAUDE-CONCEPT.md 15.10). Called by
 // an external every-minute scheduler (Vercel Hobby cron is daily-only), the
-// second such call alongside workflow-tick. Same shared secret (CRON_SECRET);
-// accepts either `x-cron-secret: <CRON_SECRET>` or
-// `Authorization: Bearer <CRON_SECRET>`.
-function authorized(req: NextRequest): boolean {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return false;
-  const header = req.headers.get("x-cron-secret");
-  const bearer = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
-  return header === secret || bearer === secret;
-}
+// second such call alongside workflow-tick. Same shared secret — see
+// lib/cronAuth.ts for the accepted header forms and the constant-time
+// comparison.
 
 async function handle(req: NextRequest) {
-  if (!authorized(req)) {
+  if (!isAuthorizedCronRequest(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   try {
