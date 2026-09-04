@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useDialog } from "@/components/AppDialog";
+import { Tooltip } from "@/components/Tooltip";
 
 // BL-079 (§17.7) — row action shown only on a shared-not-owned Device /
 // Workflow / Item Feed row (the inverse of Delete, which is for owned rows).
@@ -16,12 +17,13 @@ const KIND_PATH: Record<Kind, string> = {
   itemFeed: "/api/item-feeds",
 };
 
+// Eye with a diagonal slash — the common "hide / not shown" convention.
 function EyeSlashIcon() {
   return (
     <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M2.5 10S5.5 4.5 10 4.5c1.4 0 2.7.5 3.8 1.2M17.5 10s-1 1.9-2.9 3.4M11.8 11.8a2.5 2.5 0 0 1-3.5-3.5" />
-      <path d="M8.3 5.1A6.9 6.9 0 0 1 10 4.9" />
-      <line x1="3" y1="3" x2="17" y2="17" />
+      <path d="M2.5 10S5.5 4.5 10 4.5s7.5 5.5 7.5 5.5-3 5.5-7.5 5.5S2.5 10 2.5 10Z" />
+      <circle cx="10" cy="10" r="2.2" />
+      <line x1="3" y1="17" x2="17" y2="3" />
     </svg>
   );
 }
@@ -62,18 +64,19 @@ export function HideFromViewButton({
   }
 
   return (
-    <button
-      type="button"
-      className="row-icon-btn row-icon-btn-ghost"
-      aria-label="Remove from my view"
-      title="Remove this shared item from your view — restore it later from Settings → Hidden items"
-      disabled={busy}
-      onClick={(e) => {
-        e.stopPropagation();
-        run();
-      }}
-    >
-      <EyeSlashIcon />
-    </button>
+    <Tooltip label={`Hide this shared ${KIND_LABEL[kind]} from your view — restore it any time from Settings → Hidden items`}>
+      <button
+        type="button"
+        className="row-icon-btn row-icon-btn-ghost"
+        aria-label="Hide from my view"
+        disabled={busy}
+        onClick={(e) => {
+          e.stopPropagation();
+          run();
+        }}
+      >
+        <EyeSlashIcon />
+      </button>
+    </Tooltip>
   );
 }

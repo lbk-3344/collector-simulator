@@ -876,6 +876,21 @@ select.role-select:disabled { opacity: .5; cursor: not-allowed; }
   opacity: .85;
 }
 
+/* Fixed-position hover tooltip (components/Tooltip.tsx) — anchored to a
+   control's top-right corner, grows up and to the left. Used where the
+   browser's own `title` is too slow/unstyled or would be clipped. */
+.tooltip-pop {
+  position: fixed;
+  transform: translate(-100%, calc(-100% - 8px));
+  background: var(--ink); color: var(--surface);
+  font-size: 11px; font-weight: 600; line-height: 1.35; text-align: left;
+  white-space: normal; width: max-content; max-width: 230px;
+  padding: 6px 9px; border-radius: 6px; box-shadow: var(--shell-shadow);
+  pointer-events: none; z-index: 1000;
+  animation: tooltipIn .1s ease;
+}
+@keyframes tooltipIn { from { opacity: 0; } to { opacity: 1; } }
+
 .toast {
   position: fixed; bottom: 22px; right: 22px; z-index: 200;
   display: flex; align-items: flex-start; gap: 10px;
