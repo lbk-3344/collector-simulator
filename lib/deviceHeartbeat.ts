@@ -47,7 +47,7 @@ export async function runHeartbeatTick(): Promise<HeartbeatTickSummary> {
       configured: true,
       publishedAt: true,
       offlineAt: true,
-      task: { select: { workflow: { select: { status: true } } } },
+      tasks: { select: { workflow: { select: { status: true } } } },
     },
   });
   const devices = candidates.filter((d) => getDeviceState(d) !== "OFFLINE");

@@ -63,6 +63,18 @@ const STATE_LABELS: Record<string, string> = {
   OFFLINE: "Offline",
 };
 
+// A Device can now be in several Workflows (2026-09-04) — show the names,
+// abbreviating past two.
+function workflowNames(device: DeviceRecord): string[] {
+  return (device.tasks ?? []).map((t) => t.workflow?.name).filter((n): n is string => !!n);
+}
+function workflowLabel(device: DeviceRecord): string {
+  const names = workflowNames(device);
+  if (names.length === 0) return "—";
+  if (names.length <= 2) return names.join(", ");
+  return `${names[0]}, ${names[1]} +${names.length - 2}`;
+}
+
 const DEVICES_INFO = (
   <>
     <p>
@@ -159,7 +171,7 @@ export default function DevicesPage() {
       name: (d) => d.name.toLowerCase(),
       site: (d) => siteName(d.locationCode).toLowerCase(),
       state: (d) => getDeviceState(d),
-      workflow: (d) => d.task?.workflow?.name?.toLowerCase() ?? null,
+      workflow: (d) => workflowNames(d).join(", ").toLowerCase() || null,
     },
     { key: "name" }
   );
@@ -347,7 +359,9 @@ export default function DevicesPage() {
                         {STATE_LABELS[state]}
                       </span>
                     </td>
-                    <td className="u-meta">{device.task?.workflow?.name ?? "—"}</td>
+                    <td className="u-meta" title={workflowNames(device).join(", ") || undefined}>
+                      {workflowLabel(device)}
+                    </td>
                     <td>
                       <div className="row-actions">
                         <Tooltip label={readOnly ? "View (shared — read-only)" : "Edit"}>

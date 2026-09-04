@@ -11,7 +11,7 @@ import { deregisterCollector } from "@/lib/bartenderDataCollector";
 import { isOwner } from "@/lib/ownership";
 
 const DEVICE_INCLUDE = {
-  task: { select: { id: true, name: true, workflow: { select: { id: true, name: true, status: true } } } },
+  tasks: { select: { id: true, name: true, workflow: { select: { id: true, name: true, status: true } } } },
 } as const;
 
 // A prisma.device.update can fail for reasons other than "record gone" — most

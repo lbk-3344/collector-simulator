@@ -240,8 +240,11 @@ model Device {
   lastHeartbeatError  String? // message from the most recent FAILED attempt; cleared on the next success
 
   // A Device relates to a Workflow *through* a Task now (BL-059,
-  // CLAUDE-CONCEPT.md 16.6) — the old direct `workflowId` FK is gone.
-  task Task?
+  // CLAUDE-CONCEPT.md 16.6) — the old direct `workflowId` FK is gone. Since
+  // 2026-09-04 a Device can be a Task in more than one Workflow at once
+  // (Luc), so this is a list — at most one Task per Workflow (Task's
+  // @@unique([workflowId, deviceId])).
+  tasks Task[]
 
   // Per-user workspace ownership (BL-067, CLAUDE-CONCEPT.md section 17).
   // `ownerId` is server-derived from the session on every create, never
@@ -344,9 +347,12 @@ model Task {
   id         String   @id @default(cuid())
   workflowId String
   workflow   Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
-  deviceId   String   @unique
+  // A Device can be a Task in several Workflows at once (Luc, 2026-09-04 —
+  // revises §16.2/§16.8's "one at a time" assumption). Still at most once per
+  // Workflow, via the compound unique below.
+  deviceId   String
   device     Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
-  name       String? // defaults to the Device's own name if unset
+  name       String? // optional per-Task label override; the canvas shows the live Device name when null
   positionX  Int? // canvas position (Part 2's editor)
   positionY  Int?
 
@@ -360,7 +366,9 @@ model Task {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([workflowId, deviceId])
   @@index([workflowId])
+  @@index([deviceId])
 }
 
 // One placement of a reusable ItemFeed onto one Workflow's canvas. The same

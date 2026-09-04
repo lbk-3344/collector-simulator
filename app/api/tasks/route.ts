@@ -67,7 +67,9 @@ export async function POST(req: NextRequest) {
       data: {
         workflowId,
         deviceId,
-        name: typeof body.name === "string" && body.name.trim() ? body.name.trim() : device.name,
+        // No per-task name by default — the canvas shows the live Device
+        // name. Only stored when an explicit override is passed (no UI yet).
+        name: typeof body.name === "string" && body.name.trim() ? body.name.trim() : null,
         positionX: typeof body.positionX === "number" ? Math.round(body.positionX) : null,
         positionY: typeof body.positionY === "number" ? Math.round(body.positionY) : null,
       },
@@ -75,9 +77,10 @@ export async function POST(req: NextRequest) {
     });
     return NextResponse.json({ task });
   } catch {
-    // @unique(deviceId) — the Device is already on another Task.
+    // @@unique([workflowId, deviceId]) — the Device is already on THIS
+    // workflow's canvas (it may be on other workflows too, which is fine).
     return NextResponse.json(
-      { error: "That device is already attached to a workflow. Remove it there first." },
+      { error: "That device is already on this workflow's canvas." },
       { status: 409 }
     );
   }

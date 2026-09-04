@@ -9,7 +9,7 @@ import { buildPlatformSyncData, toRegistrableDevice } from "@/lib/deviceSync";
 import { visibilityWhere } from "@/lib/ownership";
 
 const DEVICE_INCLUDE = {
-  task: { select: { id: true, name: true, workflow: { select: { id: true, name: true, status: true } } } },
+  tasks: { select: { id: true, name: true, workflow: { select: { id: true, name: true, status: true } } } },
 } as const;
 
 // This app's own simulated Devices/Collectors (not Bartender's real

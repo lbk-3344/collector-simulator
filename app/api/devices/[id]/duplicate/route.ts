@@ -24,7 +24,7 @@ import { isOwner } from "@/lib/ownership";
 // `positionX`/`positionY` come from the request body (the map passes the
 // paste/offset position; the list passes nothing → unplaced).
 const DEVICE_INCLUDE = {
-  task: { select: { id: true, name: true, workflow: { select: { id: true, name: true, status: true } } } },
+  tasks: { select: { id: true, name: true, workflow: { select: { id: true, name: true, status: true } } } },
 } as const;
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {

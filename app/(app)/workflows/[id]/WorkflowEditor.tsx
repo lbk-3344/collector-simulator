@@ -494,8 +494,11 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
     await patchWorkflow({ status: workflow.status === "RUNNING" ? "STOPPED" : "RUNNING" });
   }
 
+  // A Device can be a Task in several Workflows now (2026-09-04), so the
+  // palette only excludes devices already on *this* canvas — not ones used
+  // elsewhere.
   const attachedDeviceIds = useMemo(() => new Set(tasks.map((t) => t.deviceId)), [tasks]);
-  const paletteDevices = devices.filter((d) => d.configured && d.publishedAt && !d.task && !attachedDeviceIds.has(d.id));
+  const paletteDevices = devices.filter((d) => d.configured && d.publishedAt && !attachedDeviceIds.has(d.id));
 
   if (notFound) {
     return (

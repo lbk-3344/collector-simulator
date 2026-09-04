@@ -8,7 +8,7 @@ import { isOwner } from "@/lib/ownership";
 import { getDeviceState } from "@/lib/deviceState";
 
 const DEVICE_INCLUDE = {
-  task: { select: { id: true, name: true, workflow: { select: { id: true, name: true, status: true } } } },
+  tasks: { select: { id: true, name: true, workflow: { select: { id: true, name: true, status: true } } } },
 } as const;
 
 // Manual OFFLINE toggle (BL-074, CLAUDE-CONCEPT.md §15.3/15.7). Owner-only,
@@ -29,7 +29,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
   const device = await prisma.device.findUnique({
     where: { id: params.id },
-    select: { ownerId: true, configured: true, publishedAt: true, offlineAt: true, task: { select: { workflow: { select: { status: true } } } } },
+    select: { ownerId: true, configured: true, publishedAt: true, offlineAt: true, tasks: { select: { workflow: { select: { status: true } } } } },
   });
   if (!device) return NextResponse.json({ error: "Device not found" }, { status: 404 });
   if (!isOwner(device, session.user.id)) {

@@ -53,9 +53,10 @@ export interface DeviceRecord {
   lastHeartbeatSentAt: string | null;
   lastHeartbeatStatus: string | null;
   lastHeartbeatError: string | null;
-  // The Device's Task (BL-059) — its link to a Workflow, one per Device.
-  // null when the Device isn't on any Workflow's canvas.
-  task: { id: string; name: string | null; workflow: WorkflowRecord | null } | null;
+  // The Device's Tasks (BL-059) — its links to Workflows. A Device can be a
+  // Task in several Workflows at once (2026-09-04); empty when it's on no
+  // canvas.
+  tasks: { id: string; name: string | null; workflow: WorkflowRecord | null }[];
 }
 
 // Shape of the `reconciliation` block on a POST /collectors/register response,

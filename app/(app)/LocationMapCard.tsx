@@ -760,15 +760,19 @@ export function LocationMapCard({ locationCode, devices, currentUserId, onDevice
                 <span className="v">Active</span>
               </div>
               <div className="info-row">
-                <span className="k">Workflow</span>
+                <span className="k">{(infoPanelDevice.tasks ?? []).length > 1 ? "Workflows" : "Workflow"}</span>
                 <span className="v">
-                  {infoPanelDevice.task?.workflow
-                    ? `${infoPanelDevice.task.workflow.name} (${infoPanelDevice.task.workflow.status})`
+                  {(infoPanelDevice.tasks ?? []).length > 0
+                    ? (infoPanelDevice.tasks ?? [])
+                        .map((t) => (t.workflow ? `${t.workflow.name} (${t.workflow.status})` : null))
+                        .filter(Boolean)
+                        .join(", ")
                     : "—"}
                 </span>
               </div>
               <p className="note" style={{ marginBottom: 0 }}>
-                Stop the workflow to take this device offline.
+                Stop {(infoPanelDevice.tasks ?? []).length > 1 ? "every running workflow" : "the workflow"} to take this
+                device offline.
               </p>
             </div>
             <div className="modal-foot">

@@ -44,7 +44,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       publishedAt: true,
       offlineAt: true,
       channels: true,
-      task: { select: { workflow: { select: { status: true } } } },
+      tasks: { select: { workflow: { select: { status: true } } } },
     },
   });
   if (!device) return NextResponse.json({ error: "Device not found" }, { status: 404 });
