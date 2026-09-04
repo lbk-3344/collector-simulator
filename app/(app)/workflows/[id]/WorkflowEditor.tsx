@@ -581,7 +581,9 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
                 }}
               >
                 {d.name}
-                <span className="wf-palette-item-type">{d.type}</span>
+                <span className="wf-palette-item-type">
+                  {d.type} · {d.locationCode}
+                </span>
               </div>
             ))
           )}
