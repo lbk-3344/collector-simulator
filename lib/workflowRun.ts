@@ -20,6 +20,28 @@ function randInt(min: number, max: number): number {
   return lo + Math.floor(Math.random() * (hi - lo + 1));
 }
 
+// Bounded-concurrency map (BL-081, performance review 2026-09-04). Firings
+// and arrivals are independent of each other — different tasks/channels,
+// and every DB claim (lastFiredAt / processedAt) is a per-row atomic
+// updateMany — so running a batch of them concurrently is safe. A workflow
+// like "RTLS Stock" fires 30 FeedLinks in lockstep every 10 minutes; doing
+// that sequentially serializes 30 Bartender round-trips inside one
+// maxDuration-capped invocation. A small bound (rather than unlimited
+// Promise.all) keeps this from hammering the platform with everything at
+// once in one instant.
+async function mapWithConcurrency<T>(items: T[], limit: number, fn: (item: T) => Promise<void>): Promise<void> {
+  let next = 0;
+  async function worker() {
+    while (next < items.length) {
+      const item = items[next++];
+      await fn(item);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+}
+
+const TICK_CONCURRENCY = 6;
+
 // Does a batch with this GTIN take this Flow Link? An edge with no filter
 // takes everything; a GTIN filter is matched literally. Category filters
 // aren't evaluated yet (would need a product→category lookup — flagged).
@@ -166,6 +188,28 @@ export async function pushReadToPlatform(args: {
   return { pushed: false, notProcessed: false };
 }
 
+// SimulatedRead had no retention at all — unlike ApiCallLog (capped 500/user
+// with inline pruning), it just grew forever (5.5k+ rows in production after
+// four days, only ever read as "last ~150" by the Activity views). Same
+// inline-prune pattern as ApiCallLog: best-effort, fire-and-forget so it
+// never adds latency to the hot path — losing an occasional prune cycle just
+// means the table temporarily sits a little over the cap.
+const MAX_SIMULATED_READS_PER_WORKFLOW = 500;
+
+function pruneSimulatedReads(workflowId: string): void {
+  prisma.simulatedRead
+    .findMany({
+      where: { workflowId },
+      orderBy: { occurredAt: "desc" },
+      skip: MAX_SIMULATED_READS_PER_WORKFLOW,
+      select: { id: true },
+    })
+    .then((stale) =>
+      stale.length ? prisma.simulatedRead.deleteMany({ where: { id: { in: stale.map((r) => r.id) } } }) : null
+    )
+    .catch((e) => console.error("[workflowRun] failed to prune SimulatedRead", e));
+}
+
 // Write the read event for (taskId, channelId), push it to the real Track &
 // Trace platform (POST /reads — every read, entry firing and every hop, per
 // Luc 2026-08-31), then fan the batch out along this Task/Channel's outgoing
@@ -191,6 +235,7 @@ async function emitReadAndScheduleHops(args: {
   await prisma.simulatedRead.create({
     data: { workflowId, taskId, deviceId, channelId, items, itemGtins, gtin, occurredAt: at },
   });
+  pruneSimulatedReads(workflowId);
 
   // Real platform read — POST /reads with the real hexa/EPC tags (shared
   // helper, also used by the manual-feed route). PRESENT feeds now yield real
@@ -228,21 +273,24 @@ async function emitReadAndScheduleHops(args: {
     }
   }
 
-  for (const [linkId, subset] of perLink) {
-    const link = links.find((l) => l.id === linkId)!;
-    const delay = randInt(link.delayMinSeconds, link.delayMaxSeconds);
-    await prisma.inFlightBatch.create({
-      data: {
-        workflowId: link.workflowId,
-        taskId: link.targetTaskId,
-        channelId: link.targetChannelId,
-        items: subset.items,
-        itemGtins: subset.gtins,
-        gtin: soleGtin(subset.gtins),
-        arrivesAt: new Date(at.getTime() + delay * 1000),
-      },
-    });
-  }
+  // Independent inserts (one per outgoing edge) — no ordering dependency.
+  await Promise.all(
+    [...perLink.entries()].map(([linkId, subset]) => {
+      const link = links.find((l) => l.id === linkId)!;
+      const delay = randInt(link.delayMinSeconds, link.delayMaxSeconds);
+      return prisma.inFlightBatch.create({
+        data: {
+          workflowId: link.workflowId,
+          taskId: link.targetTaskId,
+          channelId: link.targetChannelId,
+          items: subset.items,
+          itemGtins: subset.gtins,
+          gtin: soleGtin(subset.gtins),
+          arrivesAt: new Date(at.getTime() + delay * 1000),
+        },
+      });
+    })
+  );
 }
 
 export interface TickSummary {
@@ -275,14 +323,19 @@ export async function runTick(): Promise<TickSummary> {
   const credsForOwner = makeOwnerCredentialsCache();
 
   // Per-tenant in-stock look-back window for PRESENT feeds — read off the
-  // tenant config once per tick (keyed by API key).
-  const windowByKey = new Map<string, number | null>();
-  async function windowForOwner(ownerId: string, c: RunCreds): Promise<number | null> {
-    if (!c) return null;
-    if (!windowByKey.has(c.apiKey)) {
-      windowByKey.set(c.apiKey, await getConfiguredInStockWindowDays(ownerId, c.tenantUrl, c.apiKey));
+  // tenant config once per tick (keyed by API key). Caches the in-flight
+  // Promise (not just the resolved value) for the same reason as
+  // makeOwnerCredentialsCache above — concurrent PRESENT firings for the
+  // same tenant (BL-081) must share one lookup, not each fire their own.
+  const windowByKey = new Map<string, Promise<number | null>>();
+  function windowForOwner(ownerId: string, c: RunCreds): Promise<number | null> {
+    if (!c) return Promise.resolve(null);
+    let pending = windowByKey.get(c.apiKey);
+    if (!pending) {
+      pending = getConfiguredInStockWindowDays(ownerId, c.tenantUrl, c.apiKey);
+      windowByKey.set(c.apiKey, pending);
     }
-    return windowByKey.get(c.apiKey) ?? null;
+    return pending;
   }
 
   // ── 1. Firing — one per due FeedLink (cadence lives on the FeedLink) ──
@@ -298,18 +351,24 @@ export async function runTick(): Promise<TickSummary> {
     },
   });
 
-  for (const link of dueLinks) {
+  // BL-081 (2026-09-04 performance review): due links are independent of
+  // each other — different tasks/channels, and the lastFiredAt claim below
+  // is a per-row atomic updateMany — so a batch fires concurrently instead
+  // of one at a time. A workflow like "RTLS Stock" (30 FeedLinks, all firing
+  // in lockstep every 10 minutes) used to serialize 30 Bartender round-trips
+  // inside one tick; this cuts that to TICK_CONCURRENCY in flight at once.
+  await mapWithConcurrency(dueLinks, TICK_CONCURRENCY, async (link) => {
     const intervalMs = (link.fireIntervalSeconds ?? 0) * 1000;
     const due = !link.lastFiredAt || now.getTime() - link.lastFiredAt.getTime() >= intervalMs;
     const feed = link.feedNode?.itemFeed;
-    if (!due || !feed) continue;
+    if (!due || !feed) return;
 
     // Optimistic claim on lastFiredAt so a concurrent tick can't double-fire.
     const claim = await prisma.feedLink.updateMany({
       where: { id: link.id, lastFiredAt: link.lastFiredAt },
       data: { lastFiredAt: now },
     });
-    if (claim.count === 0) continue;
+    if (claim.count === 0) return;
 
     const creds = await credsForOwner(link.workflow.ownerId);
     const window = feed.kind === "PRESENT" ? await windowForOwner(link.workflow.ownerId, creds) : null;
@@ -332,7 +391,7 @@ export async function runTick(): Promise<TickSummary> {
       push,
       notes: summary.notes,
     });
-  }
+  });
 
   // ── 2. Arrivals ──────────────────────────────────────────────────────
   const arrivals = await prisma.inFlightBatch.findMany({
@@ -341,41 +400,49 @@ export async function runTick(): Promise<TickSummary> {
     take: 500,
   });
 
-  for (const b of arrivals) {
+  await mapWithConcurrency(arrivals, TICK_CONCURRENCY, async (b) => {
     // Claim it first — idempotent across overlapping ticks.
     const claim = await prisma.inFlightBatch.updateMany({
       where: { id: b.id, processedAt: null },
       data: { processedAt: now },
     });
-    if (claim.count === 0) continue;
+    if (claim.count === 0) return;
 
-    const task = await prisma.task.findUnique({
-      where: { id: b.taskId },
-      select: {
-        deviceId: true,
-        workflowId: true,
-        device: { select: { collectorId: true } },
-        workflow: { select: { status: true, ownerId: true } },
-      },
-    });
-    if (!task || task.workflow.status !== "RUNNING") continue; // stopped mid-flight → batch just fizzles
+    try {
+      const task = await prisma.task.findUnique({
+        where: { id: b.taskId },
+        select: {
+          deviceId: true,
+          workflowId: true,
+          device: { select: { collectorId: true } },
+          workflow: { select: { status: true, ownerId: true } },
+        },
+      });
+      if (!task || task.workflow.status !== "RUNNING") return; // stopped mid-flight → batch just fizzles
 
-    summary.arrivalsProcessed++;
-    await emitReadAndScheduleHops({
-      ownerId: task.workflow.ownerId,
-      workflowId: task.workflowId,
-      taskId: b.taskId,
-      deviceId: task.deviceId,
-      collectorId: task.device?.collectorId ?? null,
-      channelId: b.channelId,
-      items: (b.items as string[]) ?? [],
-      itemGtins: (b.itemGtins as (string | null)[] | null) ?? [],
-      at: now,
-      creds: await credsForOwner(task.workflow.ownerId),
-      push,
-      notes: summary.notes,
-    });
-  }
+      summary.arrivalsProcessed++;
+      await emitReadAndScheduleHops({
+        ownerId: task.workflow.ownerId,
+        workflowId: task.workflowId,
+        taskId: b.taskId,
+        deviceId: task.deviceId,
+        collectorId: task.device?.collectorId ?? null,
+        channelId: b.channelId,
+        items: (b.items as string[]) ?? [],
+        itemGtins: (b.itemGtins as (string | null)[] | null) ?? [],
+        at: now,
+        creds: await credsForOwner(task.workflow.ownerId),
+        push,
+        notes: summary.notes,
+      });
+    } finally {
+      // Once claimed, this row has served its whole purpose either way (used
+      // or fizzled) — delete it rather than leaving a permanently
+      // "processed" row behind (BL-081: InFlightBatch had no retention at
+      // all, 2.1k+ rows in production, 100% already-processed dead weight).
+      await prisma.inFlightBatch.delete({ where: { id: b.id } }).catch(() => {});
+    }
+  });
 
   // ── 3. Auto-stop ─────────────────────────────────────────────────────
   const running = await prisma.workflow.findMany({

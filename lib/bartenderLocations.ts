@@ -135,13 +135,21 @@ export type RunCredentials = { tenantUrl: string; apiKey: string };
 // (mint / stock hit the wrong tenant). Now each tick builds one of these
 // caches and resolves credentials per resource owner; the returned function
 // looks up any given owner at most once per tick.
+// Caches the in-flight Promise, not just its resolved value — with the run
+// engine now processing due FeedLinks/arrivals concurrently (BL-081), two
+// links for the same owner can ask for credentials in the same tick before
+// either has resolved; caching the Promise itself (rather than checking
+// `cache.has` and awaiting before storing) means the second caller gets the
+// same in-flight lookup instead of firing a redundant one.
 export function makeOwnerCredentialsCache(): (ownerId: string) => Promise<RunCredentials | null> {
-  const cache = new Map<string, RunCredentials | null>();
-  return async (ownerId: string) => {
-    if (!cache.has(ownerId)) {
-      cache.set(ownerId, await getUserBartenderCredentials(ownerId));
+  const cache = new Map<string, Promise<RunCredentials | null>>();
+  return (ownerId: string) => {
+    let pending = cache.get(ownerId);
+    if (!pending) {
+      pending = getUserBartenderCredentials(ownerId);
+      cache.set(ownerId, pending);
     }
-    return cache.get(ownerId) ?? null;
+    return pending;
   };
 }
 
