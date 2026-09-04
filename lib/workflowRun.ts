@@ -3,6 +3,7 @@ import { makeOwnerCredentialsCache, type RunCredentials } from "@/lib/bartenderL
 import { mintSerializedItems, SerializationError, MAX_NEW_ITEMS_PER_FIRING } from "@/lib/bartenderSerialization";
 import { getStockHexa, getConfiguredInStockWindowDays } from "@/lib/bartenderInventory";
 import { sendReads } from "@/lib/bartenderDataCollector";
+import { mapWithConcurrency } from "@/lib/concurrency";
 
 // Credentials for one firing — the *owning* user's Bartender connection, or
 // null if they haven't configured one (2026-09-02, was a single global account).
@@ -20,26 +21,12 @@ function randInt(min: number, max: number): number {
   return lo + Math.floor(Math.random() * (hi - lo + 1));
 }
 
-// Bounded-concurrency map (BL-081, performance review 2026-09-04). Firings
-// and arrivals are independent of each other — different tasks/channels,
-// and every DB claim (lastFiredAt / processedAt) is a per-row atomic
-// updateMany — so running a batch of them concurrently is safe. A workflow
-// like "RTLS Stock" fires 30 FeedLinks in lockstep every 10 minutes; doing
-// that sequentially serializes 30 Bartender round-trips inside one
-// maxDuration-capped invocation. A small bound (rather than unlimited
-// Promise.all) keeps this from hammering the platform with everything at
-// once in one instant.
-async function mapWithConcurrency<T>(items: T[], limit: number, fn: (item: T) => Promise<void>): Promise<void> {
-  let next = 0;
-  async function worker() {
-    while (next < items.length) {
-      const item = items[next++];
-      await fn(item);
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
-}
-
+// See lib/concurrency.ts. Firings and arrivals are independent of each
+// other — different tasks/channels, and every DB claim (lastFiredAt /
+// processedAt) is a per-row atomic updateMany — so running a batch of them
+// concurrently is safe. A workflow like "RTLS Stock" fires 30 FeedLinks in
+// lockstep every 10 minutes; doing that sequentially serializes 30
+// Bartender round-trips inside one maxDuration-capped invocation.
 const TICK_CONCURRENCY = 6;
 
 // Does a batch with this GTIN take this Flow Link? An edge with no filter

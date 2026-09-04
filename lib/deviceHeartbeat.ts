@@ -2,6 +2,13 @@ import { prisma } from "@/lib/prisma";
 import { makeOwnerCredentialsCache } from "@/lib/bartenderLocations";
 import { sendHeartbeat } from "@/lib/bartenderDataCollector";
 import { getDeviceState } from "@/lib/deviceState";
+import { mapWithConcurrency } from "@/lib/concurrency";
+
+// See lib/concurrency.ts. Devices default to a 120s heartbeat timeout
+// (ticked every half that), so a fleet tends to fall due in the same rough
+// window — same lockstep shape as the run engine's FeedLinks, same fix
+// (performance review 2026-09-04, applied here after runTick's).
+const HEARTBEAT_CONCURRENCY = 6;
 
 // BL-072, CLAUDE-CONCEPT.md 15.10 — the DataCollector heartbeat tick. Modeled
 // on lib/workflowRun.ts's runTick(): one exported async function, called by a
@@ -52,20 +59,21 @@ export async function runHeartbeatTick(): Promise<HeartbeatTickSummary> {
   });
   const devices = candidates.filter((d) => getDeviceState(d) !== "OFFLINE");
 
-  for (const device of devices) {
+  await mapWithConcurrency(devices, HEARTBEAT_CONCURRENCY, async (device) => {
     summary.checked++;
     const intervalMs = (device.heartbeatTimeoutSeconds / 2) * 1000;
     const due =
       !device.lastHeartbeatSentAt || now.getTime() - device.lastHeartbeatSentAt.getTime() >= intervalMs;
-    if (!due || !device.collectorId) continue;
+    if (!due || !device.collectorId) return;
 
     // Optimistic claim (same pattern as FeedLink firing in the run engine) —
-    // a concurrent tick can't double-send for one due window.
+    // a concurrent tick (or a concurrent worker in this same tick) can't
+    // double-send for one due window.
     const claim = await prisma.device.updateMany({
       where: { id: device.id, lastHeartbeatSentAt: device.lastHeartbeatSentAt },
       data: { lastHeartbeatSentAt: now },
     });
-    if (claim.count === 0) continue;
+    if (claim.count === 0) return;
 
     const creds = await credsForOwner(device.ownerId);
     if (!creds) {
@@ -75,7 +83,7 @@ export async function runHeartbeatTick(): Promise<HeartbeatTickSummary> {
       });
       summary.failed++;
       summary.notes.push(`heartbeat ${device.collectorId}: device owner has no Bartender connection`);
-      continue;
+      return;
     }
 
     const res = await sendHeartbeat(device.ownerId, creds.tenantUrl, creds.apiKey, device.collectorId);
@@ -96,7 +104,7 @@ export async function runHeartbeatTick(): Promise<HeartbeatTickSummary> {
       summary.failed++;
       summary.notes.push(`heartbeat ${device.collectorId}: ${res.errorMessage ?? "failed"}`);
     }
-  }
+  });
 
   return summary;
 }

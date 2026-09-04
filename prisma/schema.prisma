@@ -301,6 +301,10 @@ model Workflow {
   hiddenBy HiddenWorkflow[]
 
   @@index([ownerId])
+  // Read on every tick: the run engine's dueLinks query filters FeedLink by
+  // `workflow: { status: "RUNNING" }`, plus the direct RUNNING counts/lookups
+  // elsewhere (perf review 2026-09-04).
+  @@index([status])
 }
 
 // Run engine (BL-061, CLAUDE-CONCEPT.md 16.5). A batch of items travelling a
@@ -440,7 +444,11 @@ model FlowLink {
   updatedAt DateTime @updatedAt
 
   @@index([workflowId])
-  @@index([sourceTaskId])
+  // Compound rather than a bare [sourceTaskId] — every actual read filters
+  // both columns together (emitReadAndScheduleHops's outgoing-edge lookup,
+  // perf review 2026-09-04); nothing queries sourceTaskId alone, so the
+  // bare index it replaces was redundant with this one's leftmost prefix.
+  @@index([sourceTaskId, sourceChannelId])
   @@index([targetTaskId])
 }
 
