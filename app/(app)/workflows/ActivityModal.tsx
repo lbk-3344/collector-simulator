@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { activityDateLabel, activityTimeLabel } from "@/lib/activityTime";
 
 interface ReadRow {
   id: string;
@@ -75,7 +76,10 @@ export function ActivityModal({
               <tbody>
                 {reads.map((r) => (
                   <tr key={r.id}>
-                    <td className="wf-activity-time">{new Date(r.occurredAt).toLocaleTimeString()}</td>
+                    <td className="wf-activity-time">
+                      <div className="wf-activity-date">{activityDateLabel(r.occurredAt)}</div>
+                      {activityTimeLabel(r.occurredAt)}
+                    </td>
                     <td>
                       <div className="wf-activity-task">
                         {r.taskName} · {r.channelId}

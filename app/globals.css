@@ -817,6 +817,7 @@ select.role-select:disabled { opacity: .5; cursor: not-allowed; }
 .wf-activity-table { width: 100%; border-collapse: collapse; }
 .wf-activity-table td { padding: 6px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
 .wf-activity-time { font-family: var(--font-mono); font-size: 10.5px; color: var(--ink-3); white-space: nowrap; }
+.wf-activity-date { font-family: var(--font-ui); font-size: 10px; font-weight: 600; color: var(--ink-2); margin-bottom: 1px; }
 .wf-activity-task { font-size: 11.5px; font-weight: 600; color: var(--ink); }
 .wf-activity-meta { font-size: 10.5px; color: var(--ink-3); }
 .channel-name-input {
