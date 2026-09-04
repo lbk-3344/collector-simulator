@@ -5,6 +5,7 @@ import { useDialog } from "@/components/AppDialog";
 import { PageHeader } from "@/components/PageHeader";
 import { SharedBadge } from "@/components/SharedBadge";
 import { HideFromViewButton } from "@/components/HideFromViewButton";
+import { Tooltip } from "@/components/Tooltip";
 import { useTableSort } from "@/lib/useTableSort";
 import type { ItemFeedRecord } from "@/lib/itemFeed";
 import type { BartenderLocation } from "@/lib/bartenderLocations";
@@ -249,32 +250,34 @@ export default function ItemFeedsPage() {
                   <td className="u-meta">{feed.usageCount ?? 0}</td>
                   <td>
                     <div className="row-actions">
-                      <button
-                        className="row-icon-btn row-icon-btn-edit"
-                        aria-label={readOnly ? "View" : "Edit"}
-                        title={readOnly ? "View (shared — read-only)" : "Edit"}
-                        onClick={() => setModal({ feed, readOnly })}
-                      >
-                        {readOnly ? (
-                          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M1.5 10S4.5 4.5 10 4.5 18.5 10 18.5 10 15.5 15.5 10 15.5 1.5 10 1.5 10Z" />
-                            <circle cx="10" cy="10" r="2.5" />
-                          </svg>
-                        ) : (
-                          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M13.3 3.5a1.9 1.9 0 0 1 2.7 2.7L7 15.2l-3.7 1 1-3.7 9-9Z" />
-                          </svg>
-                        )}
-                      </button>
-                      <button
-                        className="row-icon-btn row-icon-btn-ghost"
-                        aria-label="Duplicate"
-                        title={readOnly ? "Shared with you — read-only" : "Duplicate"}
-                        disabled={busyId === feed.id || readOnly}
-                        onClick={() => handleDuplicate(feed)}
-                      >
-                        <DuplicateIcon />
-                      </button>
+                      <Tooltip label={readOnly ? "View (shared — read-only)" : "Edit"}>
+                        <button
+                          className="row-icon-btn row-icon-btn-edit"
+                          aria-label={readOnly ? "View" : "Edit"}
+                          onClick={() => setModal({ feed, readOnly })}
+                        >
+                          {readOnly ? (
+                            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M1.5 10S4.5 4.5 10 4.5 18.5 10 18.5 10 15.5 15.5 10 15.5 1.5 10 1.5 10Z" />
+                              <circle cx="10" cy="10" r="2.5" />
+                            </svg>
+                          ) : (
+                            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M13.3 3.5a1.9 1.9 0 0 1 2.7 2.7L7 15.2l-3.7 1 1-3.7 9-9Z" />
+                            </svg>
+                          )}
+                        </button>
+                      </Tooltip>
+                      <Tooltip label={readOnly ? "Shared with you — read-only" : "Duplicate"}>
+                        <button
+                          className="row-icon-btn row-icon-btn-ghost"
+                          aria-label="Duplicate"
+                          disabled={busyId === feed.id || readOnly}
+                          onClick={() => handleDuplicate(feed)}
+                        >
+                          <DuplicateIcon />
+                        </button>
+                      </Tooltip>
                       {readOnly ? (
                         <HideFromViewButton
                           kind="itemFeed"
@@ -284,17 +287,18 @@ export default function ItemFeedsPage() {
                           onError={setError}
                         />
                       ) : (
-                        <button
-                          className="row-icon-btn row-icon-btn-delete"
-                          aria-label="Delete"
-                          title="Delete"
-                          disabled={busyId === feed.id}
-                          onClick={() => handleDelete(feed)}
-                        >
-                          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M4 6h12M8 6V4.5a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1V6M5.5 6 6.2 16a1 1 0 0 0 1 .9h5.6a1 1 0 0 0 1-.9L14.5 6M8.3 9v5M11.7 9v5" />
-                          </svg>
-                        </button>
+                        <Tooltip label="Delete">
+                          <button
+                            className="row-icon-btn row-icon-btn-delete"
+                            aria-label="Delete"
+                            disabled={busyId === feed.id}
+                            onClick={() => handleDelete(feed)}
+                          >
+                            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M4 6h12M8 6V4.5a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1V6M5.5 6 6.2 16a1 1 0 0 0 1 .9h5.6a1 1 0 0 0 1-.9L14.5 6M8.3 9v5M11.7 9v5" />
+                            </svg>
+                          </button>
+                        </Tooltip>
                       )}
                     </div>
                   </td>

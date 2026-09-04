@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import ReadPointIcon, { READ_POINT_TYPES, READ_POINT_LABELS, type ReadPointType } from "@/components/ui/ReadPointIcon";
+import { Tooltip } from "@/components/Tooltip";
 import { getDeviceState } from "@/lib/deviceState";
 import type { DeviceChannel, DeviceRecord, ReconciliationMapping } from "@/lib/deviceConfig";
 
@@ -432,15 +433,16 @@ export function DeviceConfigModal({
                 placeholder="e.g. TTMEMBASE-PORTAL-02"
                 style={{ flex: 1 }}
               />
-              <button
-                type="button"
-                className="field-icon-btn"
-                aria-label="Suggest a new Collector ID"
-                title="Suggest a new Collector ID"
-                onClick={suggestCollectorId}
-              >
-                <RegenerateIcon />
-              </button>
+              <Tooltip label="Suggest a new Collector ID">
+                <button
+                  type="button"
+                  className="field-icon-btn"
+                  aria-label="Suggest a new Collector ID"
+                  onClick={suggestCollectorId}
+                >
+                  <RegenerateIcon />
+                </button>
+              </Tooltip>
             </div>
           </div>
 

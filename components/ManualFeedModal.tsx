@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { ItemFeedForm, KINDS } from "@/components/ItemFeedForm";
+import { Tooltip } from "@/components/Tooltip";
 import type { ItemFeedRecord } from "@/lib/itemFeed";
 import type { DeviceRecord } from "@/lib/deviceConfig";
 
@@ -219,19 +220,20 @@ export function ManualFeedModal({ device, onClose }: { device: DeviceRecord; onC
                               {KIND_LABEL[f.kind] ?? f.kind} · {feedDetail(f)}
                             </span>
                           </div>
-                          <button
-                            type="button"
-                            className="manual-feed-card-dup"
-                            aria-label="Duplicate this feed"
-                            title="Duplicate"
-                            disabled={dupBusyId === f.id}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDuplicate(f.id);
-                            }}
-                          >
-                            <DuplicateIcon />
-                          </button>
+                          <Tooltip label="Duplicate this feed">
+                            <button
+                              type="button"
+                              className="manual-feed-card-dup"
+                              aria-label="Duplicate this feed"
+                              disabled={dupBusyId === f.id}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDuplicate(f.id);
+                              }}
+                            >
+                              <DuplicateIcon />
+                            </button>
+                          </Tooltip>
                         </div>
                       );
                     })}

@@ -6,6 +6,7 @@ import { DeviceConfigModal } from "@/components/DeviceConfigModal";
 import { ManualFeedModal } from "@/components/ManualFeedModal";
 import { ContextMenu } from "@/components/ContextMenu";
 import { PadlockIcon } from "@/components/SharedBadge";
+import { Tooltip } from "@/components/Tooltip";
 import { getDeviceState } from "@/lib/deviceState";
 import type { DeviceRecord } from "@/lib/deviceConfig";
 import type { LocationMap, LocationZone } from "@/lib/bartenderLocations";
@@ -592,40 +593,47 @@ export function LocationMapCard({ locationCode, devices, currentUserId, onDevice
       )}
 
       <div className="map-controls">
-        <button className="map-control-btn" onClick={zoomIn} aria-label="Zoom in" title="Zoom in">
-          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8">
-            <circle cx="9" cy="9" r="6.5" />
-            <line x1="14" y1="14" x2="18" y2="18" />
-            <line x1="9" y1="6" x2="9" y2="12" />
-            <line x1="6" y1="9" x2="12" y2="9" />
-          </svg>
-        </button>
-        <button className="map-control-btn" onClick={zoomOut} aria-label="Zoom out" title="Zoom out">
-          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8">
-            <circle cx="9" cy="9" r="6.5" />
-            <line x1="14" y1="14" x2="18" y2="18" />
-            <line x1="6" y1="9" x2="12" y2="9" />
-          </svg>
-        </button>
-        <button className="map-control-btn" onClick={applyFit} aria-label="Fit to screen" title="Fit to screen">
-          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6">
-            <path d="M3 7V4a1 1 0 0 1 1-1h3" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M17 7V4a1 1 0 0 0-1-1h-3" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M3 13v3a1 1 0 0 0 1 1h3" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M17 13v3a1 1 0 0 1-1 1h-3" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </button>
-        <button
-          className={`map-control-btn${editMode ? " active" : ""}`}
-          onClick={() => setEditMode((v) => !v)}
-          aria-label="Toggle edit mode"
-          aria-pressed={editMode}
-          title="Edit devices"
-        >
-          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6">
-            <path d="M13.5 3.5l3 3L6 17H3v-3z" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </button>
+        <Tooltip label="Zoom in">
+          <button className="map-control-btn" onClick={zoomIn} aria-label="Zoom in">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <circle cx="9" cy="9" r="6.5" />
+              <line x1="14" y1="14" x2="18" y2="18" />
+              <line x1="9" y1="6" x2="9" y2="12" />
+              <line x1="6" y1="9" x2="12" y2="9" />
+            </svg>
+          </button>
+        </Tooltip>
+        <Tooltip label="Zoom out">
+          <button className="map-control-btn" onClick={zoomOut} aria-label="Zoom out">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <circle cx="9" cy="9" r="6.5" />
+              <line x1="14" y1="14" x2="18" y2="18" />
+              <line x1="6" y1="9" x2="12" y2="9" />
+            </svg>
+          </button>
+        </Tooltip>
+        <Tooltip label="Fit to screen">
+          <button className="map-control-btn" onClick={applyFit} aria-label="Fit to screen">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6">
+              <path d="M3 7V4a1 1 0 0 1 1-1h3" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M17 7V4a1 1 0 0 0-1-1h-3" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M3 13v3a1 1 0 0 0 1 1h3" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M17 13v3a1 1 0 0 1-1 1h-3" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+        </Tooltip>
+        <Tooltip label={editMode ? "Done editing" : "Edit devices — drag to reposition, drop new ones from the palette"}>
+          <button
+            className={`map-control-btn${editMode ? " active" : ""}`}
+            onClick={() => setEditMode((v) => !v)}
+            aria-label="Toggle edit mode"
+            aria-pressed={editMode}
+          >
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6">
+              <path d="M13.5 3.5l3 3L6 17H3v-3z" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+        </Tooltip>
       </div>
 
       <DeviceConfigModal

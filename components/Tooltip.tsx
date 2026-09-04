@@ -22,7 +22,7 @@ export function Tooltip({ label, children }: { label: string; children: ReactNod
   return (
     <span
       ref={ref}
-      style={{ display: "inline-flex" }}
+      className="tooltip-wrap"
       onMouseEnter={show}
       onMouseLeave={hide}
       onFocus={show}

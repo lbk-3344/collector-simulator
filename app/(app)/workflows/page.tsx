@@ -6,6 +6,7 @@ import { useDialog } from "@/components/AppDialog";
 import { PageHeader } from "@/components/PageHeader";
 import { SharedBadge } from "@/components/SharedBadge";
 import { HideFromViewButton } from "@/components/HideFromViewButton";
+import { Tooltip } from "@/components/Tooltip";
 import { useTableSort } from "@/lib/useTableSort";
 import { ActivityModal } from "./ActivityModal";
 
@@ -233,23 +234,25 @@ export default function WorkflowsPage() {
                   <td className="u-meta">{wf.flowLinkCount}</td>
                   <td onClick={(e) => e.stopPropagation()}>
                     <div className="row-actions">
-                      <button
-                        className={`row-icon-btn ${wf.status === "RUNNING" ? "row-icon-btn-stop" : "row-icon-btn-run"}`}
-                        aria-label={wf.status === "RUNNING" ? "Stop" : "Start"}
-                        title={readOnly ? "Shared with you — read-only" : wf.status === "RUNNING" ? "Stop" : "Start"}
-                        disabled={busyId === wf.id || bulkBusy || readOnly}
-                        onClick={() => setStatus(wf.id, wf.status === "RUNNING" ? "STOPPED" : "RUNNING")}
-                      >
-                        {wf.status === "RUNNING" ? <StopIcon /> : <PlayIcon />}
-                      </button>
-                      <button
-                        className="row-icon-btn row-icon-btn-ghost"
-                        aria-label="Activity"
-                        title="Activity"
-                        onClick={() => setActivityWorkflow(wf)}
-                      >
-                        <ActivityIcon />
-                      </button>
+                      <Tooltip label={readOnly ? "Shared with you — read-only" : wf.status === "RUNNING" ? "Stop" : "Start"}>
+                        <button
+                          className={`row-icon-btn ${wf.status === "RUNNING" ? "row-icon-btn-stop" : "row-icon-btn-run"}`}
+                          aria-label={wf.status === "RUNNING" ? "Stop" : "Start"}
+                          disabled={busyId === wf.id || bulkBusy || readOnly}
+                          onClick={() => setStatus(wf.id, wf.status === "RUNNING" ? "STOPPED" : "RUNNING")}
+                        >
+                          {wf.status === "RUNNING" ? <StopIcon /> : <PlayIcon />}
+                        </button>
+                      </Tooltip>
+                      <Tooltip label="Activity">
+                        <button
+                          className="row-icon-btn row-icon-btn-ghost"
+                          aria-label="Activity"
+                          onClick={() => setActivityWorkflow(wf)}
+                        >
+                          <ActivityIcon />
+                        </button>
+                      </Tooltip>
                       {readOnly ? (
                         <HideFromViewButton
                           kind="workflow"
@@ -259,17 +262,18 @@ export default function WorkflowsPage() {
                           onError={setError}
                         />
                       ) : (
-                        <button
-                          className="row-icon-btn row-icon-btn-delete"
-                          aria-label="Delete"
-                          title="Delete"
-                          disabled={busyId === wf.id}
-                          onClick={() => handleDelete(wf)}
-                        >
-                          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M4 6h12M8 6V4.5a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1V6M5.5 6 6.2 16a1 1 0 0 0 1 .9h5.6a1 1 0 0 0 1-.9L14.5 6M8.3 9v5M11.7 9v5" />
-                          </svg>
-                        </button>
+                        <Tooltip label="Delete">
+                          <button
+                            className="row-icon-btn row-icon-btn-delete"
+                            aria-label="Delete"
+                            disabled={busyId === wf.id}
+                            onClick={() => handleDelete(wf)}
+                          >
+                            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M4 6h12M8 6V4.5a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1V6M5.5 6 6.2 16a1 1 0 0 0 1 .9h5.6a1 1 0 0 0 1-.9L14.5 6M8.3 9v5M11.7 9v5" />
+                            </svg>
+                          </button>
+                        </Tooltip>
                       )}
                     </div>
                   </td>

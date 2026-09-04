@@ -8,6 +8,7 @@ import ReadPointIcon, { READ_POINT_LABELS, type ReadPointType } from "@/componen
 import { DeviceConfigModal } from "@/components/DeviceConfigModal";
 import { ManualFeedModal } from "@/components/ManualFeedModal";
 import { HideFromViewButton } from "@/components/HideFromViewButton";
+import { Tooltip } from "@/components/Tooltip";
 import { getDeviceState } from "@/lib/deviceState";
 import { useTableSort } from "@/lib/useTableSort";
 import type { DeviceRecord } from "@/lib/deviceConfig";
@@ -349,41 +350,44 @@ export default function DevicesPage() {
                     <td className="u-meta">{device.task?.workflow?.name ?? "—"}</td>
                     <td>
                       <div className="row-actions">
-                        <button
-                          className="row-icon-btn row-icon-btn-edit"
-                          aria-label={readOnly ? "View" : "Edit"}
-                          title={readOnly ? "View (shared — read-only)" : "Edit"}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setConfigModal({ device, readOnly });
-                          }}
-                        >
-                          {readOnly ? <EyeIcon /> : <EditIcon />}
-                        </button>
-                        <button
-                          className="row-icon-btn row-icon-btn-ghost"
-                          aria-label={state === "OFFLINE" ? "Turn device on" : "Turn device offline"}
-                          title={offlineTitle}
-                          disabled={isBusy || readOnly || !canToggleOffline}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleOffline(device, state !== "OFFLINE");
-                          }}
-                        >
-                          <PowerIcon />
-                        </button>
-                        <button
-                          className="row-icon-btn row-icon-btn-ghost"
-                          aria-label="Duplicate"
-                          title={readOnly ? "Shared with you — read-only" : "Duplicate"}
-                          disabled={isBusy || readOnly}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDuplicate(device);
-                          }}
-                        >
-                          <DuplicateIcon />
-                        </button>
+                        <Tooltip label={readOnly ? "View (shared — read-only)" : "Edit"}>
+                          <button
+                            className="row-icon-btn row-icon-btn-edit"
+                            aria-label={readOnly ? "View" : "Edit"}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setConfigModal({ device, readOnly });
+                            }}
+                          >
+                            {readOnly ? <EyeIcon /> : <EditIcon />}
+                          </button>
+                        </Tooltip>
+                        <Tooltip label={offlineTitle}>
+                          <button
+                            className="row-icon-btn row-icon-btn-ghost"
+                            aria-label={state === "OFFLINE" ? "Turn device on" : "Turn device offline"}
+                            disabled={isBusy || readOnly || !canToggleOffline}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOffline(device, state !== "OFFLINE");
+                            }}
+                          >
+                            <PowerIcon />
+                          </button>
+                        </Tooltip>
+                        <Tooltip label={readOnly ? "Shared with you — read-only" : "Duplicate"}>
+                          <button
+                            className="row-icon-btn row-icon-btn-ghost"
+                            aria-label="Duplicate"
+                            disabled={isBusy || readOnly}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDuplicate(device);
+                            }}
+                          >
+                            <DuplicateIcon />
+                          </button>
+                        </Tooltip>
                         {readOnly ? (
                           <HideFromViewButton
                             kind="device"
@@ -393,18 +397,19 @@ export default function DevicesPage() {
                             onError={setError}
                           />
                         ) : (
-                          <button
-                            className="row-icon-btn row-icon-btn-delete"
-                            aria-label="Delete"
-                            title="Delete"
-                            disabled={isBusy}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDelete(device);
-                            }}
-                          >
-                            <TrashIcon />
-                          </button>
+                          <Tooltip label="Delete">
+                            <button
+                              className="row-icon-btn row-icon-btn-delete"
+                              aria-label="Delete"
+                              disabled={isBusy}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDelete(device);
+                              }}
+                            >
+                              <TrashIcon />
+                            </button>
+                          </Tooltip>
                         )}
                       </div>
                     </td>
