@@ -10,6 +10,13 @@ import { useEffect, useRef } from "react";
 const MENU_W = 176;
 const ROW_H = 36;
 
+function EditGlyph() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M13.5 3.5l3 3L7 16H4v-3z" />
+    </svg>
+  );
+}
 function CopyGlyph() {
   return (
     <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
@@ -49,11 +56,13 @@ export function ContextMenu({
   x,
   y,
   canPaste = false,
+  onEdit,
   onCopy,
   onPaste,
   onCut,
   onDuplicate,
   onDelete,
+  editLabel = "Edit settings",
   copyLabel = "Copy",
   pasteLabel = "Paste",
   cutLabel = "Cut",
@@ -64,12 +73,15 @@ export function ContextMenu({
   x: number;
   y: number;
   canPaste?: boolean;
+  // Optional "open this item's config" row, rendered first.
+  onEdit?: () => void;
   onCopy?: () => void;
   onPaste?: () => void;
   onCut?: () => void;
   onDuplicate?: () => void;
   // Optional destructive row, rendered under a separator.
   onDelete?: () => void;
+  editLabel?: string;
   copyLabel?: string;
   pasteLabel?: string;
   cutLabel?: string;
@@ -97,7 +109,7 @@ export function ContextMenu({
     };
   }, [onClose]);
 
-  const topRows = [onCopy, onCut, onPaste, onDuplicate].filter(Boolean).length;
+  const topRows = [onEdit, onCopy, onCut, onPaste, onDuplicate].filter(Boolean).length;
   const menuH = topRows * ROW_H + (onDelete ? ROW_H + 9 : 0) + 12;
   const left = Math.max(8, Math.min(x, window.innerWidth - MENU_W - 8));
   const top = Math.max(8, Math.min(y, window.innerHeight - menuH - 8));
@@ -109,6 +121,12 @@ export function ContextMenu({
 
   return (
     <div ref={ref} className="ctx-menu" style={{ left, top }} role="menu">
+      {onEdit && (
+        <button type="button" className="ctx-menu-item" role="menuitem" onClick={run(onEdit)}>
+          <EditGlyph />
+          {editLabel}
+        </button>
+      )}
       {onCopy && (
         <button type="button" className="ctx-menu-item" role="menuitem" onClick={run(onCopy)}>
           <CopyGlyph />

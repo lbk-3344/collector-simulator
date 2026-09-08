@@ -803,6 +803,14 @@ function WorkflowEditorInner({ workflowId }: { workflowId: string }) {
           copyLabel="Copy settings"
           pasteLabel="Paste settings"
           cutLabel="Cut settings"
+          onEdit={() => {
+            // The edge's own label opens this same panel, but a link running
+            // from a Task's output back to another input often sits hidden
+            // under a Task node — this is the reachable way in.
+            const edge = edgeContextMenu.edge;
+            if (edge.type === "feed") setEditFeedLinkId(edge.id);
+            else setEditFlowId(edge.id);
+          }}
           onCopy={() => {
             const s = linkSettings(edgeContextMenu.edge);
             if (s) setLinkClipboard(s);
