@@ -60,6 +60,20 @@ export function isCronClockEnabled(): boolean {
   );
 }
 
+// Booleans only (no values) — surfaced in the /api/cron/tick response so a
+// misconfigured env var can be spotted without reading secrets. Behind the
+// CRON_SECRET like the rest of that route.
+export function cronClockDiagnostics() {
+  return {
+    enabled: isCronClockEnabled(),
+    hasConnString: Boolean(connString()),
+    connStringVar: process.env.GLOBAL_CONFIG ? "GLOBAL_CONFIG" : process.env.EDGE_CONFIG ? "EDGE_CONFIG" : null,
+    parsedStoreId: Boolean(configStoreId()),
+    hasApiToken: Boolean(process.env.VERCEL_API_TOKEN),
+    hasTeamId: Boolean(process.env.VERCEL_TEAM_ID),
+  };
+}
+
 // The stored nextDueAt (epoch-ms), or null when the gate can't confidently
 // skip — not configured, item never written, or any error. A null return
 // always means "run the full tick".

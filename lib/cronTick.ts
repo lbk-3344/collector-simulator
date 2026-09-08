@@ -5,6 +5,7 @@ import {
   readNextDueAt,
   computeNextDueAt,
   writeNextDueAt,
+  cronClockDiagnostics,
   CRON_CLOCK_SKEW_MS,
 } from "@/lib/cronClock";
 
@@ -33,17 +34,21 @@ export interface CombinedTickResult {
   skipped?: boolean;
   // epoch-ms the engine next has real work; present whenever the gate is on.
   nextDueAt?: number;
+  // Which skip-gate env vars are present (booleans only) — helps diagnose a
+  // gate that isn't engaging. Always included.
+  clock?: ReturnType<typeof cronClockDiagnostics>;
   workflow?: ({ ok: true } & TickSummary) | { ok: false; error: string };
   heartbeat?: ({ ok: true } & HeartbeatTickSummary) | { ok: false; error: string };
 }
 
 export async function runCombinedTick(): Promise<CombinedTickResult> {
   const gated = isCronClockEnabled();
+  const clock = cronClockDiagnostics();
 
   if (gated) {
     const nextDueAt = await readNextDueAt();
     if (nextDueAt != null && nextDueAt - CRON_CLOCK_SKEW_MS > Date.now()) {
-      return { ok: true, skipped: true, nextDueAt };
+      return { ok: true, skipped: true, nextDueAt, clock };
     }
   }
 
@@ -64,6 +69,7 @@ export async function runCombinedTick(): Promise<CombinedTickResult> {
 
   const result: CombinedTickResult = {
     ok: workflow.ok !== false && heartbeat.ok !== false,
+    clock,
     workflow,
     heartbeat,
   };
