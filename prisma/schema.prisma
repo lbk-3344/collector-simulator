@@ -229,6 +229,14 @@ model Device {
   // Workflow start overrides it, so it's restored once that Workflow stops.
   offlineAt DateTime?
 
+  // BL-086 (2026-09-08). When a Device is turned Online (single toggle or the
+  // map's per-site power panel) this is set to now + AUTO_OFFLINE_MINUTES;
+  // the heartbeat tick flips the Device back to Offline once it's reached, so
+  // an unused simulator stops sending heartbeats on its own. Cleared when the
+  // Device is turned Offline manually or by the sweep. Devices are Offline by
+  // default now (published no longer implies Online) — see §13 2026-09-08.
+  autoOfflineAt DateTime?
+
   // Platform sync-health tracking (BL-053, CLAUDE-CONCEPT.md section 15.8).
   // Kept separate from the 4-state Device model (15.3) — a sync failure
   // shows as an in-modal banner, not a 5th colour.

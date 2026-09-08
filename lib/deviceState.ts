@@ -1,5 +1,10 @@
 export type DeviceState = "PENDING" | "READY" | "ACTIVE" | "OFFLINE";
 
+// BL-086 — a Device turned Online (single toggle or the map's per-site power
+// panel) auto-reverts to Offline this many minutes later, so an unused
+// simulator stops sending heartbeats. The heartbeat tick does the flip.
+export const AUTO_OFFLINE_MINUTES = 60;
+
 interface DeviceStateInput {
   configured: boolean;
   publishedAt?: string | Date | null;

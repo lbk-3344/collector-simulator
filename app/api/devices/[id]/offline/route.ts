@@ -5,7 +5,9 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { isOwner } from "@/lib/ownership";
-import { getDeviceState } from "@/lib/deviceState";
+import { getDeviceState, AUTO_OFFLINE_MINUTES } from "@/lib/deviceState";
+import { getUserBartenderCredentials } from "@/lib/bartenderLocations";
+import { sendAndRecordHeartbeat } from "@/lib/deviceHeartbeat";
 
 const DEVICE_INCLUDE = {
   tasks: { select: { id: true, name: true, workflow: { select: { id: true, name: true, status: true } } } },
@@ -29,7 +31,15 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
   const device = await prisma.device.findUnique({
     where: { id: params.id },
-    select: { ownerId: true, configured: true, publishedAt: true, offlineAt: true, tasks: { select: { workflow: { select: { status: true } } } } },
+    select: {
+      ownerId: true,
+      configured: true,
+      publishedAt: true,
+      offlineAt: true,
+      collectorId: true,
+      heartbeatEnabled: true,
+      tasks: { select: { workflow: { select: { status: true } } } },
+    },
   });
   if (!device) return NextResponse.json({ error: "Device not found" }, { status: 404 });
   if (!isOwner(device, session.user.id)) {
@@ -44,10 +54,41 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     );
   }
 
+  const now = new Date();
+  // BL-086 — turning a Device Online opens a bounded window: it auto-reverts
+  // to Offline AUTO_OFFLINE_MINUTES later (the heartbeat tick's sweep), and
+  // we stamp lastHeartbeatSentAt now so the immediate heartbeat below counts
+  // as this window's first send. Turning it Offline clears both.
+  const turningOn = !body.offline;
   const updated = await prisma.device.update({
     where: { id: params.id },
-    data: { offlineAt: body.offline ? new Date() : null },
+    data: turningOn
+      ? {
+          offlineAt: null,
+          autoOfflineAt: new Date(now.getTime() + AUTO_OFFLINE_MINUTES * 60_000),
+          ...(device.heartbeatEnabled && device.collectorId ? { lastHeartbeatSentAt: now } : {}),
+        }
+      : { offlineAt: now, autoOfflineAt: null },
     include: DEVICE_INCLUDE,
   });
+
+  // Immediate heartbeat on turn-on so the dashboard reflects the Device
+  // within seconds instead of after a full heartbeat interval. Best-effort:
+  // sendAndRecordHeartbeat records its own outcome on the Device and never
+  // throws, but guard anyway so a platform hiccup can't 500 the toggle.
+  if (turningOn && device.heartbeatEnabled && device.collectorId) {
+    try {
+      const creds = await getUserBartenderCredentials(session.user.id);
+      if (creds) {
+        await sendAndRecordHeartbeat(
+          { id: params.id, ownerId: device.ownerId, collectorId: device.collectorId },
+          creds
+        );
+      }
+    } catch {
+      // swallowed — the Device is Online regardless; the next tick retries.
+    }
+  }
+
   return NextResponse.json({ device: updated });
 }

@@ -27,12 +27,50 @@ export interface HeartbeatTickSummary {
   online: number;
   configPending: number;
   failed: number;
+  autoOffline: number;
   notes: string[];
+}
+
+// BL-086 — one PUT /collectors/{id}/heartbeat + record the outcome on the
+// Device. Extracted from the tick loop so the "turn a device Online" paths
+// (single toggle and the map's per-site power panel) can fire an immediate
+// heartbeat through the exact same code, instead of making the dashboard
+// wait a full heartbeat interval to light up. Does NOT stamp
+// lastHeartbeatSentAt — each caller owns that (the tick claims it
+// optimistically up front; the toggle routes set it in their state write).
+export async function sendAndRecordHeartbeat(
+  device: { id: string; ownerId: string; collectorId: string },
+  creds: { tenantUrl: string; apiKey: string }
+): Promise<{ status: "ONLINE" | "CONFIG_PENDING" | "FAILED"; error?: string }> {
+  const res = await sendHeartbeat(device.ownerId, creds.tenantUrl, creds.apiKey, device.collectorId);
+  if (res.ok) {
+    const status = res.heartbeatStatus === "CONFIG_PENDING" ? "CONFIG_PENDING" : "ONLINE";
+    await prisma.device.update({
+      where: { id: device.id },
+      data: { lastHeartbeatStatus: status, lastHeartbeatError: null },
+    });
+    return { status };
+  }
+  await prisma.device.update({
+    where: { id: device.id },
+    data: { lastHeartbeatStatus: "FAILED", lastHeartbeatError: res.errorMessage ?? "heartbeat failed" },
+  });
+  return { status: "FAILED", error: res.errorMessage ?? "heartbeat failed" };
 }
 
 export async function runHeartbeatTick(): Promise<HeartbeatTickSummary> {
   const now = new Date();
-  const summary: HeartbeatTickSummary = { checked: 0, sent: 0, online: 0, configPending: 0, failed: 0, notes: [] };
+  const summary: HeartbeatTickSummary = { checked: 0, sent: 0, online: 0, configPending: 0, failed: 0, autoOffline: 0, notes: [] };
+
+  // BL-086 — sweep Devices whose Online window has elapsed back to Offline,
+  // so a map someone opened and forgot stops sending heartbeats after an
+  // hour and lets the Neon compute idle. Runs before the candidate query so
+  // a just-expired Device isn't heartbeated one last time this tick.
+  const swept = await prisma.device.updateMany({
+    where: { autoOfflineAt: { lte: now }, offlineAt: null },
+    data: { offlineAt: now, autoOfflineAt: null },
+  });
+  summary.autoOffline = swept.count;
   // Per-owner credentials — a published Device is registered on its owner's
   // Bartender tenant (publish uses that user's key), so its heartbeat must go
   // to the same tenant, not to one global account (2026-09-02 fix — before
@@ -89,23 +127,16 @@ export async function runHeartbeatTick(): Promise<HeartbeatTickSummary> {
       return;
     }
 
-    const res = await sendHeartbeat(device.ownerId, creds.tenantUrl, creds.apiKey, device.collectorId);
+    const outcome = await sendAndRecordHeartbeat(
+      { id: device.id, ownerId: device.ownerId, collectorId: device.collectorId },
+      creds
+    );
     summary.sent++;
-    if (res.ok) {
-      const status = res.heartbeatStatus === "CONFIG_PENDING" ? "CONFIG_PENDING" : "ONLINE";
-      await prisma.device.update({
-        where: { id: device.id },
-        data: { lastHeartbeatStatus: status, lastHeartbeatError: null },
-      });
-      if (status === "CONFIG_PENDING") summary.configPending++;
-      else summary.online++;
-    } else {
-      await prisma.device.update({
-        where: { id: device.id },
-        data: { lastHeartbeatStatus: "FAILED", lastHeartbeatError: res.errorMessage ?? "heartbeat failed" },
-      });
+    if (outcome.status === "CONFIG_PENDING") summary.configPending++;
+    else if (outcome.status === "ONLINE") summary.online++;
+    else {
       summary.failed++;
-      summary.notes.push(`heartbeat ${device.collectorId}: ${res.errorMessage ?? "failed"}`);
+      summary.notes.push(`heartbeat ${device.collectorId}: ${outcome.error ?? "failed"}`);
     }
   });
 

@@ -107,6 +107,11 @@ export function LocationMapCard({ locationCode, devices, currentUserId, onDevice
   const [offlineError, setOfflineError] = useState<string | null>(null);
   const [offlineBusy, setOfflineBusy] = useState(false);
 
+  // BL-086 — the per-site power panel (non-Edit mode, left overlay). Bulk
+  // turn the caller's own devices at this site Online / Offline.
+  const [sitePowerBusy, setSitePowerBusy] = useState(false);
+  const [sitePowerError, setSitePowerError] = useState<string | null>(null);
+
   // Edit-mode right-click menu (BL-066). `deviceClipboard` is plain state,
   // same lifetime as `editMode` — gone on reload, survives repeated pastes.
   const [deviceClipboard, setDeviceClipboard] = useState<DeviceRecord | null>(null);
@@ -281,6 +286,29 @@ export function LocationMapCard({ locationCode, devices, currentUserId, onDevice
     const data = await res.json();
     updateDeviceInState(data.device as DeviceRecord);
     setManualSendDevice(null);
+  }
+
+  // BL-086 — bulk power for this site. Only the caller's own devices in the
+  // flippable state are touched server-side (Offline -> Online, or Ready ->
+  // Offline); Pending / Active / shared devices are left alone. The response
+  // carries the whole site's devices fresh, so replace the list wholesale.
+  async function handleSitePower(online: boolean) {
+    if (!locationCode) return;
+    setSitePowerBusy(true);
+    setSitePowerError(null);
+    const res = await fetch("/api/devices/site-power", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ locationCode, online }),
+    }).catch(() => null);
+    setSitePowerBusy(false);
+    if (!res || !res.ok) {
+      const data = res ? await res.json().catch(() => null) : null;
+      setSitePowerError(data?.error ?? "Couldn't change the devices' power for this site.");
+      return;
+    }
+    const data = await res.json();
+    onDevicesChange(data.devices as DeviceRecord[]);
   }
 
   // --- Edit mode: palette drag-to-create -----------------------------------
@@ -495,6 +523,14 @@ export function LocationMapCard({ locationCode, devices, currentUserId, onDevice
     );
   }
 
+  // BL-086 — per-site power panel figures. Only the caller's own, published
+  // devices count; Pending ones can't be powered, shared ones aren't ours.
+  const ownPowerable = devices.filter((d) => !isReadOnly(d) && getDeviceState(d) !== "PENDING");
+  const powerOnlineCount = ownPowerable.filter((d) => getDeviceState(d) !== "OFFLINE").length;
+  const powerOfflineCount = ownPowerable.length - powerOnlineCount;
+  const canPowerOn = ownPowerable.some((d) => getDeviceState(d) === "OFFLINE");
+  const canPowerOff = ownPowerable.some((d) => getDeviceState(d) === "READY");
+
   return (
     <div className="panel map-card">
       <div
@@ -564,6 +600,48 @@ export function LocationMapCard({ locationCode, devices, currentUserId, onDevice
               );
             })}
         </div>
+
+        {!editMode && ownPowerable.length > 0 && (
+          <div className="map-power-panel">
+            <div className="map-power-title">Device power · this site</div>
+            <div className="map-power-counts">
+              <span className="map-power-count">
+                <i className="map-power-dot on" />
+                {powerOnlineCount} online
+              </span>
+              <span className="map-power-count">
+                <i className="map-power-dot off" />
+                {powerOfflineCount} offline
+              </span>
+            </div>
+            <div className="map-power-actions">
+              <button
+                type="button"
+                className="map-power-btn"
+                disabled={sitePowerBusy || !canPowerOn}
+                onClick={() => handleSitePower(true)}
+              >
+                Turn all on
+              </button>
+              <button
+                type="button"
+                className="map-power-btn"
+                disabled={sitePowerBusy || !canPowerOff}
+                onClick={() => handleSitePower(false)}
+              >
+                Turn all off
+              </button>
+            </div>
+            <p className="map-power-hint">
+              Turning on sends a heartbeat now; devices go back offline after 1&nbsp;h.
+            </p>
+            {sitePowerError && (
+              <div className="snack snack-danger" style={{ marginTop: 8, marginBottom: 0 }}>
+                {sitePowerError}
+              </div>
+            )}
+          </div>
+        )}
 
         {editMode && (
           <div className="device-palette">

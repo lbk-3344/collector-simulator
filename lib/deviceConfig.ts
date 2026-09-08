@@ -45,6 +45,9 @@ export interface DeviceRecord {
   publishedAt: string | null;
   // Manual OFFLINE toggle (BL-074) — null unless the owner turned it off.
   offlineAt: string | null;
+  // BL-086 — when set, the Device is in a bounded Online window and the
+  // heartbeat tick flips it back to Offline once this timestamp passes.
+  autoOfflineAt: string | null;
   // Platform sync-health (BL-053, CLAUDE-CONCEPT.md section 15.8).
   lastSyncedAt: string | null;
   lastSyncError: string | null;

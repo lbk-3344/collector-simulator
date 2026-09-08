@@ -48,7 +48,11 @@ export async function buildPlatformSyncData(
     lastSyncedAt: new Date(),
     lastSyncError: null,
     platformReconciliation: (result.reconciliation ?? null) as object | null,
-    ...(alreadyPublished ? {} : { publishedAt: new Date() }),
+    // BL-086 — a Device is Offline by default now (published no longer
+    // implies Online). It only sends heartbeats inside a bounded window that
+    // someone opens from the map's per-site power panel or the single
+    // Ready/Offline toggle. First publish therefore starts it Offline.
+    ...(alreadyPublished ? {} : { publishedAt: new Date(), offlineAt: new Date() }),
   };
 }
 
