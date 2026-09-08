@@ -9,6 +9,8 @@ import { getUserBartenderCredentials } from "@/lib/bartenderLocations";
 import { sendAndRecordHeartbeat } from "@/lib/deviceHeartbeat";
 import { mapWithConcurrency } from "@/lib/concurrency";
 import { visibilityWhere } from "@/lib/ownership";
+import { bustCronClock } from "@/lib/cronClock";
+import { waitUntil } from "@/lib/vercelWaitUntil";
 
 const DEVICE_INCLUDE = {
   tasks: { select: { id: true, name: true, workflow: { select: { id: true, name: true, status: true } } } },
@@ -104,6 +106,10 @@ export async function POST(req: NextRequest) {
       });
     }
   }
+
+  // Bringing devices online makes them heartbeat-eligible — nudge the cron
+  // skip-gate so the tick engine picks them up on its next run.
+  if (turningOn && targets.length > 0) waitUntil(bustCronClock());
 
   // Return the whole site's devices fresh so the panel and the map markers
   // re-render from one payload (same shape as GET /api/devices?locationCode=).

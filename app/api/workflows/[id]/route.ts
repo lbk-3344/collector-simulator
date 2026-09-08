@@ -5,6 +5,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { isOwner } from "@/lib/ownership";
+import { bustCronClock } from "@/lib/cronClock";
+import { waitUntil } from "@/lib/vercelWaitUntil";
 
 const WORKFLOW_INCLUDE = {
   tasks: {
@@ -71,6 +73,10 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
   try {
     const workflow = await prisma.workflow.update({ where: { id: params.id }, data, include: WORKFLOW_INCLUDE });
+    // Starting a workflow makes its FeedLinks due immediately — pull the cron
+    // skip-gate's clock back to now so the next tick runs in full instead of
+    // waiting out the idle horizon (lib/cronClock.ts).
+    if (data.status === "RUNNING") waitUntil(bustCronClock());
     return NextResponse.json({ workflow });
   } catch {
     return NextResponse.json({ error: "Workflow not found" }, { status: 404 });

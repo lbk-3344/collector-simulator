@@ -8,6 +8,8 @@ import { isOwner } from "@/lib/ownership";
 import { getDeviceState, AUTO_OFFLINE_MINUTES } from "@/lib/deviceState";
 import { getUserBartenderCredentials } from "@/lib/bartenderLocations";
 import { sendAndRecordHeartbeat } from "@/lib/deviceHeartbeat";
+import { bustCronClock } from "@/lib/cronClock";
+import { waitUntil } from "@/lib/vercelWaitUntil";
 
 const DEVICE_INCLUDE = {
   tasks: { select: { id: true, name: true, workflow: { select: { id: true, name: true, status: true } } } },
@@ -89,6 +91,10 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       // swallowed — the Device is Online regardless; the next tick retries.
     }
   }
+
+  // A device coming online is now heartbeat-eligible — nudge the cron
+  // skip-gate so the tick engine picks it up on its next run (lib/cronClock.ts).
+  if (turningOn) waitUntil(bustCronClock());
 
   return NextResponse.json({ device: updated });
 }
