@@ -7,6 +7,9 @@ import { prisma } from "@/lib/prisma";
 import { isOwner } from "@/lib/ownership";
 import { bustCronClock } from "@/lib/cronClock";
 import { waitUntil } from "@/lib/vercelWaitUntil";
+import { getUserBartenderCredentials } from "@/lib/bartenderLocations";
+import { sendAndRecordHeartbeat } from "@/lib/deviceHeartbeat";
+import { mapWithConcurrency } from "@/lib/concurrency";
 
 const WORKFLOW_INCLUDE = {
   tasks: {
@@ -73,14 +76,64 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
   try {
     const workflow = await prisma.workflow.update({ where: { id: params.id }, data, include: WORKFLOW_INCLUDE });
-    // Starting a workflow makes its FeedLinks due immediately — pull the cron
-    // skip-gate's clock back to now so the next tick runs in full instead of
-    // waiting out the idle horizon (lib/cronClock.ts).
-    if (data.status === "RUNNING") waitUntil(bustCronClock());
+    if (data.status === "RUNNING") {
+      // Pull the cron skip-gate's clock back to now so the next tick runs in
+      // full instead of waiting out the idle horizon (lib/cronClock.ts).
+      waitUntil(bustCronClock());
+      // Devices are Offline by default (BL-086) and the platform only knows a
+      // Collector is alive from its heartbeat — not from the reads a run
+      // sends it. Fire one heartbeat per workflow device now so they show
+      // ONLINE on Track & Trace as soon as the run starts, rather than after
+      // the next heartbeat tick (up to `heartbeatTimeoutSeconds` later).
+      waitUntil(heartbeatWorkflowDevices(params.id, session.user.id));
+    }
     return NextResponse.json({ workflow });
   } catch {
     return NextResponse.json({ error: "Workflow not found" }, { status: 404 });
   }
+}
+
+// Best-effort immediate heartbeat for every published, heartbeat-enabled
+// device attached to a workflow. Runs in waitUntil() — never blocks or fails
+// the start; the regular heartbeat tick (§15.10) keeps them alive afterward.
+async function heartbeatWorkflowDevices(workflowId: string, ownerId: string): Promise<void> {
+  const tasks = await prisma.task.findMany({
+    where: { workflowId },
+    select: {
+      device: {
+        select: { id: true, ownerId: true, collectorId: true, heartbeatEnabled: true, publishedAt: true },
+      },
+    },
+  });
+  const seen = new Set<string>();
+  const devices = tasks
+    .map((t) => t.device)
+    .filter((d): d is NonNullable<typeof d> => {
+      if (!d || !d.collectorId || !d.publishedAt || !d.heartbeatEnabled) return false;
+      if (seen.has(d.id)) return false;
+      seen.add(d.id);
+      return true;
+    });
+  if (devices.length === 0) return;
+
+  const creds = await getUserBartenderCredentials(ownerId).catch(() => null);
+  if (!creds) return;
+
+  // Stamp first so the heartbeat tick doesn't immediately re-send this batch.
+  await prisma.device.updateMany({
+    where: { id: { in: devices.map((d) => d.id) } },
+    data: { lastHeartbeatSentAt: new Date() },
+  });
+  await mapWithConcurrency(devices, 6, async (d) => {
+    try {
+      await sendAndRecordHeartbeat(
+        { id: d.id, ownerId: d.ownerId, collectorId: d.collectorId as string },
+        creds
+      );
+    } catch {
+      /* best-effort — the heartbeat tick retries */
+    }
+  });
 }
 
 export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
