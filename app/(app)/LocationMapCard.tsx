@@ -453,11 +453,21 @@ export function LocationMapCard({ locationCode, devices, currentUserId, onDevice
     };
   }, [editMode, scale, devices]);
 
-  // --- Edit mode: right-click Copy / Paste / Duplicate (BL-066) -----------
+  // --- Right-click device menu: Copy/Paste/Duplicate in Edit mode (BL-066),
+  //     a Ready/Offline power toggle outside Edit mode --------------------
 
   function handleDeviceContextMenu(e: React.MouseEvent, device: DeviceRecord) {
     e.preventDefault();
     e.stopPropagation();
+    if (!editMode) {
+      // Non-edit menu only offers the power toggle, and only for the caller's
+      // own Ready/Offline devices — Pending must be published first, Active is
+      // controlled by stopping its Workflow (§15.6). Nothing to show
+      // otherwise, so leave the right-click a clean no-op.
+      const state = getDeviceState(device);
+      if (isReadOnly(device) || (state !== "READY" && state !== "OFFLINE")) return;
+      setOfflineError(null);
+    }
     setContextMenu({ x: e.clientX, y: e.clientY, device });
   }
 
@@ -587,7 +597,7 @@ export function LocationMapCard({ locationCode, devices, currentUserId, onDevice
                     title={unplaced ? `${device.name} — not placed on this map yet; drag it into position in Edit mode` : undefined}
                     onMouseDown={editMode ? (e) => handleDeviceMouseDown(e, device) : undefined}
                     onClick={!editMode ? () => handleDeviceClick(device) : undefined}
-                    onContextMenu={editMode ? (e) => handleDeviceContextMenu(e, device) : undefined}
+                    onContextMenu={(e) => handleDeviceContextMenu(e, device)}
                   >
                     <ReadPointIcon type={device.type} size={30} title={device.name} />
                     {readOnly && (
@@ -734,7 +744,7 @@ export function LocationMapCard({ locationCode, devices, currentUserId, onDevice
         }}
       />
 
-      {contextMenu && (
+      {contextMenu && editMode && (
         <ContextMenu
           x={contextMenu.x}
           y={contextMenu.y}
@@ -750,6 +760,20 @@ export function LocationMapCard({ locationCode, devices, currentUserId, onDevice
               (contextMenu.device.positionX ?? 0) + 24,
               (contextMenu.device.positionY ?? 0) + 24
             )
+          }
+          onClose={() => setContextMenu(null)}
+        />
+      )}
+
+      {contextMenu && !editMode && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          onPower={() =>
+            handleOfflineToggle(contextMenu.device, getDeviceState(contextMenu.device) !== "OFFLINE")
+          }
+          powerLabel={
+            getDeviceState(contextMenu.device) === "OFFLINE" ? "Turn device on" : "Turn device offline"
           }
           onClose={() => setContextMenu(null)}
         />

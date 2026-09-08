@@ -17,6 +17,14 @@ function EditGlyph() {
     </svg>
   );
 }
+function PowerGlyph() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M10 3v7" />
+      <path d="M6.2 5.8a5.5 5.5 0 1 0 7.6 0" />
+    </svg>
+  );
+}
 function CopyGlyph() {
   return (
     <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
@@ -56,12 +64,14 @@ export function ContextMenu({
   x,
   y,
   canPaste = false,
+  onPower,
   onEdit,
   onCopy,
   onPaste,
   onCut,
   onDuplicate,
   onDelete,
+  powerLabel = "Turn on / off",
   editLabel = "Edit settings",
   copyLabel = "Copy",
   pasteLabel = "Paste",
@@ -73,7 +83,9 @@ export function ContextMenu({
   x: number;
   y: number;
   canPaste?: boolean;
-  // Optional "open this item's config" row, rendered first.
+  // Optional power-toggle row, rendered first.
+  onPower?: () => void;
+  // Optional "open this item's config" row.
   onEdit?: () => void;
   onCopy?: () => void;
   onPaste?: () => void;
@@ -81,6 +93,7 @@ export function ContextMenu({
   onDuplicate?: () => void;
   // Optional destructive row, rendered under a separator.
   onDelete?: () => void;
+  powerLabel?: string;
   editLabel?: string;
   copyLabel?: string;
   pasteLabel?: string;
@@ -109,7 +122,7 @@ export function ContextMenu({
     };
   }, [onClose]);
 
-  const topRows = [onEdit, onCopy, onCut, onPaste, onDuplicate].filter(Boolean).length;
+  const topRows = [onPower, onEdit, onCopy, onCut, onPaste, onDuplicate].filter(Boolean).length;
   const menuH = topRows * ROW_H + (onDelete ? ROW_H + 9 : 0) + 12;
   const left = Math.max(8, Math.min(x, window.innerWidth - MENU_W - 8));
   const top = Math.max(8, Math.min(y, window.innerHeight - menuH - 8));
@@ -121,6 +134,12 @@ export function ContextMenu({
 
   return (
     <div ref={ref} className="ctx-menu" style={{ left, top }} role="menu">
+      {onPower && (
+        <button type="button" className="ctx-menu-item" role="menuitem" onClick={run(onPower)}>
+          <PowerGlyph />
+          {powerLabel}
+        </button>
+      )}
       {onEdit && (
         <button type="button" className="ctx-menu-item" role="menuitem" onClick={run(onEdit)}>
           <EditGlyph />
