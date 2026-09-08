@@ -30,7 +30,14 @@ import { getDeviceState } from "@/lib/deviceState";
 //   VERCEL_API_TOKEN — a token with Global Config write access
 //   VERCEL_TEAM_ID   — the team that owns the store (team_...)
 
-const KEY = "nextDueAt";
+// One store can back several deployments (Preview + Production share it), so
+// the item key is scoped per Vercel environment — otherwise staging's idle
+// "nothing due for 30 min" would make production skip while a workflow runs,
+// and vice versa. Production keeps the bare key; others get a suffix.
+function itemKey(): string {
+  const env = process.env.VERCEL_ENV;
+  return env && env !== "production" ? `nextDueAt_${env}` : "nextDueAt";
+}
 // While nothing is scheduled, park the clock this far ahead. Bounds the
 // worst-case "a mutation we don't bust on made work due" latency, and keeps
 // one real (DB-touching) tick happening on that cadence as a safety re-sync.
@@ -88,6 +95,7 @@ export function cronClockDiagnostics() {
     parsedStoreId: Boolean(configStoreId()),
     hasApiToken: Boolean(process.env.VERCEL_API_TOKEN),
     hasTeamId: Boolean(process.env.VERCEL_TEAM_ID),
+    itemKey: itemKey(),
   };
 }
 
@@ -99,7 +107,7 @@ export async function readNextDueAt(): Promise<number | null> {
   if (!conn || !isCronClockEnabled()) return null;
   try {
     const [base, qs] = conn.split("?");
-    const url = `${base.replace(/\/$/, "")}/item/${KEY}${qs ? `?${qs}` : ""}`;
+    const url = `${base.replace(/\/$/, "")}/item/${itemKey()}${qs ? `?${qs}` : ""}`;
     const res = await fetch(url, { cache: "no-store" });
     if (!res.ok) return null; // 404 = item not written yet → run + write it
     const val = await res.json();
@@ -113,7 +121,7 @@ export async function writeNextDueAt(value: number): Promise<void> {
   if (!isCronClockEnabled()) return;
   const id = configStoreId();
   const team = process.env.VERCEL_TEAM_ID;
-  const body = JSON.stringify({ items: [{ operation: "upsert", key: KEY, value }] });
+  const body = JSON.stringify({ items: [{ operation: "upsert", key: itemKey(), value }] });
   const headers = {
     Authorization: `Bearer ${process.env.VERCEL_API_TOKEN}`,
     "content-type": "application/json",
