@@ -248,7 +248,7 @@ export interface SendHeartbeatResult {
 // platform's own message). `CONFIG_PENDING` is still recognized here
 // defensively in case the platform ever returns it (server-side drift
 // detection), but this app has no way to elicit it. A scheduled tick
-// (lib/deviceHeartbeat.ts) calls this every heartbeatTimeoutSeconds/2 for
+// (lib/deviceHeartbeat.ts) calls this every heartbeatTimeoutSeconds for
 // each published, heartbeat-enabled Device.
 export async function sendHeartbeat(
   userId: string,

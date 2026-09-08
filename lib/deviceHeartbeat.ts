@@ -4,10 +4,10 @@ import { sendHeartbeat } from "@/lib/bartenderDataCollector";
 import { getDeviceState } from "@/lib/deviceState";
 import { mapWithConcurrency } from "@/lib/concurrency";
 
-// See lib/concurrency.ts. Devices default to a 120s heartbeat timeout
-// (ticked every half that), so a fleet tends to fall due in the same rough
-// window — same lockstep shape as the run engine's FeedLinks, same fix
-// (performance review 2026-09-04, applied here after runTick's).
+// See lib/concurrency.ts. Devices default to a 600s heartbeat interval, so a
+// fleet tends to fall due in the same rough window — same lockstep shape as
+// the run engine's FeedLinks, same fix (performance review 2026-09-04,
+// applied here after runTick's).
 const HEARTBEAT_CONCURRENCY = 6;
 
 // BL-072, CLAUDE-CONCEPT.md 15.10 — the DataCollector heartbeat tick. Modeled
@@ -17,7 +17,7 @@ const HEARTBEAT_CONCURRENCY = 6;
 // mechanism as workflow-tick.
 //
 // For every published (registered), heartbeat-enabled Device, PUT
-// /collectors/{collectorId}/heartbeat once every heartbeatTimeoutSeconds/2.
+// /collectors/{collectorId}/heartbeat once every heartbeatTimeoutSeconds.
 // Never blocks anything else on a platform failure — the failure is recorded
 // on the Device and surfaced as an in-modal banner (15.10 / 15.8).
 
@@ -61,7 +61,10 @@ export async function runHeartbeatTick(): Promise<HeartbeatTickSummary> {
 
   await mapWithConcurrency(devices, HEARTBEAT_CONCURRENCY, async (device) => {
     summary.checked++;
-    const intervalMs = (device.heartbeatTimeoutSeconds / 2) * 1000;
+    // heartbeatTimeoutSeconds is the send interval directly (the old /2 was
+    // dropped 2026-09-08 so the stored number means exactly "seconds
+    // between heartbeats").
+    const intervalMs = device.heartbeatTimeoutSeconds * 1000;
     const due =
       !device.lastHeartbeatSentAt || now.getTime() - device.lastHeartbeatSentAt.getTime() >= intervalMs;
     if (!due || !device.collectorId) return;

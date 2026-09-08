@@ -178,7 +178,7 @@ export function DeviceConfigModal({
   const [vendor, setVendor] = useState("");
   const [configVersion, setConfigVersion] = useState("");
   const [heartbeatEnabled, setHeartbeatEnabled] = useState(true);
-  const [heartbeatTimeoutSeconds, setHeartbeatTimeoutSeconds] = useState(120);
+  const [heartbeatTimeoutSeconds, setHeartbeatTimeoutSeconds] = useState(600);
   const [attrs, setAttrs] = useState<AttrRow[]>([]);
   const [channels, setChannels] = useState<DeviceChannel[]>(DEFAULT_CHANNELS);
 
@@ -202,7 +202,7 @@ export function DeviceConfigModal({
     setVendor(device?.vendor ?? "");
     setConfigVersion(device?.configVersion ?? "");
     setHeartbeatEnabled(device?.heartbeatEnabled ?? true);
-    setHeartbeatTimeoutSeconds(device?.heartbeatTimeoutSeconds ?? 120);
+    setHeartbeatTimeoutSeconds(device?.heartbeatTimeoutSeconds ?? 600);
     setAttrs(attributesToRows(device?.attributes ?? null));
     setChannels(device?.channels && device.channels.length ? device.channels : DEFAULT_CHANNELS);
     setError(null);
@@ -519,7 +519,7 @@ export function DeviceConfigModal({
                 style={{ maxWidth: 110 }}
               />
               <span className="note" style={{ marginTop: 0 }}>
-                seconds
+                seconds between heartbeats
               </span>
             </div>
           </div>

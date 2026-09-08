@@ -140,7 +140,7 @@ export function buildDeviceConfigData(body: any) {
     vendor: typeof body.vendor === "string" && body.vendor.trim() ? body.vendor.trim() : null,
     configVersion: typeof body.configVersion === "string" && body.configVersion.trim() ? body.configVersion.trim() : null,
     heartbeatEnabled: typeof body.heartbeatEnabled === "boolean" ? body.heartbeatEnabled : true,
-    heartbeatTimeoutSeconds: typeof body.heartbeatTimeoutSeconds === "number" ? body.heartbeatTimeoutSeconds : 120,
+    heartbeatTimeoutSeconds: typeof body.heartbeatTimeoutSeconds === "number" ? body.heartbeatTimeoutSeconds : 600,
     attributes: body.attributes ?? null,
     channels,
     configured: true,

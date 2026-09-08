@@ -196,7 +196,11 @@ model Device {
   configVersion String?
 
   heartbeatEnabled        Boolean @default(true)
-  heartbeatTimeoutSeconds Int     @default(120)
+  // How often a heartbeat is sent, in seconds (was "timeout / 2" — the /2
+  // was dropped 2026-09-08 so the number means exactly what it says).
+  // Default raised 120 → 600 (heartbeat every 10 min) to let the Neon
+  // compute idle between ticks — see §13 2026-09-08.
+  heartbeatTimeoutSeconds Int     @default(600)
   attributes              Json? // free-form flat scalar key/value map
 
   // Repeatable Channel list — supersedes the v1 single flattened default
@@ -234,7 +238,7 @@ model Device {
 
   // Real heartbeat tracking (BL-072, CLAUDE-CONCEPT.md section 15.10). A
   // scheduled tick PUTs /collectors/{collectorId}/heartbeat every
-  // heartbeatTimeoutSeconds/2 for every published, heartbeat-enabled Device.
+  // heartbeatTimeoutSeconds for every published, heartbeat-enabled Device.
   lastHeartbeatSentAt DateTime? // stamped on every attempt (success or failure) — drives the due-check
   lastHeartbeatStatus String? // "ONLINE" | "CONFIG_PENDING" | "FAILED", from the most recent attempt
   lastHeartbeatError  String? // message from the most recent FAILED attempt; cleared on the next success
@@ -274,9 +278,9 @@ model Workflow {
   name      String
   status    WorkflowStatus @default(RUNNING)
 
-  // Safety auto-stop for the run engine (BL-061, Part 2). 240 min is a
-  // conservative PLACEHOLDER — Luc to confirm/adjust once it's in the UI.
-  maxRunDurationMinutes Int?      @default(240)
+  // Safety auto-stop for the run engine (BL-061, Part 2). Lowered 240 → 60
+  // min 2026-09-08 (Luc) — a stopped workflow lets the Neon compute idle.
+  maxRunDurationMinutes Int?      @default(60)
   runningStartedAt      DateTime? // set when flipped to RUNNING, cleared on STOPPED
   autoStoppedAt         DateTime? // set by the cron job when IT stopped the run (vs a manual stop)
 
