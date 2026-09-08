@@ -22,10 +22,11 @@ import {
 // route's maxDuration. `allSettled` — a failure in one never hides the
 // other's result or stops it running.
 //
-// Skip-gate (lib/cronClock.ts): when Edge Config is configured, a tick with
-// nothing due returns immediately with `skipped: true` and never touches
-// Postgres, so the Neon compute can autosuspend while idle. Only
-// `/api/cron/tick` is gated — the deprecated split routes still run in full.
+// Skip-gate (lib/cronClock.ts): when the Vercel Global Config store is
+// configured, a tick with nothing due returns immediately with
+// `skipped: true` and never touches Postgres, so the Neon compute can
+// autosuspend while idle. Only `/api/cron/tick` is gated — the deprecated
+// split routes still run in full.
 export interface CombinedTickResult {
   ok: boolean;
   // true when the skip-gate short-circuited this tick (no DB work done).

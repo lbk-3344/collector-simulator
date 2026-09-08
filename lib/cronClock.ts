@@ -9,23 +9,26 @@ import { getDeviceState } from "@/lib/deviceState";
 // running (that's what exhausted the free-tier quota, §13 2026-09-08).
 //
 // This gate lets an idle tick return WITHOUT any Prisma call: the earliest
-// moment the engine next has real work to do is kept in a Vercel Edge Config
-// item (`nextDueAt`, epoch-ms). Edge Config reads are edge-cached and never
-// hit the database, so while nothing is due the compute gets no queries and
-// autosuspends; when a workflow is actually running, `nextDueAt` is in the
-// past every tick and the full tick runs as before.
+// moment the engine next has real work to do is kept in a Vercel **Global
+// Config** item (`nextDueAt`, epoch-ms). Global Config (formerly "Edge
+// Config" — Vercel renamed it; store ids still start with `ecfg_`) reads are
+// edge-cached and never hit the database, so while nothing is due the
+// compute gets no queries and autosuspends; when a workflow is actually
+// running, `nextDueAt` is in the past every tick and the full tick runs.
 //
-// Writes go through the Vercel REST API (Edge Config is read-only from the
-// app runtime). `nextDueAt` is (re)written at the end of every real tick, and
+// Writes go through the Vercel REST API (the store is read-only from the app
+// runtime). `nextDueAt` is (re)written at the end of every real tick, and
 // collapsed to "now" by bustCronClock() from the mutations that create
-// imminent work (workflow start, FeedLink cadence change, a device coming
-// online) so a just-started workflow is picked up within one tick.
+// imminent work (workflow start, a device coming online) so a just-started
+// workflow is picked up within one tick.
 //
-// Fail-open everywhere: if Edge Config isn't configured, or any read/write
-// errors, the gate is simply inert and every tick runs in full — exactly the
-// pre-gate behaviour. The three env vars below must all be set for it to
-// engage: EDGE_CONFIG (the read connection string Vercel injects when the
-// store is linked to the project), VERCEL_API_TOKEN, VERCEL_TEAM_ID.
+// Fail-open everywhere: if the store isn't configured, or any read/write
+// errors, the gate is inert and every tick runs in full — exactly the
+// pre-gate behaviour. Three env vars must all be set for it to engage:
+//   GLOBAL_CONFIG  — the read connection string Vercel injects when the
+//                    store is linked to the project (older projects: EDGE_CONFIG)
+//   VERCEL_API_TOKEN — a token with Global Config write access
+//   VERCEL_TEAM_ID   — the team that owns the store (team_...)
 
 const KEY = "nextDueAt";
 // While nothing is scheduled, park the clock this far ahead. Bounds the
@@ -37,19 +40,23 @@ const IDLE_HORIZON_MS = 30 * 60_000;
 // Run the real tick slightly before the stored instant, never after.
 const SKEW_MS = 2_000;
 
-function edgeConfigId(): string | null {
-  const conn = process.env.EDGE_CONFIG;
+// The read connection string — Vercel names it GLOBAL_CONFIG now, EDGE_CONFIG
+// on projects linked before the rename. Same URL shape either way:
+// https://<host>/<ecfg_id>?token=<read-token>
+function connString(): string | null {
+  return process.env.GLOBAL_CONFIG || process.env.EDGE_CONFIG || null;
+}
+
+function configStoreId(): string | null {
+  const conn = connString();
   if (!conn) return null;
-  const m = conn.match(/edge-config\.vercel\.com\/(ecfg_[A-Za-z0-9]+)/);
+  const m = conn.match(/(ecfg_[A-Za-z0-9]+)/);
   return m ? m[1] : null;
 }
 
 export function isCronClockEnabled(): boolean {
   return Boolean(
-    process.env.EDGE_CONFIG &&
-      process.env.VERCEL_API_TOKEN &&
-      process.env.VERCEL_TEAM_ID &&
-      edgeConfigId()
+    connString() && process.env.VERCEL_API_TOKEN && process.env.VERCEL_TEAM_ID && configStoreId()
   );
 }
 
@@ -57,11 +64,11 @@ export function isCronClockEnabled(): boolean {
 // skip — not configured, item never written, or any error. A null return
 // always means "run the full tick".
 export async function readNextDueAt(): Promise<number | null> {
-  const conn = process.env.EDGE_CONFIG;
+  const conn = connString();
   if (!conn || !isCronClockEnabled()) return null;
   try {
     const [base, qs] = conn.split("?");
-    const url = `${base}/item/${KEY}${qs ? `?${qs}` : ""}`;
+    const url = `${base.replace(/\/$/, "")}/item/${KEY}${qs ? `?${qs}` : ""}`;
     const res = await fetch(url, { cache: "no-store" });
     if (!res.ok) return null; // 404 = item not written yet → run + write it
     const val = await res.json();
@@ -73,18 +80,29 @@ export async function readNextDueAt(): Promise<number | null> {
 
 export async function writeNextDueAt(value: number): Promise<void> {
   if (!isCronClockEnabled()) return;
-  const id = edgeConfigId();
+  const id = configStoreId();
   const team = process.env.VERCEL_TEAM_ID;
+  const body = JSON.stringify({ items: [{ operation: "upsert", key: KEY, value }] });
+  const headers = {
+    Authorization: `Bearer ${process.env.VERCEL_API_TOKEN}`,
+    "content-type": "application/json",
+  };
   try {
-    await fetch(`https://api.vercel.com/v1/edge-config/${id}/items?teamId=${team}`, {
+    // New path first (post-rename); fall back to the legacy one on 404.
+    let res = await fetch(`https://api.vercel.com/v1/global-config/${id}/items?teamId=${team}`, {
       method: "PATCH",
-      headers: {
-        Authorization: `Bearer ${process.env.VERCEL_API_TOKEN}`,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({ items: [{ operation: "upsert", key: KEY, value }] }),
+      headers,
+      body,
       cache: "no-store",
     });
+    if (res.status === 404) {
+      res = await fetch(`https://api.vercel.com/v1/edge-config/${id}/items?teamId=${team}`, {
+        method: "PATCH",
+        headers,
+        body,
+        cache: "no-store",
+      });
+    }
   } catch {
     // Swallowed — the next real tick recomputes and rewrites. A persistently
     // failing write just degrades to "full tick every minute" (today).
@@ -92,8 +110,8 @@ export async function writeNextDueAt(value: number): Promise<void> {
 }
 
 // "Work might be due right now" — pull the clock back to now so the next cron
-// tick runs in full. Cheap (one Edge Config write); worst case it costs one
-// extra real tick. Fire-and-forget from the caller's point of view.
+// tick runs in full. Cheap (one write); worst case it costs one extra real
+// tick. Fire-and-forget from the caller's point of view.
 export async function bustCronClock(): Promise<void> {
   if (!isCronClockEnabled()) return;
   await writeNextDueAt(Date.now());
