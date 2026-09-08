@@ -40,17 +40,34 @@ const IDLE_HORIZON_MS = 30 * 60_000;
 // Run the real tick slightly before the stored instant, never after.
 const SKEW_MS = 2_000;
 
-// The read connection string — Vercel names it GLOBAL_CONFIG now, EDGE_CONFIG
-// on projects linked before the rename. Same URL shape either way:
-// https://<host>/<ecfg_id>?token=<read-token>
+// A Global/Edge Config connection string: https://<host>/<ecfg_id>?token=...
+const CONN_RE = /https?:\/\/[^/\s]*(?:global|edge)-config\.vercel\.com\/(ecfg_[A-Za-z0-9]+)\?/i;
+
+// The read connection string. Vercel names the env var GLOBAL_CONFIG now
+// (EDGE_CONFIG on projects linked before the rename), but "Connect Project"
+// can also use a custom name or a numbered suffix — so as a last resort scan
+// every env value for one that IS a connection string.
+function connEntry(): { key: string; value: string } | null {
+  const direct = process.env.GLOBAL_CONFIG
+    ? { key: "GLOBAL_CONFIG", value: process.env.GLOBAL_CONFIG }
+    : process.env.EDGE_CONFIG
+      ? { key: "EDGE_CONFIG", value: process.env.EDGE_CONFIG }
+      : null;
+  if (direct && CONN_RE.test(direct.value)) return direct;
+  for (const [key, value] of Object.entries(process.env)) {
+    if (typeof value === "string" && CONN_RE.test(value)) return { key, value };
+  }
+  return direct; // may be a malformed value — let the caller fail gracefully
+}
+
 function connString(): string | null {
-  return process.env.GLOBAL_CONFIG || process.env.EDGE_CONFIG || null;
+  return connEntry()?.value ?? null;
 }
 
 function configStoreId(): string | null {
   const conn = connString();
   if (!conn) return null;
-  const m = conn.match(/(ecfg_[A-Za-z0-9]+)/);
+  const m = conn.match(CONN_RE) ?? conn.match(/(ecfg_[A-Za-z0-9]+)/);
   return m ? m[1] : null;
 }
 
@@ -67,7 +84,7 @@ export function cronClockDiagnostics() {
   return {
     enabled: isCronClockEnabled(),
     hasConnString: Boolean(connString()),
-    connStringVar: process.env.GLOBAL_CONFIG ? "GLOBAL_CONFIG" : process.env.EDGE_CONFIG ? "EDGE_CONFIG" : null,
+    connStringVar: connEntry()?.key ?? null,
     parsedStoreId: Boolean(configStoreId()),
     hasApiToken: Boolean(process.env.VERCEL_API_TOKEN),
     hasTeamId: Boolean(process.env.VERCEL_TEAM_ID),
