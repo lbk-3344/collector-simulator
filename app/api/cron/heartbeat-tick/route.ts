@@ -6,10 +6,13 @@ import { runHeartbeatTick } from "@/lib/deviceHeartbeat";
 import { isAuthorizedCronRequest } from "@/lib/cronAuth";
 
 // Real DataCollector heartbeats (BL-072, CLAUDE-CONCEPT.md 15.10). Called by
-// an external every-minute scheduler (Vercel Hobby cron is daily-only), the
-// second such call alongside workflow-tick. Same shared secret — see
-// lib/cronAuth.ts for the accepted header forms and the constant-time
-// comparison.
+// an external every-minute scheduler (Vercel Hobby cron is daily-only). Same
+// shared secret — see lib/cronAuth.ts.
+//
+// DEPRECATED 2026-09-08 — superseded by the combined `/api/cron/tick` (which
+// runs this plus the run-engine tick in one invocation, to cut Neon
+// compute). Still functional so the switchover isn't a hard cutover; point
+// the scheduler at `/api/cron/tick` and drop this job + the workflow one.
 
 async function handle(req: NextRequest) {
   if (!isAuthorizedCronRequest(req)) {
@@ -17,7 +20,7 @@ async function handle(req: NextRequest) {
   }
   try {
     const summary = await runHeartbeatTick();
-    return NextResponse.json({ ok: true, ...summary });
+    return NextResponse.json({ ok: true, deprecated: true, use: "/api/cron/tick", ...summary });
   } catch (e) {
     console.error("[heartbeat-tick] failed:", e);
     return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "tick failed" }, { status: 500 });
