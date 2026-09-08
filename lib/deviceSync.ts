@@ -71,5 +71,10 @@ export function toRegistrableDevice(data: any): RegistrableDevice {
     attributes:
       data.attributes && typeof data.attributes === "object" ? data.attributes : null,
     channels: Array.isArray(data.channels) ? data.channels : null,
+    heartbeatEnabled: typeof data.heartbeatEnabled === "boolean" ? data.heartbeatEnabled : true,
+    heartbeatTimeoutSeconds:
+      typeof data.heartbeatTimeoutSeconds === "number" && data.heartbeatTimeoutSeconds > 0
+        ? data.heartbeatTimeoutSeconds
+        : 600,
   };
 }

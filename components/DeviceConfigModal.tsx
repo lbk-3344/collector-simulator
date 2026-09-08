@@ -258,6 +258,14 @@ export function DeviceConfigModal({
       setError("Site is required.");
       return;
     }
+    // The platform requires a non-blank Model on register (§15.8) — enforced
+    // for Publish and for any Save on an already-published Device; a plain
+    // draft can still be saved without one.
+    const willSync = action === "publish" || (action === "save" && Boolean(device?.publishedAt));
+    if (willSync && !model.trim()) {
+      setError("A Model is required to publish this device to the platform.");
+      return;
+    }
     setSaving(action);
     setError(null);
 
@@ -489,8 +497,14 @@ export function DeviceConfigModal({
 
           <div className="field-row">
             <div className="field-block">
-              <label htmlFor="deviceModel">Model</label>
-              <input id="deviceModel" type="text" value={model} onChange={(e) => setModel(e.target.value)} />
+              <label htmlFor="deviceModel">Model{isPublished ? " *" : ""}</label>
+              <input
+                id="deviceModel"
+                type="text"
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                placeholder="Required to publish"
+              />
             </div>
             <div className="field-block">
               <label htmlFor="deviceVendor">Vendor</label>

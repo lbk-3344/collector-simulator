@@ -102,6 +102,20 @@ export function validateChannels(body: any): string | null {
   return null;
 }
 
+// The platform's POST /collectors/register requires a non-blank `model`
+// (live-probed 2026-09-08 against the new sandbox version, §13 — it was
+// optional before). Enforced only on a save that actually syncs (Publish, or
+// any Save on an already-published Device); a local-only draft can still be
+// saved without one. Returns an error string or null.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function validateModelForPublish(body: any, willSync: boolean): string | null {
+  if (!willSync) return null;
+  if (typeof body.model !== "string" || !body.model.trim()) {
+    return "A Model is required to publish this device to the platform.";
+  }
+  return null;
+}
+
 // configVersion version management (BL-053, CLAUDE-CONCEPT.md section 15.8).
 // Only bumps on a save that will sync to the platform, and only when the user
 // left the field untouched *and* the stored value is purely numeric — a

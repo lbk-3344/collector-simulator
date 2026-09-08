@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { buildDeviceConfigData, resolveConfigVersion, validateChannels } from "@/lib/deviceConfig";
+import { buildDeviceConfigData, resolveConfigVersion, validateChannels, validateModelForPublish } from "@/lib/deviceConfig";
 import { buildPlatformSyncData, toRegistrableDevice } from "@/lib/deviceSync";
 import { getUserBartenderCredentials } from "@/lib/bartenderLocations";
 import { deregisterCollector } from "@/lib/bartenderDataCollector";
@@ -114,6 +114,12 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   // A save syncs to the platform if the Device is already published, or this
   // save is an explicit Publish (section 15.8).
   const willSync = Boolean(existing.publishedAt) || body.publish === true;
+
+  const modelError = validateModelForPublish(body, willSync);
+  if (modelError) {
+    return NextResponse.json({ error: modelError }, { status: 400 });
+  }
+
   // configVersion: auto-increment only on a syncing save the user didn't
   // touch, and only for a purely-numeric stored value.
   body.configVersion = resolveConfigVersion(existing.configVersion, body.configVersion, willSync);

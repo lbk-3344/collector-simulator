@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { buildDeviceConfigData, validateChannels } from "@/lib/deviceConfig";
+import { buildDeviceConfigData, validateChannels, validateModelForPublish } from "@/lib/deviceConfig";
 import { buildPlatformSyncData, toRegistrableDevice } from "@/lib/deviceSync";
 import { visibilityWhere } from "@/lib/ownership";
 
@@ -67,6 +67,12 @@ export async function POST(req: NextRequest) {
     const channelsError = validateChannels(body);
     if (channelsError) {
       return NextResponse.json({ error: channelsError }, { status: 400 });
+    }
+    // Creating and publishing in one go needs a Model (platform requirement,
+    // §15.8) — a plain draft-create doesn't.
+    const modelError = validateModelForPublish(body, body.publish === true);
+    if (modelError) {
+      return NextResponse.json({ error: modelError }, { status: 400 });
     }
     // Brand-new full config: default configVersion to "1" when empty. No
     // auto-increment here — nothing to increment from (section 15.8).

@@ -13,8 +13,12 @@ import { loggedFetch } from "@/lib/apiCallLog";
 //
 // NOTE: the generic PUT .../heartbeat endpoint (sendHeartbeat, below) is a
 // well-specified schema and unrelated to the `heartbeatConfig` object inside
-// POST /collectors/register — Phase 0 (BL-053) could not determine that
-// object's accepted shape, so it stays omitted from the register payload.
+// POST /collectors/register. Phase 0 (BL-053) could not determine that
+// object's shape and left it out; live-probed again 2026-09-08 against the
+// new sandbox version (§13), which DOES accept it — a closed schema of
+// exactly `{ enabled: boolean, timeoutSeconds: integer > 0 }`, echoed back
+// by GET /collectors/{id}. It's sent on every register now (see
+// buildCollectorRegistrationPayload) — omitting it doesn't reset cleanly.
 
 export function resolveDataCollectorGatewayUrl(tenantUrl: string): string {
   return `${resolveGatewayUrl(tenantUrl)}/datacollector`;
@@ -33,13 +37,16 @@ export interface RegistrableDevice {
   configVersion: string | null;
   attributes: Record<string, string | number | boolean> | null;
   channels: DeviceChannel[] | null;
+  // Maps 1:1 onto the platform's `heartbeatConfig` (2026-09-08, §15.10).
+  heartbeatEnabled: boolean;
+  heartbeatTimeoutSeconds: number;
 }
 
 // Device -> CollectorRegistration body. Field mapping per section 15.8's
-// table. `heartbeatConfig` is intentionally NOT sent — Phase 0 could not
-// determine its accepted request shape (10+ variants all rejected with a
-// generic type error) and the API YAML isn't in the repo; heartbeat config
-// stays local-simulator-only until the schema is provided.
+// table. `heartbeatConfig` IS sent now (live-probed 2026-09-08, §15.10) —
+// `{ enabled, timeoutSeconds }`, always, from the Device's own
+// heartbeatEnabled / heartbeatTimeoutSeconds. `timeoutSeconds` must be > 0
+// or the platform 400s, so a non-positive stored value falls back to 600.
 export function buildCollectorRegistrationPayload(device: RegistrableDevice): Record<string, unknown> {
   const channels = (device.channels ?? []).map((ch) => ({
     channelId: ch.id,
@@ -63,6 +70,10 @@ export function buildCollectorRegistrationPayload(device: RegistrableDevice): Re
   if (device.attributes && Object.keys(device.attributes).length > 0) {
     payload.attributes = device.attributes;
   }
+  payload.heartbeatConfig = {
+    enabled: device.heartbeatEnabled,
+    timeoutSeconds: device.heartbeatTimeoutSeconds > 0 ? device.heartbeatTimeoutSeconds : 600,
+  };
   return payload;
 }
 
