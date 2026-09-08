@@ -95,17 +95,12 @@ export interface RegisterResult {
   errorMessage?: string;
 }
 
-// POST {gateway}/collectors/register. `ok` on any 2xx (201 REGISTERED first
-// time, 200 UPDATED on every resync — idempotent on collectorId, replaces the
-// whole channel list). Network/DNS failure is a distinct, softer message.
-export async function registerCollector(
+async function postRegister(
   userId: string,
-  tenantUrl: string,
+  url: string,
   apiKey: string,
   payload: Record<string, unknown>
-): Promise<RegisterResult> {
-  const url = `${resolveDataCollectorGatewayUrl(tenantUrl)}/collectors/register`;
-
+): Promise<{ res: Response; raw: string; body: unknown } | null> {
   let res: Response;
   try {
     res = await loggedFetch(userId, "Register or update a DataCollector", url, {
@@ -115,9 +110,8 @@ export async function registerCollector(
       cache: "no-store",
     });
   } catch {
-    return { ok: false, status: 0, errorMessage: "Could not reach the Bartender platform — check the tenant URL." };
+    return null;
   }
-
   const raw = await res.text().catch(() => "");
   let body: unknown = null;
   try {
@@ -125,7 +119,47 @@ export async function registerCollector(
   } catch {
     /* keep raw */
   }
+  return { res, raw, body };
+}
 
+// True when a 400 body is specifically "heartbeatConfig is not a field I know"
+// — i.e. this gateway is still on the pre-2026-09-08 datacollector-api version
+// (§13). Lets registerCollector transparently retry without it rather than
+// failing a publish on a tenant whose gateway hasn't been upgraded yet.
+function isUnknownHeartbeatConfig(body: unknown): boolean {
+  const err = (body as { error?: { field?: string; message?: string } } | null)?.error;
+  if (!err) return false;
+  const field = (err.field ?? "").toLowerCase();
+  const msg = (err.message ?? "").toLowerCase();
+  return field.includes("heartbeatconfig") && msg.includes("unknown");
+}
+
+// POST {gateway}/collectors/register. `ok` on any 2xx (201 REGISTERED first
+// time, 200 UPDATED on every resync — idempotent on collectorId, replaces the
+// whole channel list). Network/DNS failure is a distinct, softer message.
+// Sends `heartbeatConfig` (§15.8); if the gateway rejects it as an unknown
+// field (older API version), strips it and retries once so publish still
+// works there.
+export async function registerCollector(
+  userId: string,
+  tenantUrl: string,
+  apiKey: string,
+  payload: Record<string, unknown>
+): Promise<RegisterResult> {
+  const url = `${resolveDataCollectorGatewayUrl(tenantUrl)}/collectors/register`;
+
+  let attempt = await postRegister(userId, url, apiKey, payload);
+  if (!attempt) {
+    return { ok: false, status: 0, errorMessage: "Could not reach the Bartender platform — check the tenant URL." };
+  }
+
+  if (!attempt.res.ok && attempt.res.status === 400 && isUnknownHeartbeatConfig(attempt.body) && "heartbeatConfig" in payload) {
+    const { heartbeatConfig: _omit, ...withoutHeartbeatConfig } = payload;
+    const retry = await postRegister(userId, url, apiKey, withoutHeartbeatConfig);
+    if (retry) attempt = retry;
+  }
+
+  const { res, raw, body } = attempt;
   if (res.ok) {
     return {
       ok: true,
