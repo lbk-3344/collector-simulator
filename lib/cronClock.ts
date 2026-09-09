@@ -9,34 +9,43 @@ import { getDeviceState } from "@/lib/deviceState";
 // running (that's what exhausted the free-tier quota, §13 2026-09-08).
 //
 // This gate lets an idle tick return WITHOUT any Prisma call: the earliest
-// moment the engine next has real work to do is kept in a Vercel **Global
-// Config** item (`nextDueAt`, epoch-ms). Global Config (formerly "Edge
-// Config" — Vercel renamed it; store ids still start with `ecfg_`) reads are
-// edge-cached and never hit the database, so while nothing is due the
-// compute gets no queries and autosuspends; when a workflow is actually
-// running, `nextDueAt` is in the past every tick and the full tick runs.
+// moment the engine next has real work to do is kept in a small key-value
+// store that lives outside Postgres (`nextDueAt`, epoch-ms). While that
+// instant is in the future every tick is a single out-of-band read and the
+// Neon compute autosuspends; once it's in the past the full tick runs and
+// rewrites it.
 //
-// Writes go through the Vercel REST API (the store is read-only from the app
-// runtime). `nextDueAt` is (re)written at the end of every real tick, and
-// collapsed to "now" by bustCronClock() from the mutations that create
-// imminent work (workflow start, a device coming online) so a just-started
-// workflow is picked up within one tick.
+// Store: **Upstash Redis** (Vercel Marketplace), talked to over its documented
+// REST API with plain `fetch` — no SDK (same dependency-free reasoning as
+// `lib/vercelWaitUntil.ts`). This was a Vercel Global Config item until
+// 2026-09-09 — but Global Config's Hobby plan allows only 100 writes per
+// *month*, and this key is rewritten on every real tick, so a couple of hours
+// of cumulative workflow runtime exhausted the quota. Upstash's free tier
+// (~500K commands/month) absorbs a per-minute read+write with room to spare,
+// and a Redis REST read still never touches Postgres, so the autosuspend
+// property that makes the gate worthwhile is unchanged.
+//
+// `nextDueAt` is (re)written at the end of every real tick, and collapsed to
+// "now" by bustCronClock() from the mutations that create imminent work
+// (workflow start, a device coming online) so a just-started workflow is
+// picked up within one tick.
 //
 // Fail-open everywhere: if the store isn't configured, or any read/write
 // errors, the gate is inert and every tick runs in full — exactly the
-// pre-gate behaviour. Three env vars must all be set for it to engage:
-//   GLOBAL_CONFIG  — the read connection string Vercel injects when the
-//                    store is linked to the project (older projects: EDGE_CONFIG)
-//   VERCEL_API_TOKEN — a token with Global Config write access
-//   VERCEL_TEAM_ID   — the team that owns the store (team_...)
+// pre-gate behaviour. Both env vars must be set for it to engage (Vercel
+// injects them when the Upstash integration is connected to the project):
+//   UPSTASH_REDIS_REST_URL
+//   UPSTASH_REDIS_REST_TOKEN
 
 // One store can back several deployments (Preview + Production share it), so
-// the item key is scoped per Vercel environment — otherwise staging's idle
+// the key is scoped per Vercel environment — otherwise staging's idle
 // "nothing due for 30 min" would make production skip while a workflow runs,
-// and vice versa. Production keeps the bare key; others get a suffix.
+// and vice versa. Production keeps the bare name; others get a suffix.
 function itemKey(): string {
   const env = process.env.VERCEL_ENV;
-  return env && env !== "production" ? `nextDueAt_${env}` : "nextDueAt";
+  return env && env !== "production"
+    ? `cronclock:nextDueAt_${env}`
+    : "cronclock:nextDueAt";
 }
 // While nothing is scheduled, park the clock this far ahead. Bounds the
 // worst-case "a mutation we don't bust on made work due" latency, and keeps
@@ -46,41 +55,39 @@ function itemKey(): string {
 const IDLE_HORIZON_MS = 30 * 60_000;
 // Run the real tick slightly before the stored instant, never after.
 const SKEW_MS = 2_000;
+// TTL on the stored key — a self-heal backstop. If the writer stops for any
+// reason, the key expires and the next tick reads null → runs in full →
+// rewrites it. Comfortably longer than IDLE_HORIZON_MS so a normal idle
+// re-sync always refreshes it well before it can expire.
+const KEY_TTL_SECONDS = 60 * 60;
 
-// A Global/Edge Config connection string: https://<host>/<ecfg_id>?token=...
-const CONN_RE = /https?:\/\/[^/\s]*(?:global|edge)-config\.vercel\.com\/(ecfg_[A-Za-z0-9]+)\?/i;
-
-// The read connection string. Vercel names the env var GLOBAL_CONFIG now
-// (EDGE_CONFIG on projects linked before the rename), but "Connect Project"
-// can also use a custom name or a numbered suffix — so as a last resort scan
-// every env value for one that IS a connection string.
-function connEntry(): { key: string; value: string } | null {
-  const direct = process.env.GLOBAL_CONFIG
-    ? { key: "GLOBAL_CONFIG", value: process.env.GLOBAL_CONFIG }
-    : process.env.EDGE_CONFIG
-      ? { key: "EDGE_CONFIG", value: process.env.EDGE_CONFIG }
-      : null;
-  if (direct && CONN_RE.test(direct.value)) return direct;
-  for (const [key, value] of Object.entries(process.env)) {
-    if (typeof value === "string" && CONN_RE.test(value)) return { key, value };
-  }
-  return direct; // may be a malformed value — let the caller fail gracefully
-}
-
-function connString(): string | null {
-  return connEntry()?.value ?? null;
-}
-
-function configStoreId(): string | null {
-  const conn = connString();
-  if (!conn) return null;
-  const m = conn.match(CONN_RE) ?? conn.match(/(ecfg_[A-Za-z0-9]+)/);
-  return m ? m[1] : null;
+// One Redis command per request: POST the base URL with a JSON-array body
+// (["GET", key] / ["SET", key, value, "EX", ttl]) and a bearer token.
+// Response shape: { result } on success, { error } on a command error.
+// Returns undefined when the store isn't configured; throws on HTTP or
+// command error so callers can fail open.
+async function redisCommand(cmd: (string | number)[]): Promise<unknown> {
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (!url || !token) return undefined;
+  const res = await fetch(url.replace(/\/$/, ""), {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(cmd),
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`upstash HTTP ${res.status}`);
+  const json = (await res.json()) as { result?: unknown; error?: string };
+  if (json.error) throw new Error(json.error);
+  return json.result;
 }
 
 export function isCronClockEnabled(): boolean {
   return Boolean(
-    connString() && process.env.VERCEL_API_TOKEN && process.env.VERCEL_TEAM_ID && configStoreId()
+    process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
   );
 }
 
@@ -90,28 +97,22 @@ export function isCronClockEnabled(): boolean {
 export function cronClockDiagnostics() {
   return {
     enabled: isCronClockEnabled(),
-    hasConnString: Boolean(connString()),
-    connStringVar: connEntry()?.key ?? null,
-    parsedStoreId: Boolean(configStoreId()),
-    hasApiToken: Boolean(process.env.VERCEL_API_TOKEN),
-    hasTeamId: Boolean(process.env.VERCEL_TEAM_ID),
+    hasRedisUrl: Boolean(process.env.UPSTASH_REDIS_REST_URL),
+    hasRedisToken: Boolean(process.env.UPSTASH_REDIS_REST_TOKEN),
     itemKey: itemKey(),
   };
 }
 
 // The stored nextDueAt (epoch-ms), or null when the gate can't confidently
-// skip — not configured, item never written, or any error. A null return
-// always means "run the full tick".
+// skip — not configured, key never written / expired, or any error. A null
+// return always means "run the full tick".
 export async function readNextDueAt(): Promise<number | null> {
-  const conn = connString();
-  if (!conn || !isCronClockEnabled()) return null;
+  if (!isCronClockEnabled()) return null;
   try {
-    const [base, qs] = conn.split("?");
-    const url = `${base.replace(/\/$/, "")}/item/${itemKey()}${qs ? `?${qs}` : ""}`;
-    const res = await fetch(url, { cache: "no-store" });
-    if (!res.ok) return null; // 404 = item not written yet → run + write it
-    const val = await res.json();
-    return typeof val === "number" && Number.isFinite(val) ? val : null;
+    const result = await redisCommand(["GET", itemKey()]);
+    if (result == null) return null; // key missing / expired → run + write it
+    const n = typeof result === "number" ? result : Number(result);
+    return Number.isFinite(n) ? n : null;
   } catch {
     return null;
   }
@@ -119,32 +120,12 @@ export async function readNextDueAt(): Promise<number | null> {
 
 export async function writeNextDueAt(value: number): Promise<void> {
   if (!isCronClockEnabled()) return;
-  const id = configStoreId();
-  const team = process.env.VERCEL_TEAM_ID;
-  const body = JSON.stringify({ items: [{ operation: "upsert", key: itemKey(), value }] });
-  const headers = {
-    Authorization: `Bearer ${process.env.VERCEL_API_TOKEN}`,
-    "content-type": "application/json",
-  };
   try {
-    // New path first (post-rename); fall back to the legacy one on 404.
-    let res = await fetch(`https://api.vercel.com/v1/global-config/${id}/items?teamId=${team}`, {
-      method: "PATCH",
-      headers,
-      body,
-      cache: "no-store",
-    });
-    if (res.status === 404) {
-      res = await fetch(`https://api.vercel.com/v1/edge-config/${id}/items?teamId=${team}`, {
-        method: "PATCH",
-        headers,
-        body,
-        cache: "no-store",
-      });
-    }
+    await redisCommand(["SET", itemKey(), String(value), "EX", String(KEY_TTL_SECONDS)]);
   } catch {
     // Swallowed — the next real tick recomputes and rewrites. A persistently
-    // failing write just degrades to "full tick every minute" (today).
+    // failing write just degrades to "full tick every minute" (the pre-gate
+    // behaviour).
   }
 }
 
