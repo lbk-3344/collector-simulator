@@ -32,10 +32,9 @@ import { getDeviceState } from "@/lib/deviceState";
 //
 // Fail-open everywhere: if the store isn't configured, or any read/write
 // errors, the gate is inert and every tick runs in full — exactly the
-// pre-gate behaviour. Both env vars must be set for it to engage (Vercel
-// injects them when the Upstash integration is connected to the project):
-//   UPSTASH_REDIS_REST_URL
-//   UPSTASH_REDIS_REST_TOKEN
+// pre-gate behaviour. It engages once the Upstash REST URL + write token are
+// present in the environment (Vercel injects them when the integration is
+// connected to the project — see upstashCreds() for the accepted var names).
 
 // One store can back several deployments (Preview + Production share it), so
 // the key is scoped per Vercel environment — otherwise staging's idle
@@ -61,19 +60,47 @@ const SKEW_MS = 2_000;
 // re-sync always refreshes it well before it can expire.
 const KEY_TTL_SECONDS = 60 * 60;
 
+// Resolve the Upstash REST URL + write token from the environment. Vercel's
+// Upstash integration names them after a project-chosen prefix: a bare
+// connect gives `UPSTASH_REDIS_REST_URL` / `_TOKEN`, but with a prefix set
+// (the default when the store is named) they arrive as e.g.
+// `UPSTASH_REDIS_KV_REST_API_URL` / `..._KV_REST_API_TOKEN`. Accept either:
+// the well-known names first, then any `*REST_API_URL` var pointing at an
+// upstash.io host paired with its sibling `*REST_API_TOKEN` (never the
+// `*READ_ONLY_TOKEN` — the gate needs writes).
+function upstashCreds(): { url: string; token: string } | null {
+  const env = process.env;
+  for (const [url, token] of [
+    [env.UPSTASH_REDIS_REST_URL, env.UPSTASH_REDIS_REST_TOKEN],
+    [env.KV_REST_API_URL, env.KV_REST_API_TOKEN],
+  ] as const) {
+    if (url && token) return { url, token };
+  }
+  for (const [key, value] of Object.entries(env)) {
+    if (
+      typeof value === "string" &&
+      /REST_API_URL$/.test(key) &&
+      /^https:\/\/[^/\s]*upstash\.io/i.test(value)
+    ) {
+      const token = env[key.replace(/URL$/, "TOKEN")];
+      if (token) return { url: value, token };
+    }
+  }
+  return null;
+}
+
 // One Redis command per request: POST the base URL with a JSON-array body
 // (["GET", key] / ["SET", key, value, "EX", ttl]) and a bearer token.
 // Response shape: { result } on success, { error } on a command error.
 // Returns undefined when the store isn't configured; throws on HTTP or
 // command error so callers can fail open.
 async function redisCommand(cmd: (string | number)[]): Promise<unknown> {
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (!url || !token) return undefined;
-  const res = await fetch(url.replace(/\/$/, ""), {
+  const creds = upstashCreds();
+  if (!creds) return undefined;
+  const res = await fetch(creds.url.replace(/\/$/, ""), {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${token}`,
+      Authorization: `Bearer ${creds.token}`,
       "content-type": "application/json",
     },
     body: JSON.stringify(cmd),
@@ -86,19 +113,18 @@ async function redisCommand(cmd: (string | number)[]): Promise<unknown> {
 }
 
 export function isCronClockEnabled(): boolean {
-  return Boolean(
-    process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
-  );
+  return upstashCreds() !== null;
 }
 
 // Booleans only (no values) — surfaced in the /api/cron/tick response so a
 // misconfigured env var can be spotted without reading secrets. Behind the
 // CRON_SECRET like the rest of that route.
 export function cronClockDiagnostics() {
+  const creds = upstashCreds();
   return {
-    enabled: isCronClockEnabled(),
-    hasRedisUrl: Boolean(process.env.UPSTASH_REDIS_REST_URL),
-    hasRedisToken: Boolean(process.env.UPSTASH_REDIS_REST_TOKEN),
+    enabled: creds !== null,
+    hasRedisUrl: Boolean(creds?.url),
+    hasRedisToken: Boolean(creds?.token),
     itemKey: itemKey(),
   };
 }
