@@ -18,6 +18,14 @@ import { parseEnvList } from "@/lib/permissions";
 // an admin role change still shows up within a request or two, not
 // instantly but not "next login" either.
 const ROLE_RECHECK_MS = 15_000;
+// How often the jwt callback writes User.lastActiveAt (BL-089, admin Users
+// tab "last active" column). Deliberately separate from ROLE_RECHECK_MS and
+// much coarser: this is "track usage", not a security-relevant check, and an
+// open tab / polling component (badge poll, etc.) hits this callback on every
+// authenticated request — writing every 15s would add real DB load for no
+// benefit an admin cares about. 10 minutes is plenty for "is this person
+// still around" without turning a busy session into a write storm.
+const LAST_ACTIVE_WRITE_MS = 10 * 60_000;
 
 function resolveAutoRole(email: string): Role | null {
   const normalized = email.toLowerCase();
@@ -72,6 +80,13 @@ export const authOptions: NextAuthOptions = {
 
         token.role = role;
         token.roleCheckedAt = Date.now();
+
+        // A fresh sign-in always counts as activity — write unconditionally
+        // (rare event, not on the hot per-request path).
+        await prisma.user
+          .update({ where: { id: user.id }, data: { lastActiveAt: new Date() } })
+          .catch(() => {});
+        token.lastActiveWrittenAt = Date.now();
       } else if (token.id) {
         // Re-check the DB so a role change made by an admin (validate /
         // change role) takes effect without a re-login — throttled to
@@ -88,6 +103,15 @@ export const authOptions: NextAuthOptions = {
             // non-fatal — keep whatever role the token already carried
           }
           token.roleCheckedAt = Date.now();
+        }
+
+        // Throttled "last active" write — see LAST_ACTIVE_WRITE_MS above.
+        const lastWritten = token.lastActiveWrittenAt ?? 0;
+        if (Date.now() - lastWritten >= LAST_ACTIVE_WRITE_MS) {
+          await prisma.user
+            .update({ where: { id: token.id as string }, data: { lastActiveAt: new Date() } })
+            .catch(() => {});
+          token.lastActiveWrittenAt = Date.now();
         }
       }
       return token;

@@ -10,6 +10,7 @@ type ApiUser = {
   image: string | null;
   role: "ADMIN" | "USER" | "PENDING";
   createdAt: string;
+  lastActiveAt: string | null;
 };
 
 function initials(user: ApiUser): string {
@@ -20,6 +21,22 @@ function initials(user: ApiUser): string {
 }
 
 function formatJoined(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+}
+
+// Relative "last active" (BL-089) — an admin scanning the table cares about
+// "is this person still around", which a relative label answers faster than
+// a date. The exact timestamp is still available via the cell's title.
+function formatLastActive(iso: string | null): string {
+  if (!iso) return "Never";
+  const ms = Date.now() - new Date(iso).getTime();
+  const min = Math.floor(ms / 60_000);
+  if (min < 1) return "Just now";
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  const day = Math.floor(hr / 24);
+  if (day < 30) return `${day}d ago`;
   return new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 }
 
@@ -125,6 +142,7 @@ export function UsersTable({
               <th>User</th>
               <th>Role</th>
               <th>Joined</th>
+              <th>Last active</th>
               <th></th>
             </tr>
           </thead>
@@ -169,6 +187,9 @@ export function UsersTable({
                     )}
                   </td>
                   <td className="u-meta">{formatJoined(user.createdAt)}</td>
+                  <td className="u-meta" title={user.lastActiveAt ? new Date(user.lastActiveAt).toLocaleString() : undefined}>
+                    {formatLastActive(user.lastActiveAt)}
+                  </td>
                   <td>
                     <div className="row-actions">
                       {user.role === "PENDING" ? (

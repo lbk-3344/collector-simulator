@@ -108,6 +108,13 @@ model User {
   // Overview site selector — see CLAUDE-CONCEPT.md section 14, BACKLOG.md BL-037.
   selectedLocationCode String?
 
+  // Admin "last used" tracking (BL-089, CLAUDE-CONCEPT.md section 4). Updated
+  // from lib/auth.ts's jwt callback: always on a fresh sign-in, otherwise
+  // throttled (LAST_ACTIVE_WRITE_MS) so an open tab doesn't write every
+  // request. Reflects real activity, not just login — see the field's own
+  // comment in lib/auth.ts for why login alone would understate usage.
+  lastActiveAt DateTime?
+
   accounts      Account[]
   sessions      Session[]
   bugReports    BugReport[]

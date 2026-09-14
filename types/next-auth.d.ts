@@ -22,5 +22,8 @@ declare module "next-auth/jwt" {
     // per-request re-check rather than dropping it (performance review
     // 2026-09-04).
     roleCheckedAt?: number;
+    // Epoch ms of the last User.lastActiveAt write (lib/auth.ts, BL-089) —
+    // throttles that write the same way roleCheckedAt throttles the re-check.
+    lastActiveWrittenAt?: number;
   }
 }
