@@ -32,9 +32,12 @@
 //  - cron-job.org: GET /jobs is real and needs a new CRONJOB_ORG_API_KEY, but
 //    the free plan has no invocation quota to measure against (job count +
 //    the API's own 100 req/day rate limit are the only caps) — so this panel
-//    is a job-health list, not a usage-vs-limit meter. Field names below are
-//    read defensively (never assumed) since this wasn't live-tested against
-//    a real account before shipping.
+//    is a job-health list, not a usage-vs-limit meter. Live-verified
+//    2026-09-14 against the real account running this app's own scheduler:
+//    `lastStatus` is an integer code (1 = OK, 4 = HTTP error, etc. — see
+//    CRONJOBORG_STATUS_LABELS), `lastExecution`/`nextExecution` are unix
+//    seconds. That same live check is what surfaced the staging job being
+//    disabled with a stale failed run — a real finding, not a parsing bug.
 
 type FetchResult<T> = { configured: true; error?: string; data?: T } | { configured: false };
 
@@ -237,9 +240,12 @@ export async function getVercelUsage(): Promise<FetchResult<VercelUsage>> {
 
 export interface CronJobOrgJob {
   title: string;
+  url: string | null;
   enabled: boolean;
-  lastStatus: string | null; // best-effort — see field-name caveat above
+  lastStatusOk: boolean | null; // null = never run yet
+  lastStatusLabel: string; // human label, e.g. "OK", "Failed (HTTP error)"
   lastExecutionAt: string | null;
+  nextExecutionAt: string | null;
 }
 
 export interface CronJobOrgUsage {
@@ -247,22 +253,38 @@ export interface CronJobOrgUsage {
   consoleUrl: string;
 }
 
-// cron-job.org's own job-object field names, read defensively (optional
-// chaining + fallbacks) since this integration hasn't been live-verified
-// against a real account/key yet — see the file header caveat.
+// cron-job.org's lastStatus codes (docs.cron-job.org/rest-api.html, checked
+// 2026-09-14 against a live GET /jobs response — 1 = OK, 4 = HTTP error,
+// confirmed against this project's own two jobs).
+const CRONJOBORG_STATUS_LABELS: Record<number, string> = {
+  0: "Not executed yet",
+  1: "OK",
+  2: "Failed (DNS error)",
+  3: "Failed (could not connect)",
+  4: "Failed (HTTP error)",
+  5: "Failed (timeout)",
+  6: "Failed (too much response data)",
+  7: "Failed (invalid URL)",
+  8: "Failed (internal error)",
+  9: "Failed (unknown reason)",
+};
+
+// cron-job.org's own job-object field names — live-verified 2026-09-14
+// against a real account (jobId, enabled, title, url, lastStatus [int],
+// lastExecution [unix seconds], nextExecution [unix seconds]). Read
+// defensively (optional chaining + fallbacks) regardless, in case a field is
+// ever absent for a job that's never run.
 function parseCronJob(raw: unknown): CronJobOrgJob {
   const j = raw as Record<string, unknown>;
-  const statusRaw = j?.lastStatus ?? j?.lastExecutionStatus ?? j?.status;
+  const statusCode = typeof j?.lastStatus === "number" ? j.lastStatus : null;
   return {
     title: typeof j?.title === "string" ? j.title : "(untitled job)",
+    url: typeof j?.url === "string" ? j.url : null,
     enabled: j?.enabled !== false, // default true unless explicitly disabled
-    lastStatus: typeof statusRaw === "string" || typeof statusRaw === "number" ? String(statusRaw) : null,
-    lastExecutionAt:
-      typeof j?.lastExecution === "number"
-        ? new Date(j.lastExecution * 1000).toISOString()
-        : typeof j?.lastExecution === "string"
-          ? j.lastExecution
-          : null,
+    lastStatusOk: statusCode === null || statusCode === 0 ? null : statusCode === 1,
+    lastStatusLabel: statusCode !== null ? (CRONJOBORG_STATUS_LABELS[statusCode] ?? `Status ${statusCode}`) : "—",
+    lastExecutionAt: typeof j?.lastExecution === "number" ? new Date(j.lastExecution * 1000).toISOString() : null,
+    nextExecutionAt: typeof j?.nextExecution === "number" ? new Date(j.nextExecution * 1000).toISOString() : null,
   };
 }
 

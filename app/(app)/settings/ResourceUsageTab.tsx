@@ -34,9 +34,12 @@ interface VercelUsage {
 }
 interface CronJobOrgJob {
   title: string;
+  url: string | null;
   enabled: boolean;
-  lastStatus: string | null;
+  lastStatusOk: boolean | null;
+  lastStatusLabel: string;
   lastExecutionAt: string | null;
+  nextExecutionAt: string | null;
 }
 interface CronJobOrgUsage {
   jobs: CronJobOrgJob[];
@@ -304,25 +307,37 @@ export function ResourceUsageTab() {
               <p className="note">Connected — no jobs found.</p>
             ) : (
               <>
+                {data.cronJobOrg.data.jobs.some((j) => !j.enabled || j.lastStatusOk === false) && (
+                  <div className="snack snack-warning">
+                    At least one job is disabled or its last run failed — see below. A disabled/failing tick means
+                    that environment isn&apos;t getting workflow-firing or heartbeat reactivity right now.
+                  </div>
+                )}
                 <div className="usage-jobs">
                   {data.cronJobOrg.data.jobs.map((job, i) => (
                     <div className="usage-job-row" key={i}>
-                      <span className="title">{job.title}</span>
-                      <span className="meta">
+                      <div className="row-top">
+                        <span className="title">{job.title}</span>
                         {job.enabled ? (
                           <span className="chip chip-success">Enabled</span>
                         ) : (
                           <span className="chip chip-warning">Disabled</span>
                         )}
-                        {job.lastStatus && <> · last: {job.lastStatus}</>}
-                        {job.lastExecutionAt && <> · {new Date(job.lastExecutionAt).toLocaleString()}</>}
-                      </span>
+                        {job.lastStatusOk === true && <span className="chip chip-success">{job.lastStatusLabel}</span>}
+                        {job.lastStatusOk === false && <span className="chip chip-danger">{job.lastStatusLabel}</span>}
+                        {job.lastStatusOk === null && <span className="chip chip-info">{job.lastStatusLabel}</span>}
+                      </div>
+                      <div className="meta">
+                        {job.url && <code>{job.url}</code>}
+                        {job.lastExecutionAt && <> · last run {new Date(job.lastExecutionAt).toLocaleString()}</>}
+                        {job.nextExecutionAt && <> · next {new Date(job.nextExecutionAt).toLocaleString()}</>}
+                      </div>
                     </div>
                   ))}
                 </div>
                 <p className="note">
                   The free plan has no invocation quota — job count and this API&apos;s own request rate are the
-                  only caps. Field parsing here is best-effort (not yet live-verified against a real account).
+                  only caps.
                 </p>
               </>
             )
