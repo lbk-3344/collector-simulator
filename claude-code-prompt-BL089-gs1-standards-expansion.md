@@ -290,9 +290,14 @@ call) to:
   items minted via either standard currently don't resolve a GTIN in the
   platform's own EPCIS/inventory records (confirmed live 2026-09-17, see
   `CLAUDE-CONCEPT.md` §7.6) — so a downstream `PRESENT` feed's GTIN filter or
-  a Flow Link GTIN filter may not recognize them. Word it plainly, e.g. "Note:
-  on this sandbox tenant, items minted this way don't currently resolve a
-  GTIN downstream — see CLAUDE-CONCEPT.md §7.6." This is a known, accepted
+  a Flow Link GTIN filter may not recognize them. **This is a temporary,
+  version-bound platform limitation, not an open-ended one**: per Luc
+  (2026-09-17), it's specific to the Track & Trace platform version currently
+  running on `demotrackandtrace` (T&T 12.6), and expected to be fixed in the
+  next platform version (T&T 12.7). Word it plainly, e.g. "Note: on the
+  current Track & Trace platform version (T&T 12.6), items minted this way
+  don't resolve a GTIN downstream — expected to be fixed in T&T 12.7. See
+  CLAUDE-CONCEPT.md §7.6." This is a known, accepted, and time-bound
   limitation, not something to work around in code.
 - **GTIN picker (`<ProductPicker>`)**: currently rendered whenever
   `kind === "NEW" || (kind === "PRESENT" && presentMatchMode === "GTIN_LIST")`
