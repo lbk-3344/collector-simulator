@@ -118,6 +118,8 @@ export function ItemFeedForm({
   // BL-089 — DSGTIN lot/date mechanism.
   const [gs1LotMode, setGs1LotMode] = useState<"NONE" | "AUTO" | "FIXED">("AUTO");
   const [gs1LotCode, setGs1LotCode] = useState("");
+  const [gs1LotRandomize, setGs1LotRandomize] = useState(true); // BL-089b, AUTO mode only
+  const [gs1LotGranularity, setGs1LotGranularity] = useState<"DAY" | "HALF_DAY">("DAY"); // BL-089b
   const [gs1DateField, setGs1DateField] = useState<"expirationDate" | "bestBeforeDate">("expirationDate");
   const [shelfLifeValue, setShelfLifeValue] = useState(30);
   const [shelfLifeUnit, setShelfLifeUnit] = useState<ShelfLifeUnit>("days");
@@ -152,6 +154,8 @@ export function ItemFeedForm({
     setGs1Filter(feed?.gs1Filter ?? GS1_FILTER_DEFAULTS[standard as keyof typeof GS1_FILTER_DEFAULTS] ?? 3);
 
     setGs1LotMode((feed?.gs1LotMode as "NONE" | "AUTO" | "FIXED") ?? "AUTO");
+    setGs1LotRandomize(feed?.gs1LotRandomize !== false);
+    setGs1LotGranularity((feed?.gs1LotGranularity as "DAY" | "HALF_DAY") ?? "DAY");
     setGs1LotCode(feed?.gs1LotCode ?? "");
     setGs1DateField((feed?.gs1DateField as "expirationDate" | "bestBeforeDate") ?? "expirationDate");
     // No clean inverse from days back to a weeks/months selection — always
@@ -197,7 +201,10 @@ export function ItemFeedForm({
     // "re-default on standard change" posture, a manual edit followed by a
     // standard change re-defaults too (documented tradeoff, BL-089).
     setGs1Filter(GS1_FILTER_DEFAULTS[next as keyof typeof GS1_FILTER_DEFAULTS] ?? 3);
-    if (next !== "dsgtin-plus-plus") setGs1DigitalLinkBaseUrl("https://id.gs1.org");
+    // Reset the Digital Link base URL only when leaving DSGTIN entirely —
+    // switching dsgtin-plus <-> dsgtin-plus-plus keeps whatever the user
+    // already typed (BL-089b: both standards use this field now).
+    if (!DSGTIN_STANDARDS.has(next)) setGs1DigitalLinkBaseUrl("https://id.gs1.org");
   }
 
   async function handleSave() {
@@ -245,7 +252,11 @@ export function ItemFeedForm({
         body.gs1ShelfLifeDays = Math.round(shelfLifeValue * SHELF_LIFE_FACTORS[shelfLifeUnit]);
         body.gs1LotMode = gs1LotMode;
         if (gs1LotMode === "FIXED") body.gs1LotCode = gs1LotCode;
-        if (gs1Standard === "dsgtin-plus-plus") body.gs1DigitalLinkBaseUrl = gs1DigitalLinkBaseUrl;
+        if (gs1LotMode === "AUTO") {
+          body.gs1LotRandomize = gs1LotRandomize;
+          body.gs1LotGranularity = gs1LotGranularity;
+        }
+        body.gs1DigitalLinkBaseUrl = gs1DigitalLinkBaseUrl; // both DSGTIN standards now (BL-089b)
       }
     }
 
@@ -607,9 +618,41 @@ export function ItemFeedForm({
               </div>
               {gs1LotMode === "NONE" && <p className="note" style={{ marginTop: 6 }}>No lot code is sent — it's optional on the platform.</p>}
               {gs1LotMode === "AUTO" && (
-                <p className="note" style={{ marginTop: 6 }}>
-                  A fresh lot code (e.g. L250917-K3M — date + a random suffix) is generated every time this feed fires.
-                </p>
+                <div style={{ marginTop: 6 }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5 }}>
+                    <input
+                      type="checkbox"
+                      checked={gs1LotRandomize}
+                      onChange={(e) => setGs1LotRandomize(e.target.checked)}
+                    />
+                    Include random suffix
+                  </label>
+                  {gs1LotRandomize ? (
+                    <p className="note" style={{ marginTop: 6 }}>
+                      A fresh lot code (e.g. L250917-K3M — date + a random suffix) is generated every time this feed
+                      fires.
+                    </p>
+                  ) : (
+                    <>
+                      <div className="field-block" style={{ marginTop: 8 }}>
+                        <label htmlFor="gs1LotGranularity">Changes</label>
+                        <select
+                          id="gs1LotGranularity"
+                          value={gs1LotGranularity}
+                          onChange={(e) => setGs1LotGranularity(e.target.value as "DAY" | "HALF_DAY")}
+                        >
+                          <option value="DAY">Once per day</option>
+                          <option value="HALF_DAY">Once per half-day</option>
+                        </select>
+                      </div>
+                      <p className="note" style={{ marginTop: 6 }}>
+                        {gs1LotGranularity === "DAY"
+                          ? "Every firing on the same calendar day sends the same lot code (e.g. L250917)."
+                          : "The lot code changes once at midday (server clock) — e.g. L250917-AM, then L250917-PM after noon."}
+                      </p>
+                    </>
+                  )}
+                </div>
               )}
               {gs1LotMode === "FIXED" && (
                 <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 8 }}>
@@ -628,7 +671,7 @@ export function ItemFeedForm({
               )}
             </div>
 
-            {gs1Standard === "dsgtin-plus-plus" && (
+            {isDsgtin && (
               <div className="field-block">
                 <label htmlFor="gs1DigitalLinkBaseUrl">Digital Link base URL</label>
                 <input
@@ -638,7 +681,9 @@ export function ItemFeedForm({
                   onChange={(e) => setGs1DigitalLinkBaseUrl(e.target.value)}
                 />
                 <span className="note" style={{ marginTop: 4 }}>
-                  This standard embeds the domain directly into the identifier.
+                  {gs1Standard === "dsgtin-plus-plus"
+                    ? "This standard embeds the domain directly into the identifier."
+                    : "Used to build this item's resolvable Digital Link."}
                 </span>
               </div>
             )}

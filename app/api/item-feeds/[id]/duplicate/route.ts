@@ -52,6 +52,8 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
       gs1Filter: source.gs1Filter,
       gs1LotMode: source.gs1LotMode,
       gs1LotCode: source.gs1LotCode,
+      gs1LotRandomize: source.gs1LotRandomize,
+      gs1LotGranularity: source.gs1LotGranularity,
       gs1DateField: source.gs1DateField,
       gs1ShelfLifeDays: source.gs1ShelfLifeDays,
       gs1DigitalLinkBaseUrl: source.gs1DigitalLinkBaseUrl,

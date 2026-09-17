@@ -99,6 +99,9 @@ export interface ItemFeedRecord {
   // BL-089 — NEW, DSGTIN-only lot/date mechanism.
   gs1LotMode: string | null;
   gs1LotCode: string | null;
+  // BL-089b (2026-09-17) — AUTO lot mode only.
+  gs1LotRandomize: boolean | null;
+  gs1LotGranularity: string | null;
   gs1DateField: string | null;
   gs1ShelfLifeDays: number | null;
   gs1DigitalLinkBaseUrl: string | null;
@@ -149,6 +152,8 @@ export function buildItemFeedData(body: any): { error: string } | { data: Record
   let gs1Filter: number | null = null;
   let gs1LotMode: string | null = null;
   let gs1LotCode: string | null = null;
+  let gs1LotRandomize: boolean | null = null;
+  let gs1LotGranularity: string | null = null;
   let gs1DateField: string | null = null;
   let gs1ShelfLifeDays: number | null = null;
   let gs1DigitalLinkBaseUrl: string | null = null;
@@ -223,14 +228,20 @@ export function buildItemFeedData(body: any): { error: string } | { data: Record
       } else {
         gs1LotCode = null; // AUTO generates fresh at fire time; NONE sends no lotCode at all
       }
-
-      if (gs1Standard === "dsgtin-plus-plus") {
-        gs1DigitalLinkBaseUrl = str(body.gs1DigitalLinkBaseUrl) ?? "https://id.gs1.org";
-        if (!/^https:\/\//.test(gs1DigitalLinkBaseUrl)) {
-          return { error: "The Digital Link base URL must start with https://." };
-        }
+      if (gs1LotMode === "AUTO") {
+        // BL-089b — default true/"DAY" preserves BL-089's exact original
+        // behavior (a fresh random 3-char suffix every firing) when unset.
+        gs1LotRandomize = body.gs1LotRandomize === false ? false : true;
+        gs1LotGranularity = body.gs1LotGranularity === "HALF_DAY" ? "HALF_DAY" : "DAY";
       } else {
-        gs1DigitalLinkBaseUrl = null; // dsgtin-plus doesn't embed a domain — never carried over
+        gs1LotRandomize = null;
+        gs1LotGranularity = null;
+      }
+
+      // BL-089b — widened from dsgtin-plus-plus only to both DSGTIN standards.
+      gs1DigitalLinkBaseUrl = str(body.gs1DigitalLinkBaseUrl) ?? "https://id.gs1.org";
+      if (!/^https:\/\//.test(gs1DigitalLinkBaseUrl)) {
+        return { error: "The Digital Link base URL must start with https://." };
       }
     }
 
@@ -280,6 +291,8 @@ export function buildItemFeedData(body: any): { error: string } | { data: Record
       gs1Filter,
       gs1LotMode,
       gs1LotCode,
+      gs1LotRandomize,
+      gs1LotGranularity,
       gs1DateField,
       gs1ShelfLifeDays,
       gs1DigitalLinkBaseUrl,

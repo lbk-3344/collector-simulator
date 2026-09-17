@@ -116,6 +116,8 @@ export async function resolveBatch(
         objectClass: feed.objectClass,
         gs1LotMode: feed.gs1LotMode,
         gs1LotCode: feed.gs1LotCode,
+        gs1LotRandomize: feed.gs1LotRandomize,
+        gs1LotGranularity: feed.gs1LotGranularity,
         gs1DateField: feed.gs1DateField,
         gs1ShelfLifeDays: feed.gs1ShelfLifeDays,
         gs1DigitalLinkBaseUrl: feed.gs1DigitalLinkBaseUrl,

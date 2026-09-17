@@ -53,15 +53,36 @@ export class SerializationError extends Error {}
 // L<YYMMDD>-<3-char suffix>, e.g. L250917-K3M — satisfies Luc's explicit
 // "includes month, day" ask, 11 chars total, well under the 20-char cap.
 const LOT_SUFFIX_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-export function generateLotCode(now: Date = new Date()): string {
+
+// BL-089b (2026-09-17): randomize/granularity, both optional and defaulting
+// to BL-089's exact original behavior (randomize true, granularity "DAY") —
+// Luc, using the shipped feature: "many times, the lot number will be the
+// same for the whole day, or for a half day," plus turning the random
+// suffix off entirely. granularity only visibly matters when randomize is
+// false — with it on, the suffix already makes every code unique.
+export interface LotCodeOptions {
+  randomize?: boolean; // default true
+  granularity?: "DAY" | "HALF_DAY"; // default "DAY"; half-day splits at server-clock noon
+}
+
+export function generateLotCode(now: Date = new Date(), opts: LotCodeOptions = {}): string {
+  const randomize = opts.randomize !== false;
+  const granularity = opts.granularity === "HALF_DAY" ? "HALF_DAY" : "DAY";
   const yy = String(now.getFullYear() % 100).padStart(2, "0");
   const mm = String(now.getMonth() + 1).padStart(2, "0");
   const dd = String(now.getDate()).padStart(2, "0");
-  const suffix = Array.from(
-    { length: 3 },
-    () => LOT_SUFFIX_ALPHABET[Math.floor(Math.random() * LOT_SUFFIX_ALPHABET.length)]
-  ).join("");
-  return `L${yy}${mm}${dd}-${suffix}`;
+  let code = `L${yy}${mm}${dd}`;
+  if (granularity === "HALF_DAY") {
+    code += now.getHours() < 12 ? "-AM" : "-PM";
+  }
+  if (randomize) {
+    const suffix = Array.from(
+      { length: 3 },
+      () => LOT_SUFFIX_ALPHABET[Math.floor(Math.random() * LOT_SUFFIX_ALPHABET.length)]
+    ).join("");
+    code += `-${suffix}`;
+  }
+  return code;
 }
 
 // Shelf-life period -> real ISO date, computed fresh at the moment of
@@ -104,7 +125,7 @@ export interface Gs1MintOptions {
   objectClass?: string; // gid-96
   // dsgtin-plus / dsgtin-plus-plus only:
   context?: DsgtinContext;
-  digitalLinkBaseUrl?: string; // dsgtin-plus-plus only — TOP-LEVEL request field, not inside input
+  digitalLinkBaseUrl?: string; // DSGTIN only (widened to dsgtin-plus BL-089b) — TOP-LEVEL request field, not inside input
 }
 
 // Builds the standard-specific `input` object. GTIN-based SGTIN standards
@@ -150,10 +171,11 @@ async function generateGs1(opts: Gs1MintOptions): Promise<string[]> {
     serialSource: { mode: "internal" },
     input: buildGs1Input(opts),
   };
-  // dsgtin-plus-plus's Digital Link base URL is a TOP-LEVEL request field,
-  // sibling to quantity/formats/filter/serialSource/input — never inside
-  // input/context (live-confirmed 2026-09-17).
-  if (opts.standard === "dsgtin-plus-plus") {
+  // DSGTIN's Digital Link base URL is a TOP-LEVEL request field, sibling to
+  // quantity/formats/filter/serialSource/input — never inside input/context
+  // (live-confirmed 2026-09-17). Widened from dsgtin-plus-plus only to both
+  // DSGTIN standards, BL-089b (Luc, using the shipped feature).
+  if (opts.standard === "dsgtin-plus" || opts.standard === "dsgtin-plus-plus") {
     body.digitalLinkBaseUrl = opts.digitalLinkBaseUrl || "https://id.gs1.org";
   }
 
@@ -205,6 +227,8 @@ export interface FeedGs1Fields {
   objectClass?: string | null;
   gs1LotMode?: string | null; // "NONE" | "AUTO" | "FIXED"
   gs1LotCode?: string | null; // FIXED mode only
+  gs1LotRandomize?: boolean | null; // AUTO mode only (BL-089b)
+  gs1LotGranularity?: string | null; // AUTO mode only, "DAY" | "HALF_DAY" (BL-089b)
   gs1DateField?: string | null; // "expirationDate" | "bestBeforeDate"
   gs1ShelfLifeDays?: number | null;
   gs1DigitalLinkBaseUrl?: string | null;
@@ -218,7 +242,10 @@ function buildFiringContext(feed: FeedGs1Fields, now: Date): DsgtinContext | und
   if (feed.gs1DateField == null && feed.gs1ShelfLifeDays == null && !feed.gs1LotMode) return undefined;
   const context: DsgtinContext = {};
   if (feed.gs1LotMode === "AUTO") {
-    context.lotCode = generateLotCode(now);
+    context.lotCode = generateLotCode(now, {
+      randomize: feed.gs1LotRandomize !== false,
+      granularity: feed.gs1LotGranularity === "HALF_DAY" ? "HALF_DAY" : "DAY",
+    });
   } else if (feed.gs1LotMode === "FIXED" && feed.gs1LotCode) {
     context.lotCode = feed.gs1LotCode;
   }
@@ -300,7 +327,7 @@ export async function mintSerializedItems(
       quantity: count,
       gtin,
       context,
-      digitalLinkBaseUrl: feed.standard === "dsgtin-plus-plus" ? (feed.gs1DigitalLinkBaseUrl ?? undefined) : undefined,
+      digitalLinkBaseUrl: isDsgtin ? (feed.gs1DigitalLinkBaseUrl ?? undefined) : undefined,
     };
     const epcs = await generateGs1(opts);
     for (const epc of epcs) out.push({ gtin, epc });

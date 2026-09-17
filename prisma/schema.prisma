@@ -523,11 +523,21 @@ model ItemFeed {
   gs1DateField     String? // "expirationDate" | "bestBeforeDate"
   gs1ShelfLifeDays Int?
 
-  // dsgtin-plus-plus only. NOT a "custom domain name" field on the platform
+  // Both DSGTIN standards (widened 2026-09-17, BL-089b — was dsgtin-plus-plus
+  // only at BL-089 launch). NOT a "custom domain name" field on the platform
   // (an earlier draft assumed one existed — live-testing 2026-09-17 found no
   // such field; this is the ordinary top-level `digitalLinkBaseUrl` request
   // field, defaults to "https://id.gs1.org" when blank).
   gs1DigitalLinkBaseUrl String?
+
+  // BL-089b (2026-09-17) — DSGTIN AUTO lot mode only. gs1LotRandomize defaults
+  // to true when unset (preserves BL-089's exact original behavior: a fresh
+  // random 3-char suffix every firing). gs1LotGranularity ("DAY" | "HALF_DAY")
+  // only matters when gs1LotRandomize is false — it picks how often the
+  // deterministic part of the code changes. Luc: "many times, the lot number
+  // will be the same for the whole day, or for a half day."
+  gs1LotRandomize    Boolean?
+  gs1LotGranularity  String? // "DAY" (default) | "HALF_DAY" — half-day splits at server-clock noon
 
   // PRESENT only, default GTIN_LIST. ALL = "match anything present in the
   // zone" — `gtins` is ignored.
