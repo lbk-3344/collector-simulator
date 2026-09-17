@@ -487,11 +487,47 @@ model ItemFeed {
   gtins        Json? // string[]
   categoryCode String? // authoring-time bulk-add helper — resolves into `gtins`, not a live reference
 
-  // NEW only. null / "sgtin-96" = default; "sgtin-198" = the longer GS1 EPC
-  // encoding (BL-073, 2026-09-01). grai-96/sscc-96/giai-96 are also live on
-  // the platform but aren't GTIN-based and don't fit this field — see BL-073's
-  // follow-up note.
+  // NEW only. null / "sgtin-96" = default; one of the other 7 platform
+  // standards otherwise (BL-073 2026-09-01: "sgtin-198"; BL-089 2026-09-17
+  // widened to all 8 the platform's GET /gs1/standards lists — "sscc-96" /
+  // "grai-96" / "giai-96" / "gid-96" / "dsgtin-plus" / "dsgtin-plus-plus").
   gs1Standard String?
+
+  // BL-089 (2026-09-17), NEW only, only the fields relevant to the resolved
+  // gs1Standard are ever non-null. Non-GTIN standards' own identifier fields
+  // — see CLAUDE-CONCEPT.md §7.6 "GS1 standard expansion" for the full
+  // per-standard input contract.
+  companyPrefix        String? // sscc-96 / grai-96 / giai-96 — 6-12 digits
+  extensionDigit       String? // sscc-96 — single digit, default "0"
+  assetType            String? // grai-96
+  itemReference        String? // giai-96 ("individual asset reference")
+  generalManagerNumber String? // gid-96
+  objectClass          String? // gid-96
+
+  // Every NEW standard — the v3 API has no default (unlike the old client's
+  // implicit omission), so this is always sent explicitly. Pre-filled per
+  // standard in the form, editable.
+  gs1Filter Int?
+
+  // DSGTIN (dsgtin-plus / dsgtin-plus-plus) only — the lot/date mechanism.
+  // "NONE" (no lotCode sent at all, live-confirmed valid) / "AUTO" (default;
+  // freshly generated at firing time) / "FIXED" (gs1LotCode, user-entered or
+  // "Suggest"-generated once, reused every firing).
+  gs1LotMode String?
+  gs1LotCode String? // only meaningful when gs1LotMode = "FIXED", <=20 chars
+
+  // DSGTIN only — which of the platform's 7 possible date AIs this app
+  // exposes (Luc named exactly these two), and the shelf-life PERIOD (not a
+  // fixed date — Luc's explicit ask) the real ISO date is computed from,
+  // fresh, at every firing.
+  gs1DateField     String? // "expirationDate" | "bestBeforeDate"
+  gs1ShelfLifeDays Int?
+
+  // dsgtin-plus-plus only. NOT a "custom domain name" field on the platform
+  // (an earlier draft assumed one existed — live-testing 2026-09-17 found no
+  // such field; this is the ordinary top-level `digitalLinkBaseUrl` request
+  // field, defaults to "https://id.gs1.org" when blank).
+  gs1DigitalLinkBaseUrl String?
 
   // PRESENT only, default GTIN_LIST. ALL = "match anything present in the
   // zone" — `gtins` is ignored.

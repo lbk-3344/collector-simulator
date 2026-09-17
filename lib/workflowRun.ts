@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { makeOwnerCredentialsCache, type RunCredentials } from "@/lib/bartenderLocations";
 import { mintSerializedItems, SerializationError, MAX_NEW_ITEMS_PER_FIRING } from "@/lib/bartenderSerialization";
+import { normalizeGs1Standard, isGtinBasedStandard } from "@/lib/itemFeed";
 import { getStockHexa, getConfiguredInStockWindowDays } from "@/lib/bartenderInventory";
 import { sendReads } from "@/lib/bartenderDataCollector";
 import { mapWithConcurrency } from "@/lib/concurrency";
@@ -83,18 +84,42 @@ export async function resolveBatch(
 
   if (feed.kind === "NEW") {
     if (!creds) return { items: [], itemGtins: [], note: "the workflow owner has no Bartender connection configured" };
-    if (gtins.length === 0) return { items: [], itemGtins: [], note: "NEW feed has no GTIN" };
+    const standard = normalizeGs1Standard(feed.gs1Standard);
+    // GTIN-based standards need a GTIN; the 4 non-GTIN standards (BL-089)
+    // instead need their own identifier fields — buildItemFeedData already
+    // enforces this at save time, this is belt-and-suspenders for a Feed
+    // that predates that validation or was touched directly in the DB.
+    if (isGtinBasedStandard(standard) && gtins.length === 0) {
+      return { items: [], itemGtins: [], note: "NEW feed has no GTIN" };
+    }
+    if (
+      (standard === "sscc-96" || standard === "grai-96" || standard === "giai-96") &&
+      !feed.companyPrefix
+    ) {
+      return { items: [], itemGtins: [], note: "NEW feed has no company prefix" };
+    }
+    if (standard === "gid-96" && (!feed.generalManagerNumber || !feed.objectClass)) {
+      return { items: [], itemGtins: [], note: "NEW feed is missing its general manager number / object class" };
+    }
     try {
-      // mintSerializedItems clamps the TOTAL to MAX_NEW_ITEMS_PER_FIRING and
-      // splits it randomly across the feed's GTINs.
-      const minted = await mintSerializedItems(
-        ownerId,
-        creds.tenantUrl,
-        creds.apiKey,
-        gtins,
-        quantity,
-        feed.gs1Standard === "sgtin-198" ? "sgtin-198" : "sgtin-96"
-      );
+      // mintSerializedItems clamps the TOTAL to MAX_NEW_ITEMS_PER_FIRING —
+      // for GTIN-based standards it's split randomly across the feed's
+      // GTINs; non-GTIN standards mint the whole quantity in one call.
+      const minted = await mintSerializedItems(ownerId, creds.tenantUrl, creds.apiKey, gtins, quantity, {
+        standard,
+        filter: feed.gs1Filter,
+        companyPrefix: feed.companyPrefix,
+        extensionDigit: feed.extensionDigit,
+        assetType: feed.assetType,
+        itemReference: feed.itemReference,
+        generalManagerNumber: feed.generalManagerNumber,
+        objectClass: feed.objectClass,
+        gs1LotMode: feed.gs1LotMode,
+        gs1LotCode: feed.gs1LotCode,
+        gs1DateField: feed.gs1DateField,
+        gs1ShelfLifeDays: feed.gs1ShelfLifeDays,
+        gs1DigitalLinkBaseUrl: feed.gs1DigitalLinkBaseUrl,
+      });
       return { items: minted.map((m) => m.epc), itemGtins: minted.map((m) => m.gtin) };
     } catch (e) {
       const msg = e instanceof SerializationError ? e.message : "serialization call failed";

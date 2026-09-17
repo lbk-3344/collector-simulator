@@ -42,6 +42,19 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
       quantityMax: source.quantityMax,
       locationCode: source.locationCode,
       zoneCode: source.zoneCode,
+      // BL-089 (2026-09-17) — non-GTIN/DSGTIN standard-specific fields.
+      companyPrefix: source.companyPrefix,
+      extensionDigit: source.extensionDigit,
+      assetType: source.assetType,
+      itemReference: source.itemReference,
+      generalManagerNumber: source.generalManagerNumber,
+      objectClass: source.objectClass,
+      gs1Filter: source.gs1Filter,
+      gs1LotMode: source.gs1LotMode,
+      gs1LotCode: source.gs1LotCode,
+      gs1DateField: source.gs1DateField,
+      gs1ShelfLifeDays: source.gs1ShelfLifeDays,
+      gs1DigitalLinkBaseUrl: source.gs1DigitalLinkBaseUrl,
       // Json columns: pass the source value through, or omit (column default
       // is null) — never pass a bare `null` for a Json? field.
       ...(source.gtins !== null ? { gtins: source.gtins as never } : {}),
