@@ -748,6 +748,7 @@ export function LocationMapCard({ locationCode, devices, currentUserId, onDevice
         <ContextMenu
           x={contextMenu.x}
           y={contextMenu.y}
+          title={contextMenu.device.name}
           canPaste={deviceClipboard !== null}
           onCopy={() => setDeviceClipboard(contextMenu.device)}
           onPaste={() => {
@@ -769,6 +770,7 @@ export function LocationMapCard({ locationCode, devices, currentUserId, onDevice
         <ContextMenu
           x={contextMenu.x}
           y={contextMenu.y}
+          title={contextMenu.device.name}
           onPower={() =>
             handleOfflineToggle(contextMenu.device, getDeviceState(contextMenu.device) !== "OFFLINE")
           }

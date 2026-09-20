@@ -9,6 +9,7 @@ import { useEffect, useRef } from "react";
 
 const MENU_W = 176;
 const ROW_H = 36;
+const TITLE_H = 31;
 
 function EditGlyph() {
   return (
@@ -63,6 +64,7 @@ function TrashGlyph() {
 export function ContextMenu({
   x,
   y,
+  title,
   canPaste = false,
   onPower,
   onEdit,
@@ -82,6 +84,10 @@ export function ContextMenu({
 }: {
   x: number;
   y: number;
+  // Optional non-interactive header row, e.g. the device's name — identifies
+  // which item the menu is acting on when it was opened off a small target
+  // (a map marker) rather than a labeled row.
+  title?: string;
   canPaste?: boolean;
   // Optional power-toggle row, rendered first.
   onPower?: () => void;
@@ -123,7 +129,7 @@ export function ContextMenu({
   }, [onClose]);
 
   const topRows = [onPower, onEdit, onCopy, onCut, onPaste, onDuplicate].filter(Boolean).length;
-  const menuH = topRows * ROW_H + (onDelete ? ROW_H + 9 : 0) + 12;
+  const menuH = topRows * ROW_H + (onDelete ? ROW_H + 9 : 0) + 12 + (title ? TITLE_H : 0);
   const left = Math.max(8, Math.min(x, window.innerWidth - MENU_W - 8));
   const top = Math.max(8, Math.min(y, window.innerHeight - menuH - 8));
 
@@ -134,6 +140,11 @@ export function ContextMenu({
 
   return (
     <div ref={ref} className="ctx-menu" style={{ left, top }} role="menu">
+      {title && (
+        <div className="ctx-menu-title" title={title}>
+          {title}
+        </div>
+      )}
       {onPower && (
         <button type="button" className="ctx-menu-item" role="menuitem" onClick={run(onPower)}>
           <PowerGlyph />
