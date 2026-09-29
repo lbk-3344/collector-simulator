@@ -51,14 +51,22 @@ function itemKey(): string {
 // one real (DB-touching) tick happening on that cadence as a safety re-sync.
 // Must be comfortably over Neon's 5-min autosuspend so the compute still gets
 // a real idle gap between those re-syncs.
-const IDLE_HORIZON_MS = 30 * 60_000;
+//
+// Raised 30min → 4h (2026-09-29): Neon operation history showed this floor
+// alone was waking the compute 48x/day (every 30min, 5min active each time —
+// Neon's Launch-plan autosuspend minimum) even with zero workflows running,
+// ~4 active-hours/day unconditionally. A RUNNING workflow / device-online
+// still busts the clock to "now" immediately (see bustCronClock() call
+// sites), so this only affects the fully-idle safety-resync cadence, not
+// reactivity. 4h cuts the floor to 6 wakeups/day (~30 idle-active min/day).
+const IDLE_HORIZON_MS = 4 * 60 * 60_000;
 // Run the real tick slightly before the stored instant, never after.
 const SKEW_MS = 2_000;
 // TTL on the stored key — a self-heal backstop. If the writer stops for any
 // reason, the key expires and the next tick reads null → runs in full →
 // rewrites it. Comfortably longer than IDLE_HORIZON_MS so a normal idle
 // re-sync always refreshes it well before it can expire.
-const KEY_TTL_SECONDS = 60 * 60;
+const KEY_TTL_SECONDS = 6 * 60 * 60;
 
 // Resolve the Upstash REST URL + write token from the environment. Vercel's
 // Upstash integration names them after a project-chosen prefix: a bare
