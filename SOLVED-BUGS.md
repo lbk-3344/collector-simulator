@@ -212,3 +212,12 @@ A new email notifying of new bugs should be send to the Admin users for them to 
 If I am on the bug report page, and a new bug just came in, I don't see it until I refresh (like the number in the red circle). Could it be live?
 
 **Fix (v0.31.4):** `BugReportsTable` now re-fetches `/api/bugs` every 8s while the tab is open, so a report filed in the meantime appears on its own; when the row count moves it also nudges the parent to re-sync the tab badge, so list and circle stay together. Pairs with the #16 badge-polling fix.
+
+---
+
+## #22 — Sort the list of location in alphabetical order.
+
+**Reported:** 2026-10-09 by Ian Cummings <icummings@seagullsoftware.com>
+**Resolved:** 2026-10-09
+
+In the Overview page the list of locations seem to be listed in the order that they were created, rather than A->Z.

@@ -169,7 +169,7 @@ export async function getUserBartenderBasicAuthCredentials(
 
 // GET /locations returns a paginated envelope ({ page, total, pageSize,
 // locations: [...] }), not a bare array — unwrap it here so callers just get
-// the list.
+// the list. Sorted A→Z by name (bug #22) — the API returns creation order.
 export async function listLocations(
   userId: string,
   tenantUrl: string,
@@ -177,7 +177,10 @@ export async function listLocations(
 ): Promise<GatewayResult<BartenderLocation[]>> {
   const result = await callGateway<{ locations: BartenderLocation[] }>(userId, tenantUrl, apiKey, "/locations");
   if (!result.ok) return result;
-  return { ok: true, data: result.data.locations };
+  const locations = [...result.data.locations].sort((a, b) =>
+    a.name.localeCompare(b.name, undefined, { sensitivity: "base", numeric: true })
+  );
+  return { ok: true, data: locations };
 }
 
 // A location with no floor plan is a normal, expected outcome (SUPPLIER/CUSTOMER
