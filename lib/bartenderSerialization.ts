@@ -17,7 +17,7 @@ import { type Gs1Standard, GTIN_BASED_STANDARDS, GS1_FILTER_DEFAULTS } from "@/l
 export type { Gs1Standard };
 
 export function resolveSerializationGatewayUrl(tenantUrl: string): string {
-  return `${resolveGatewayUrl(tenantUrl)}/serialization`;
+  return `${resolveGatewayUrl(tenantUrl)}/itemidentity`;
 }
 
 export const MAX_NEW_ITEMS_PER_FIRING = 10; // Luc's explicit safety cap, 2026-08-30
@@ -152,7 +152,7 @@ function buildGs1Input(opts: Gs1MintOptions): Record<string, unknown> {
   return { generalManagerNumber: opts.generalManagerNumber, objectClass: opts.objectClass };
 }
 
-// POST {gateway}/serialization/gs1/{standard}/generate. Auth is the bare
+// POST {gateway}/itemidentity/gs1/{standard}/generate. Auth is the bare
 // lowercase `apikey` header — NOT `x-api-key` as the spec text claims (Luc's
 // live curl, 2026-09-01; the same spec-vs-reality correction already on
 // record for location-api-v2 / inventory-public-api / datacollector-api-v3).
