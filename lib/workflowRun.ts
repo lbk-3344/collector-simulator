@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { makeOwnerCredentialsCache, type RunCredentials } from "@/lib/bartenderLocations";
 import { mintSerializedItems, SerializationError, MAX_NEW_ITEMS_PER_FIRING } from "@/lib/bartenderSerialization";
 import { normalizeGs1Standard, isGtinBasedStandard } from "@/lib/itemFeed";
-import { getStockHexa, getConfiguredInStockWindowDays } from "@/lib/bartenderInventory";
+import { getStockHexa, getUserInStockWindowDays } from "@/lib/bartenderInventory";
 import { sendReads } from "@/lib/bartenderDataCollector";
 import { mapWithConcurrency } from "@/lib/concurrency";
 
@@ -336,18 +336,16 @@ export async function runTick(): Promise<TickSummary> {
   // must go there, not to one global account (2026-09-02 fix).
   const credsForOwner = makeOwnerCredentialsCache();
 
-  // Per-tenant in-stock look-back window for PRESENT feeds — read off the
-  // tenant config once per tick (keyed by API key). Caches the in-flight
-  // Promise (not just the resolved value) for the same reason as
-  // makeOwnerCredentialsCache above — concurrent PRESENT firings for the
-  // same tenant (BL-081) must share one lookup, not each fire their own.
-  const windowByKey = new Map<string, Promise<number | null>>();
-  function windowForOwner(ownerId: string, c: RunCreds): Promise<number | null> {
-    if (!c) return Promise.resolve(null);
-    let pending = windowByKey.get(c.apiKey);
+  // Per-owner in-stock look-back window for PRESENT feeds (Settings → Stock),
+  // read once per owner per tick. Caches the in-flight Promise (not just the
+  // resolved value) for the same reason as makeOwnerCredentialsCache above —
+  // concurrent PRESENT firings for the same owner (BL-081) must share one lookup.
+  const windowByOwner = new Map<string, Promise<number>>();
+  function windowForOwner(ownerId: string): Promise<number> {
+    let pending = windowByOwner.get(ownerId);
     if (!pending) {
-      pending = getConfiguredInStockWindowDays(ownerId, c.tenantUrl, c.apiKey);
-      windowByKey.set(c.apiKey, pending);
+      pending = getUserInStockWindowDays(ownerId);
+      windowByOwner.set(ownerId, pending);
     }
     return pending;
   }
@@ -385,7 +383,7 @@ export async function runTick(): Promise<TickSummary> {
     if (claim.count === 0) return;
 
     const creds = await credsForOwner(link.workflow.ownerId);
-    const window = feed.kind === "PRESENT" ? await windowForOwner(link.workflow.ownerId, creds) : null;
+    const window = feed.kind === "PRESENT" ? await windowForOwner(link.workflow.ownerId) : null;
     const batch = await resolveBatch(link.workflow.ownerId, feed, creds, window);
     if (batch.note) summary.notes.push(`feed "${feed.name}": ${batch.note}`);
     if (feed.kind === "NEW") summary.itemsMinted += batch.items.length;

@@ -108,6 +108,10 @@ model User {
   // Overview site selector — see CLAUDE-CONCEPT.md section 14, BACKLOG.md BL-037.
   selectedLocationCode String?
 
+  // "In stock" look-back window (days) sent as `inStockWindowDays` on every
+  // Inventory stock query for this user's PRESENT feeds — Settings → Stock.
+  inStockWindowDays Int @default(30)
+
   // Admin "last used" tracking (BL-089, CLAUDE-CONCEPT.md section 4). Updated
   // from lib/auth.ts's jwt callback: always on a fresh sign-in, otherwise
   // throttled (LAST_ACTIVE_WRITE_MS) so an open tab doesn't write every

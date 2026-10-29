@@ -1,5 +1,6 @@
 import { resolveGatewayUrl } from "@/lib/bartenderLocations";
 import { loggedFetch } from "@/lib/apiCallLog";
+import { prisma } from "@/lib/prisma";
 
 // Client for Bartender's Inventory API (`inventory-public-api`) — see
 // CLAUDE-CONCEPT.md section 7.8. Feeds the Item Feed `PRESENT` kind (Part 2's
@@ -118,27 +119,14 @@ export async function getStock(
   };
 }
 
-// The tenant's configured in-stock look-back window. There's no settings
-// endpoint (§7.8 — /settings, /inventory/config etc. all 404), but GET /stock
-// echoes the tenant default in its response envelope when the param is
-// omitted. A cheap 1-row page. Returns null if it can't be read.
-export async function getConfiguredInStockWindowDays(
-  userId: string,
-  tenantUrl: string,
-  apiKey: string
-): Promise<number | null> {
-  const url = `${resolveInventoryGatewayUrl(tenantUrl)}/stock?groupBy=zone&pageSize=1`;
-  try {
-    const res = await loggedFetch(userId, "Get current stock snapshot", url, {
-      headers: { apikey: apiKey },
-      cache: "no-store",
-    });
-    if (!res.ok) return null;
-    const b = (await res.json().catch(() => null)) as { inStockWindowDays?: number } | null;
-    return typeof b?.inStockWindowDays === "number" ? b.inStockWindowDays : null;
-  } catch {
-    return null;
-  }
+export const DEFAULT_IN_STOCK_WINDOW_DAYS = 30;
+export const MAX_IN_STOCK_WINDOW_DAYS = 3650;
+
+// The user's own in-stock look-back window (Settings → Stock). Sent on every
+// stock query instead of inheriting the tenant default echoed by GET /stock.
+export async function getUserInStockWindowDays(userId: string): Promise<number> {
+  const u = await prisma.user.findUnique({ where: { id: userId }, select: { inStockWindowDays: true } });
+  return u?.inStockWindowDays ?? DEFAULT_IN_STOCK_WINDOW_DAYS;
 }
 
 export interface StockHexaRow {

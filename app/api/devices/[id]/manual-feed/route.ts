@@ -7,7 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { isOwner, visibilityWhere } from "@/lib/ownership";
 import { getDeviceState } from "@/lib/deviceState";
 import { getUserBartenderCredentials } from "@/lib/bartenderLocations";
-import { getConfiguredInStockWindowDays } from "@/lib/bartenderInventory";
+import { getUserInStockWindowDays } from "@/lib/bartenderInventory";
 import { resolveBatch, pushReadToPlatform } from "@/lib/workflowRun";
 import type { DeviceChannel } from "@/lib/deviceConfig";
 
@@ -80,9 +80,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   // the automated engine.
   const creds = await getUserBartenderCredentials(session.user.id).catch(() => null);
   const inStockWindowDays =
-    feed.kind === "PRESENT" && creds
-      ? await getConfiguredInStockWindowDays(session.user.id, creds.tenantUrl, creds.apiKey)
-      : null;
+    feed.kind === "PRESENT" ? await getUserInStockWindowDays(session.user.id) : null;
 
   const batch = await resolveBatch(session.user.id, feed, creds, inStockWindowDays);
 

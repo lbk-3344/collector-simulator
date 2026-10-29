@@ -8,8 +8,9 @@ import { AnnouncementsTab } from "./AnnouncementsTab";
 import { SharedResourcesTable } from "@/components/SharedResourcesTable";
 import { HiddenResourcesTable } from "@/components/HiddenResourcesTable";
 import { ResourceUsageTab } from "./ResourceUsageTab";
+import { StockTab } from "./StockTab";
 
-type Tab = "bartender" | "hidden" | "users" | "bugs" | "announcements" | "sharing" | "usage";
+type Tab = "bartender" | "stock" | "hidden" | "users" | "bugs" | "announcements" | "sharing" | "usage";
 
 const BADGE_POLL_MS = 8000;
 
@@ -59,6 +60,9 @@ export function SettingsTabs({
         <button className={`tab${tab === "bartender" ? " active" : ""}`} onClick={() => setTab("bartender")}>
           Bartender Connection
         </button>
+        <button className={`tab${tab === "stock" ? " active" : ""}`} onClick={() => setTab("stock")}>
+          Stock
+        </button>
         <button className={`tab${tab === "hidden" ? " active" : ""}`} onClick={() => setTab("hidden")}>
           Hidden items
         </button>
@@ -96,6 +100,7 @@ export function SettingsTabs({
       </div>
 
       {tab === "bartender" && <BartenderConnectionTab />}
+      {tab === "stock" && <StockTab />}
       {tab === "hidden" && <HiddenResourcesTable />}
       {tab === "users" && isAdmin && <UsersTable currentUserId={currentUserId} onChanged={refreshBadges} />}
       {tab === "bugs" && isAdmin && <BugReportsTable onChanged={refreshBadges} />}
