@@ -156,7 +156,7 @@ function buildGs1Input(opts: Gs1MintOptions): Record<string, unknown> {
 // lowercase `apikey` header — NOT `x-api-key` as the spec text claims (Luc's
 // live curl, 2026-09-01; the same spec-vs-reality correction already on
 // record for location-api-v2 / inventory-public-api / datacollector-api-v3).
-// `Accept-Version: v2` per Luc's example. Requests `hex` only — the sole
+// `Accept-Version: v1` (changed from v2 on 2026-10-29 per Luc). Requests `hex` only — the sole
 // format this app stores / pushes to the platform (POST /reads' `hexa`
 // field, §7.5 / BL-063) — confirmed 2026-09-17 that all 8 standards support
 // it, so no formats picker is needed anywhere in this app.
@@ -183,7 +183,7 @@ async function generateGs1(opts: Gs1MintOptions): Promise<string[]> {
   try {
     res = await loggedFetch(opts.userId, "Generate GS1 identifiers", url, {
       method: "POST",
-      headers: { apikey: opts.apiKey, "Accept-Version": "v2", "Content-Type": "application/json" },
+      headers: { apikey: opts.apiKey, "Accept-Version": "v1", "Content-Type": "application/json" },
       body: JSON.stringify(body),
       cache: "no-store",
     });

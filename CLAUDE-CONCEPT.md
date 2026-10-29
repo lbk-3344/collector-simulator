@@ -384,6 +384,8 @@ Feeds the History page's EPCIS-events tab (§19) — browsing the real events th
 
 Dated log of product decisions, most recent first. This is the section to check before making an undocumented product call.
 
+- **2026-10-29 — Serialization API `Accept-Version` header is `v1`, not `v2` (v0.38.2).** Luc's instruction; the mint call in `lib/bartenderSerialization.ts` previously sent `v2`. Not yet re-verified live.
+
 - **2026-10-29 — Serialization API path moved `/serialization` → `/itemidentity` (v0.38.1).** Luc: the API was updated; host unchanged (`api.sandbox.bartender-tt.com` for sandbox tenants, `api.bartender-tt.com` otherwise), only the base path changed, which is expected to clear the 400s on mint. `resolveSerializationGatewayUrl()` in `lib/bartenderSerialization.ts` is the single place it's built; mint is now `POST {gateway}/itemidentity/gs1/{standard}/generate`. Older §7.6 text still says `/serialization` — read it as `/itemidentity`. Not yet re-verified live.
 
 - **2026-10-29 — "In stock" window is now a per-user setting (BL-090, v0.38.0).** Luc asked for it to be configurable instead of inheriting the tenant default echoed by `GET /stock` (§7.8). New Settings → **Stock** tab, all roles, `User.inStockWindowDays` (default 30), sent explicitly as `inStockWindowDays` on every `POST /stock/analytics` for PRESENT feeds (run engine + manual feed). No per-feed override — Settings only; flag if Luc wanted one on the feed form too.
