@@ -16,9 +16,32 @@ import { type Gs1Standard, GTIN_BASED_STANDARDS, GS1_FILTER_DEFAULTS } from "@/l
 
 export type { Gs1Standard };
 
-export function resolveSerializationGatewayUrl(tenantUrl: string): string {
-  return `${resolveGatewayUrl(tenantUrl)}/itemidentity`;
+// Two definitions of the same Serialization API (2026-10-30, Luc): the
+// current one only exists on the sandbox tenant; production tenants still run
+// the previous definition (base path /serialization, Accept-Version v2).
+// generateGs1() tries the current one first and falls back seamlessly.
+type SerializationApiDef = { basePath: string; acceptVersion: string; label: string };
+const CURRENT_API: SerializationApiDef = {
+  basePath: "/itemidentity",
+  acceptVersion: "v1",
+  label: "Generate GS1 identifiers",
+};
+const LEGACY_API: SerializationApiDef = {
+  basePath: "/serialization",
+  acceptVersion: "v2",
+  label: "Generate GS1 identifiers (previous API)",
+};
+
+export function resolveSerializationGatewayUrl(tenantUrl: string, def: SerializationApiDef = CURRENT_API): string {
+  return `${resolveGatewayUrl(tenantUrl)}${def.basePath}`;
 }
+
+// Gateways that recently answered "endpoint unavailable" on the current
+// definition but worked on the previous one — skips the doomed first call.
+// Per server instance, expires so a production tenant that later gets the new
+// API switches over by itself.
+const LEGACY_PREFERRED_TTL_MS = 60 * 60 * 1000;
+const legacyPreferredUntil = new Map<string, number>();
 
 export const MAX_NEW_ITEMS_PER_FIRING = 10; // Luc's explicit safety cap, 2026-08-30
 // — "we will level up the limit later when it is fully baked in." Do NOT raise
@@ -152,7 +175,26 @@ function buildGs1Input(opts: Gs1MintOptions): Record<string, unknown> {
   return { generalManagerNumber: opts.generalManagerNumber, objectClass: opts.objectClass };
 }
 
-// POST {gateway}/itemidentity/gs1/{standard}/generate. Auth is the bare
+// A 400 can be the current API reporting "endpoint unavailable" on a tenant
+// that still runs the previous one — or a genuine validation error — so every
+// 400/404/405/501 gets one attempt on the previous definition.
+const FALLBACK_STATUSES = new Set([400, 404, 405, 501]);
+
+function errorMessage(raw: string, status: number): string {
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed?.message) return String(parsed.message);
+  } catch {
+    /* keep the generic message */
+  }
+  return `The Serialization API returned HTTP ${status}.`;
+}
+
+function isEndpointUnavailable(status: number, message: string): boolean {
+  return status === 404 || status === 405 || status === 501 || /unavailable|not available|not found|no route|unknown (endpoint|path)/i.test(message);
+}
+
+// POST {gateway}/itemidentity/gs1/{standard}/generate (falls back to {gateway}/serialization/…, Accept-Version v2). Auth is the bare
 // lowercase `apikey` header — NOT `x-api-key` as the spec text claims (Luc's
 // live curl, 2026-09-01; the same spec-vs-reality correction already on
 // record for location-api-v2 / inventory-public-api / datacollector-api-v3).
@@ -161,7 +203,6 @@ function buildGs1Input(opts: Gs1MintOptions): Record<string, unknown> {
 // field, §7.5 / BL-063) — confirmed 2026-09-17 that all 8 standards support
 // it, so no formats picker is needed anywhere in this app.
 async function generateGs1(opts: Gs1MintOptions): Promise<string[]> {
-  const url = `${resolveSerializationGatewayUrl(opts.tenantUrl)}/gs1/${opts.standard}/generate`;
   const filter = opts.filter ?? GS1_FILTER_DEFAULTS[opts.standard];
 
   const body: Record<string, unknown> = {
@@ -179,29 +220,53 @@ async function generateGs1(opts: Gs1MintOptions): Promise<string[]> {
     body.digitalLinkBaseUrl = opts.digitalLinkBaseUrl || "https://id.gs1.org";
   }
 
-  let res: Response;
-  try {
-    res = await loggedFetch(opts.userId, "Generate GS1 identifiers", url, {
-      method: "POST",
-      headers: { apikey: opts.apiKey, "Accept-Version": "v1", "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-      cache: "no-store",
-    });
-  } catch {
-    throw new SerializationError("Could not reach the Serialization API — check the tenant URL.");
+  const gatewayKey = resolveGatewayUrl(opts.tenantUrl);
+  const call = async (def: SerializationApiDef): Promise<{ status: number; ok: boolean; raw: string }> => {
+    let res: Response;
+    try {
+      res = await loggedFetch(
+        opts.userId,
+        def.label,
+        `${resolveSerializationGatewayUrl(opts.tenantUrl, def)}/gs1/${opts.standard}/generate`,
+        {
+          method: "POST",
+          headers: { apikey: opts.apiKey, "Accept-Version": def.acceptVersion, "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+          cache: "no-store",
+        }
+      );
+    } catch {
+      throw new SerializationError("Could not reach the Serialization API — check the tenant URL.");
+    }
+    return { status: res.status, ok: res.ok, raw: await res.text().catch(() => "") };
+  };
+
+  let result: { status: number; ok: boolean; raw: string };
+  if ((legacyPreferredUntil.get(gatewayKey) ?? 0) > Date.now()) {
+    result = await call(LEGACY_API);
+    // The tenant may have been upgraded since — drop the preference and retry.
+    if (!result.ok && isEndpointUnavailable(result.status, errorMessage(result.raw, result.status))) {
+      legacyPreferredUntil.delete(gatewayKey);
+      result = await call(CURRENT_API);
+    }
+  } else {
+    result = await call(CURRENT_API);
+    if (!result.ok && FALLBACK_STATUSES.has(result.status)) {
+      const primaryMessage = errorMessage(result.raw, result.status);
+      const legacy = await call(LEGACY_API);
+      if (legacy.ok) {
+        legacyPreferredUntil.set(gatewayKey, Date.now() + LEGACY_PREFERRED_TTL_MS);
+        result = legacy;
+      } else if (isEndpointUnavailable(result.status, primaryMessage)) {
+        // The current API plainly isn't there on this tenant, so the previous
+        // API's answer is the meaningful one (e.g. a genuine validation error).
+        result = legacy;
+      }
+    }
   }
 
-  const raw = await res.text().catch(() => "");
-  if (!res.ok) {
-    let message = `The Serialization API returned HTTP ${res.status}.`;
-    try {
-      const parsed = JSON.parse(raw);
-      if (parsed?.message) message = String(parsed.message);
-    } catch {
-      /* keep the generic message */
-    }
-    throw new SerializationError(message);
-  }
+  const { raw } = result;
+  if (!result.ok) throw new SerializationError(errorMessage(raw, result.status));
 
   try {
     const parsed = JSON.parse(raw) as { serials?: Gs1GeneratedSerial[] };
